@@ -54,8 +54,10 @@
       });
       var adminBtn = document.getElementById('btn-admin');
       if (adminBtn) adminBtn.addEventListener('click', function () {
+        console.log('[DEBUG] Token:', storedToken);
         var url = chrome.runtime.getURL('src/pages/admin/admin.html');
         if (storedToken) url += '?token=' + storedToken;
+        alert('Abriendo admin con URL: ' + url.substring(0, 80) + '...');
         window.open(url, '_blank');
       });
       document.getElementById('btn-logout').addEventListener('click', function () {
