@@ -522,8 +522,24 @@ async function doLogin() {
     document.getElementById('authError').style.display = 'none';
     isAuthenticated = true;
     currentUser = email;
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('mainScreen').style.display = 'block';
+    
+    const loginScreen = document.getElementById('loginScreen');
+    const mainScreen = document.getElementById('mainScreen');
+    
+    console.log('[TESSERACT] loginScreen:', loginScreen ? 'EXISTS' : 'NULL');
+    console.log('[TESSERACT] mainScreen:', mainScreen ? 'EXISTS' : 'NULL');
+    
+    if (loginScreen) loginScreen.style.display = 'none';
+    if (mainScreen) {
+      mainScreen.style.display = 'block';
+      console.log('[TESSERACT] ✅ MainScreen mostrado');
+    } else {
+      console.error('[TESSERACT] ❌ MainScreen NO EXISTE');
+      document.getElementById('authError').textContent = '❌ Error: Panel no encontrado';
+      document.getElementById('authError').style.display = 'block';
+      return;
+    }
+    
     document.getElementById('currentUserDisplay').textContent = email;
     renderStarIds();
     saveAllStates();
