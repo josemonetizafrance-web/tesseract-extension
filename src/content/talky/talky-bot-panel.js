@@ -863,16 +863,23 @@ async function doSaludosSweep(list) {
   for (const c of contacts) {
     if (!saludosActive) break;
     
+    if (isPinnedOrSaved(c)) {
+      skipped++;
+      continue;
+    }
+    
     if (!isRecentlyEngaged(c)) {
       skipped++;
       continue;
     }
     
     c.click();
-    await sleep(1000);
+    await sleep(1500);
     
     const msg = saludoMessages[Math.floor(Math.random() * saludoMessages.length)];
     copyToChatInput(msg);
+    await sleep(500);
+    sendChatMessage();
     
     const id = extractId(c);
     if (id) registerIdInStarTools(id, 'Saludo');
@@ -928,14 +935,21 @@ async function doCartasSweep(list) {
   for (const c of contacts) {
     if (!cartasActive) break;
     
+    if (isPinnedOrSaved(c)) {
+      skipped++;
+      continue;
+    }
+    
     if (!isRecentlyEngaged(c)) {
       skipped++;
       continue;
     }
     
     c.click();
-    await sleep(1000);
+    await sleep(1500);
     copyToChatInput(cartaMessage);
+    await sleep(500);
+    sendChatMessage();
     
     const id = extractId(c);
     if (id) registerIdInStarTools(id, 'Cartas');
@@ -1044,10 +1058,41 @@ function copyToChatInput(text) {
     input.value = text;
   }
   input.focus();
-  // Disparar input event para que el framework del chat detecte el cambio visualmente
-  // NO se dispara change/submit para evitar envío automático
   try { input.dispatchEvent(new Event('input', { bubbles: true })); } catch(e) {}
   try { input.dispatchEvent(new Event('keyup', { bubbles: true })); } catch(e) {}
+}
+
+function sendChatMessage() {
+  const input = findChatInput();
+  if (!input) return false;
+  input.focus();
+  
+  // 1) Intentar Enter key
+  try {
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, code: 'Enter', which: 13, bubbles: true, cancelable: true }));
+    input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', keyCode: 13, code: 'Enter', which: 13, bubbles: true, cancelable: true }));
+    input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, code: 'Enter', which: 13, bubbles: true, cancelable: true }));
+    // Para textareas, el submit nativo a veces requiere evento 'change'
+    if (input.tagName === 'TEXTAREA') {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  } catch(e) {}
+  
+  // 2) Buscar botón de envío en el área del chat
+  const chatArea = input.closest('[class*="chat"], [class*="message"], form') || document.body;
+  const sendBtn = chatArea.querySelector('button[type="submit"], button[class*="send"], button[aria-label*="enviar"], button[aria-label*="send"], [class*="send-btn"], [class*="btn-send"], button[class*="chat-send"]');
+  if (sendBtn && !sendBtn.disabled) {
+    try { sendBtn.click(); } catch(e) {}
+  }
+  
+  return true;
+}
+
+function isPinnedOrSaved(contactEl) {
+  const text = contactEl.textContent.toLowerCase();
+  if (text.includes('pin') || text.includes('saved') || text.includes('fijado') || text.includes('guardado')) return true;
+  if (contactEl.querySelector('[class*="pin"], [class*="saved"], [class*="star"], [class*="fixed"], [src*="pin"], [src*="star"]')) return true;
+  return false;
 }
 
 // ============ CHAT WATCHER ============

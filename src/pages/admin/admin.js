@@ -12,11 +12,12 @@ function apiFetch(endpoint, options = {}) {
     'Authorization': `Bearer ${currentToken}`,
     'Content-Type': 'application/json'
   };
+  const fetchOptions = { method, headers };
   if (options.body) {
-    options.body = JSON.stringify(options.body);
+    fetchOptions.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
   }
   
-  return fetch(`${TESSERACT_API}${endpoint}`, { ...options, headers }).then(async res => {
+  return fetch(`${TESSERACT_API}${endpoint}`, fetchOptions).then(async res => {
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error || `Error ${res.status}`);
@@ -202,13 +203,10 @@ async function loadUserList(office = 'all') {
       const email = target.dataset.email;
       if (!email) return;
       if (target.classList.contains('btn-premium')) {
-        await apiFetch('/api/tess/admin/premium', { method: 'POST', body: JSON.stringify({ email }) });
-        await loadMetrics(); await loadUserList();
-      }
-      if (target.classList.contains('btn-set-plan')) {
-        const plan = target.closest('tr').querySelector('.plan-input').value.trim().toLowerCase();
-        if (!plan) return;
-        await apiFetch('/api/tess/admin/set-plan', { method: 'POST', body: JSON.stringify({ email, plan }) });
+        await apiFetch('/api/tess/admin/premium', { method: 'POST', body: { email } });
+
+      case 'plan':
+        await apiFetch('/api/tess/admin/set-plan', { method: 'POST', body: { email, plan } });
         await loadUserList();
       }
     });
@@ -246,17 +244,16 @@ async function activatePremium() {
   const email = document.getElementById('input-email').value.trim().toLowerCase();
   if (!email) return;
   try {
-    await apiFetch('/api/tess/admin/premium', { method: 'POST', body: JSON.stringify({ email }) });
-    document.getElementById('input-email').value = '';
-    await loadMetrics(); await loadUserList();
-  } catch (e) { alert(e.message); }
+    await apiFetch('/api/tess/admin/premium', { method: 'POST', body: { email } });
+    alert('Premium activado correctamente');
+  } catch (e) { alert('Error: ' + e.message); }
 }
 
 async function banUser() {
-  const email = document.getElementById('input-email').value.trim().toLowerCase();
-  if (!email) return;
+  const email = document.getElementById('ban-email')?.value?.trim().toLowerCase();
+  if (!email) return alert('Ingresa el email del usuario');
   try {
-    await apiFetch('/api/tess/admin/ban', { method: 'POST', body: JSON.stringify({ email }) });
+    await apiFetch('/api/tess/admin/ban', { method: 'POST', body: { email } });
     document.getElementById('input-email').value = '';
     await loadUserList();
   } catch (e) { alert(e.message); }
@@ -266,7 +263,7 @@ async function unbanUser() {
   const email = document.getElementById('input-email').value.trim().toLowerCase();
   if (!email) return;
   try {
-    await apiFetch('/api/tess/admin/unban', { method: 'POST', body: JSON.stringify({ email }) });
+    await apiFetch('/api/tess/admin/unban', { method: 'POST', body: { email } });
     document.getElementById('input-email').value = '';
     await loadUserList();
   } catch (e) { alert(e.message); }
@@ -276,7 +273,7 @@ async function addDeveloper() {
   const email = document.getElementById('input-dev-email').value.trim().toLowerCase();
   if (!email) return;
   try {
-    await apiFetch('/api/tess/admin/developer', { method: 'POST', body: JSON.stringify({ email, action: 'add' }) });
+    await apiFetch('/api/tess/admin/developer', { method: 'POST', body: { email, action: 'add' } });
     document.getElementById('input-dev-email').value = '';
     await loadUserList();
   } catch (e) { alert(e.message); }
@@ -325,7 +322,7 @@ async function createUser() {
   try {
     const result = await apiFetch('/api/tess/admin/create-user', {
       method: 'POST',
-      body: JSON.stringify({ email, password, office, userType })
+      body: { email, password, office, userType }
     });
     
     alert(`Usuario ${userType === 'admin' ? 'ADMIN' : 'OPERADOR'} creado correctamente`);
@@ -345,7 +342,7 @@ async function createOffice() {
   try {
     await apiFetch('/api/tess/admin/create-office', {
       method: 'POST',
-      body: JSON.stringify({ name })
+      body: { name }
     });
     alert('Oficina creada correctamente');
     document.getElementById('new-office-name').value = '';
