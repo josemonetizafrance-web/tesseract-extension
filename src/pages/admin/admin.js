@@ -246,80 +246,34 @@ async function loadUserList(office = 'all') {
 
 async function loadActivityLog(office = 'all') {
   try {
-    const grid = document.getElementById('activity-grid');
-    if (!grid) {
-      console.warn('[ADMIN] No se encontró activity-grid');
+    const container = document.getElementById('log-container');
+    if (!container) {
+      console.warn('[ADMIN] No se encontró log-container');
       return;
     }
     
     const query = office && office !== 'all' ? `&office=${encodeURIComponent(office)}` : '';
-    const data = await apiFetch(`/api/tess/admin/activity-log?limit=100${query}`);
+    const data = await apiFetch(`/api/tess/admin/activity-log?limit=50${query}`);
+    
+    container.innerHTML = '';
     
     if (!data?.logs?.length) {
-      grid.innerHTML = '<div class="activity-row"><div class="activity-cell empty">Sin actividad registrada</div></div>';
+      container.innerHTML = '<div class="log-entry" style="text-align:center;padding:20px;color:#555;">Sin actividad</div>';
       return;
     }
     
-    const usersMap = {};
-    data.logs.forEach(log => {
-      if (!usersMap[log.email]) {
-        usersMap[log.email] = { 
-          email: log.email || 'desconocido',
-          saludos: 0, 
-          likes: 0, 
-          follows: 0, 
-          cartas: 0, 
-          lastActivity: log.created_at || 0 
-        };
-      }
-      const action = (log.action || '').toLowerCase();
-      const actionType = log.action_type || '';
-      
-      if (action.includes('saludo') || action.includes('icebreaker') || actionType === 'saludo') {
-        usersMap[log.email].saludos++;
-      }
-      if (action.includes('like') || actionType === 'like') {
-        usersMap[log.email].likes++;
-      }
-      if (action.includes('follow') || actionType === 'follow') {
-        usersMap[log.email].follows++;
-      }
-      if (action.includes('carta') || actionType === 'carta') {
-        usersMap[log.email].cartas++;
-      }
-      
-      if (log.created_at && log.created_at > usersMap[log.email].lastActivity) {
-        usersMap[log.email].lastActivity = log.created_at;
-      }
+    data.logs.forEach(entry => {
+      const time = entry.created_at ? new Date(entry.created_at).toLocaleString() : '--:--:--';
+      const div = document.createElement('div');
+      div.className = 'log-entry';
+      div.innerHTML = `<span class="log-time">${time}</span><span class="log-message">[${entry.email || 'desconocido'}] ${entry.action || ''}</span>`;
+      container.appendChild(div);
     });
-    
-    const users = Object.values(usersMap).sort((a, b) => {
-      const totalA = a.saludos + a.likes + a.follows + a.cartas;
-      const totalB = b.saludos + b.likes + b.follows + b.cartas;
-      return totalB - totalA;
-    });
-    
-    if (users.length === 0) {
-      grid.innerHTML = '<div class="activity-row"><div class="activity-cell empty">Sin actividad registrada</div></div>';
-      return;
-    }
-    
-    grid.innerHTML = users.map(u => `
-      <div class="activity-row">
-        <div class="activity-cell email-cell">${u.email}</div>
-        <div class="activity-cell metric-cell saludos">${u.saludos}</div>
-        <div class="activity-cell metric-cell likes">${u.likes}</div>
-        <div class="activity-cell metric-cell follows">${u.follows}</div>
-        <div class="activity-cell metric-cell cartas">${u.cartas}</div>
-        <div class="activity-cell time-cell">--:--:--</div>
-        <div class="activity-cell last-activity">${u.lastActivity ? new Date(u.lastActivity).toLocaleString() : 'Nunca'}</div>
-      </div>
-    `).join('');
     
   } catch (e) { 
     console.error('[ADMIN] loadActivityLog:', e); 
-    const grid = document.getElementById('activity-grid');
-    if (grid) grid.innerHTML = '<div class="activity-row"><div class="activity-cell empty">Error: ' + e.message + '</div></div>';
+    const container = document.getElementById('log-container');
+    if (container) container.innerHTML = '<div class="log-entry" style="color:#ef4444;">Error: ' + e.message + '</div>';
   }
 }
 
