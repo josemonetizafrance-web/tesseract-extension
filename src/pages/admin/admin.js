@@ -16,11 +16,16 @@ let userOffice = null;
 let isOfficeAdmin = false;
 
 async function apiFetch(path, options = {}) {
+  console.log('[ADMIN] Fetch:', path);
   const data = await chrome.storage.local.get(['tess_jwt']);
   const headers = { 'Content-Type': 'application/json', ...options.headers };
   if (data.tess_jwt) headers['Authorization'] = `Bearer ${data.tess_jwt}`;
+  
+  console.log('[ADMIN] Token:', data.tess_jwt ? 'YES' : 'NO');
 
   const res = await fetch(`${TESSERACT_API}${path}`, { ...options, headers });
+  console.log('[ADMIN] Response:', res.status, res.ok);
+  
   if (res.status === 401 || res.status === 403) {
     window.location.href = '/src/pages/login/login.html';
     return null;
@@ -33,14 +38,21 @@ async function apiFetch(path, options = {}) {
 }
 
 async function initAdminPanel() {
+  console.log('[ADMIN] Iniciando panel...');
   try {
     const data = await apiFetch('/api/tess/auth/verify');
-    console.log('[ADMIN] Verify response:', data);
+    console.log('[ADMIN] Verify response:', JSON.stringify(data));
     
     // Permitir acceso si es admin, developer, office admin, o el admin maestro
     const isMasterAdmin = data?.email === 'adminchevy@tesseract.com';
     
+    console.log('[ADMIN] isMasterAdmin:', isMasterAdmin);
+    console.log('[ADMIN] isAdmin:', data?.isAdmin);
+    console.log('[ADMIN] isDeveloper:', data?.isDeveloper);
+    console.log('[ADMIN] isOfficeAdmin:', data?.isOfficeAdmin);
+    
     if (!data || (!data.isAdmin && !data.isDeveloper && !data.isOfficeAdmin && !isMasterAdmin)) {
+      console.log('[ADMIN] No autorizado, redirigiendo...');
       window.location.href = '/src/pages/login/login.html';
       return;
     }
@@ -49,6 +61,8 @@ async function initAdminPanel() {
     if (isMasterAdmin && !data.isAdmin) {
       data.isAdmin = true;
     }
+    
+    console.log('[ADMIN] Acceso concedido');
 
     currentAdminEmail = data.email;
     userOffice = data.office;
