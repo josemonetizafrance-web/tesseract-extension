@@ -511,6 +511,8 @@ async function doLogin() {
     // Guardar token y datos
     await chrome.storage.local.set({
       tess_jwt: data.token,
+      tess_auth: true,
+      tess_user: data.user.email,
       user_email: data.user.email,
       isAdmin: data.user.isAdmin,
       isDeveloper: data.user.isDeveloper,

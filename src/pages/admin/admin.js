@@ -62,15 +62,20 @@ async function initAdminPanel() {
     currentAdminEmail = data.email;
     userOffice = data.office;
     isOfficeAdmin = data.isOfficeAdmin;
+    const isMasterAdmin = data.email === 'adminchevy@tesseract.com';
     
     document.getElementById('admin-email').textContent = data.email;
+
+    // Solo el admin maestro puede crear oficinas
+    if (!isMasterAdmin) {
+      document.getElementById('create-office-section').style.display = 'none';
+      document.getElementById('btn-create-office').style.display = 'none';
+    }
 
     // Si es office admin, automáticamente filtra por su oficina
     if (isOfficeAdmin && userOffice) {
       document.getElementById('office-filter').value = userOffice;
       document.getElementById('office-filter').disabled = true;
-      document.getElementById('btn-create-office').style.display = 'none';
-      document.getElementById('create-office-section').style.display = 'none';
     }
 
     await loadOffices();
