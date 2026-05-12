@@ -55,7 +55,7 @@
       var adminBtn = document.getElementById('btn-admin');
       if (adminBtn) adminBtn.addEventListener('click', function () {
         var url = chrome.runtime.getURL('src/pages/admin/admin.html');
-        if (storedToken) url += '?token=' + storedToken;
+        if (storedToken) url += '?token=' + encodeURIComponent(storedToken);
         window.open(url, '_blank');
       });
       document.getElementById('btn-logout').addEventListener('click', function () {

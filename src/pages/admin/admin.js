@@ -30,18 +30,11 @@ function apiFetch(endpoint, options = {}) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   const urlParams = new URLSearchParams(window.location.search);
-  currentToken = urlParams.get('token');
-  
-  console.log('[ADMIN] URL:', window.location.href);
-  console.log('[ADMIN] Token:', currentToken ? currentToken.substring(0, 20) + '...' : 'NULL');
+  const encodedToken = urlParams.get('token');
+  currentToken = encodedToken ? decodeURIComponent(encodedToken) : '';
   
   if (!currentToken) {
-    document.body.innerHTML = `
-      <div style="padding:40px;text-align:center;color:#f59e0b;font-family:monospace;background:#0a0a0f;min-height:100vh;">
-        <h1>⚠️ SIN TOKEN</h1>
-        <p style="color:#888;margin:20px 0;">URL: ${window.location.href.substring(0, 100)}</p>
-      </div>
-    `;
+    window.location.href = chrome.runtime.getURL('src/pages/popup/popup.html');
     return;
   }
   
