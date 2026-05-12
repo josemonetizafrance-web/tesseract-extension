@@ -241,8 +241,8 @@ function createMainPanel() {
 <div id="mainScreen" style="display:none;">
 <div class="user-bar">👤 <strong id="currentUserDisplay"></strong></div>
 <div class="mod-grid">
-<div class="mod-card"><h4>❤️ LIKES</h4><div class="st" id="likesStatus" style="color:#ffffff;">INACTIVO</div><button id="btnLikesToggle">▶ INICIAR</button><button class="cfg" id="btnLikesNow">⚡ AHORA</button></div>
-<div class="mod-card"><h4>➕ FOLLOWS</h4><div class="st" id="followsStatus" style="color:#ffffff;">INACTIVO</div><button id="btnFollowsToggle">▶ INICIAR</button><button class="cfg" id="btnFollowsNow">⚡ AHORA</button></div>
+<div class="mod-card"><h4>❤️ LIKES</h4><div class="st" id="likesStatus" style="color:#ffffff;">INACTIVO</div><button id="btnLikesToggle">▶ INICIAR</button></div>
+<div class="mod-card"><h4>➕ FOLLOWS</h4><div class="st" id="followsStatus" style="color:#ffffff;">INACTIVO</div><button id="btnFollowsToggle">▶ INICIAR</button></div>
 <div class="mod-card"><h4>👋 SALUDOS</h4><div class="st" id="saludosStatus" style="color:#ffffff;">INACTIVO</div><button id="btnSaludosToggle">▶ INICIAR</button><button class="cfg" id="btnSaludosConfig">⚙ CONFIG</button></div>
 <div class="mod-card"><h4>📨 CARTAS</h4><div class="st" id="cartasStatus" style="color:#ffffff;">INACTIVO</div><button id="btnCartasToggle">▶ INICIAR</button><button class="cfg" id="btnCartasConfig">⚙ CONFIG</button></div>
 </div>
@@ -386,8 +386,7 @@ function setupAllEvents() {
   document.getElementById('btnFollowsToggle').addEventListener('click', toggleFollows);
   document.getElementById('btnSaludosToggle').addEventListener('click', toggleSaludos);
   document.getElementById('btnCartasToggle').addEventListener('click', toggleCartas);
-  document.getElementById('btnLikesNow').addEventListener('click', () => { likesActive = true; executeLikes(); });
-  document.getElementById('btnFollowsNow').addEventListener('click', () => { followsActive = true; executeFollows(); });
+  // Quitar event listeners de botones eliminados
   document.getElementById('btnSaludosConfig').addEventListener('click', openSaludosConfig);
   document.getElementById('btnCartasConfig').addEventListener('click', openCartasConfig);
   
