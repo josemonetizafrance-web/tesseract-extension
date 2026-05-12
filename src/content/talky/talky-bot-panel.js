@@ -479,13 +479,13 @@ async function doLogin() {
   const email = document.getElementById('agentId').value.trim().toLowerCase();
   const password = document.getElementById('encryptKey').value.trim();
 
-  if (!email.endsWith(ALLOWED_DOMAIN)) {
-    document.getElementById('authError').textContent = '❌ El identificador debe terminar en ' + ALLOWED_DOMAIN;
+  if (!email.endsWith('@tesseract.com')) {
+    document.getElementById('authError').textContent = '❌ El identificador debe terminar en @tesseract.com';
     document.getElementById('authError').style.display = 'block';
     return;
   }
-  if (!password.endsWith(REQUIRED_KEY_SUFFIX)) {
-    document.getElementById('authError').textContent = '❌ La clave debe terminar en ' + REQUIRED_KEY_SUFFIX;
+  if (!password.endsWith('*+')) {
+    document.getElementById('authError').textContent = '❌ La clave debe terminar en *+';
     document.getElementById('authError').style.display = 'block';
     return;
   }
