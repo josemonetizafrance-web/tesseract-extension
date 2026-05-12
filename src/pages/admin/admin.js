@@ -52,6 +52,7 @@ async function initAdminPanel() {
     }
 
     await loadOffices();
+    await populateCalendarOfficeFilter();
 
     document.getElementById('office-filter').addEventListener('change', async () => {
       const office = document.getElementById('office-filter').value;
@@ -79,6 +80,7 @@ async function initAdminPanel() {
     });
     document.getElementById('btn-create-user').addEventListener('click', createUser);
     document.getElementById('btn-create-office').addEventListener('click', createOffice);
+    document.getElementById('btn-load-calendar').addEventListener('click', loadCalendar);
 
     await loadMetrics();
     await loadUserList();
@@ -190,21 +192,74 @@ async function loadActivityLog(office = 'all') {
   try {
     const query = office && office !== 'all' ? `&office=${encodeURIComponent(office)}` : '';
     const data = await apiFetch(`/api/tess/admin/activity-log?limit=100${query}`);
-    if (!data) return;
-    const container = document.getElementById('log-container');
-    container.innerHTML = '';
-    if (!data.logs?.length) {
-      container.innerHTML = '<div class="log-entry"><span class="log-time">--:--:--</span><span class="log-message">Sin actividad</span></div>';
+    const grid = document.getElementById('activity-grid');
+    
+    if (!data?.logs?.length) {
+      grid.innerHTML = '<div class="activity-row"><div class="activity-cell empty">Sin actividad registrada</div></div>';
       return;
     }
-    data.logs.forEach(entry => {
-      const time = entry.created_at ? new Date(entry.created_at).toLocaleString() : '--:--:--';
-      const div = document.createElement('div');
-      div.className = 'log-entry';
-      div.innerHTML = `<span class="log-time">${time}</span><span class="log-message">[${entry.email}] ${entry.action}</span>`;
-      container.appendChild(div);
+    
+    const usersMap = {};
+    data.logs.forEach(log => {
+      if (!usersMap[log.email]) {
+        usersMap[log.email] = { 
+          email: log.email,
+          saludos: 0, 
+          likes: 0, 
+          follows: 0, 
+          cartas: 0, 
+          lastActivity: log.created_at 
+        };
+      }
+      const action = log.action?.toLowerCase() || '';
+      const actionType = log.action_type || '';
+      
+      if (action.includes('saludo') || action.includes('icebreaker') || actionType === 'saludo') {
+        usersMap[log.email].saludos++;
+      }
+      if (action.includes('like') || actionType === 'like') {
+        usersMap[log.email].likes++;
+      }
+      if (action.includes('follow') || actionType === 'follow') {
+        usersMap[log.email].follows++;
+      }
+      if (action.includes('carta') || actionType === 'carta') {
+        usersMap[log.email].cartas++;
+      }
+      
+      if (log.created_at > usersMap[log.email].lastActivity) {
+        usersMap[log.email].lastActivity = log.created_at;
+      }
     });
-  } catch (e) { console.error('[ADMIN] loadActivityLog:', e); }
+    
+    const users = Object.values(usersMap).sort((a, b) => {
+      const totalA = a.saludos + a.likes + a.follows + a.cartas;
+      const totalB = b.saludos + b.likes + b.follows + b.cartas;
+      return totalB - totalA;
+    });
+    
+    if (users.length === 0) {
+      grid.innerHTML = '<div class="activity-row"><div class="activity-cell empty">Sin actividad registrada</div></div>';
+      return;
+    }
+    
+    grid.innerHTML = users.map(u => `
+      <div class="activity-row">
+        <div class="activity-cell email-cell">${u.email}</div>
+        <div class="activity-cell metric-cell saludos">${u.saludos}</div>
+        <div class="activity-cell metric-cell likes">${u.likes}</div>
+        <div class="activity-cell metric-cell follows">${u.follows}</div>
+        <div class="activity-cell metric-cell cartas">${u.cartas}</div>
+        <div class="activity-cell time-cell">--:--:--</div>
+        <div class="activity-cell last-activity">${u.lastActivity ? new Date(u.lastActivity).toLocaleString() : 'Nunca'}</div>
+      </div>
+    `).join('');
+    
+  } catch (e) { 
+    console.error('[ADMIN] loadActivityLog:', e); 
+    const grid = document.getElementById('activity-grid');
+    grid.innerHTML = '<div class="activity-row"><div class="activity-cell empty">Error al cargar: ' + e.message + '</div></div>';
+  }
 }
 
 async function activatePremium() {
@@ -280,6 +335,7 @@ async function createUser() {
   const email = document.getElementById('new-user-email')?.value?.trim().toLowerCase();
   const password = document.getElementById('new-user-password')?.value?.trim();
   const office = document.getElementById('new-user-office')?.value?.trim();
+  const userType = document.getElementById('new-user-type')?.value || 'operador';
   
   if (!email) return alert('Ingresa el email');
   if (!password) return alert('Ingresa la contraseña');
@@ -287,14 +343,16 @@ async function createUser() {
   if (!password.endsWith('*+')) return alert('La contraseña debe terminar en *+');
   
   try {
-    await apiFetch('/api/tess/admin/create-user', {
+    const result = await apiFetch('/api/tess/admin/create-user', {
       method: 'POST',
-      body: JSON.stringify({ email, password, office })
+      body: JSON.stringify({ email, password, office, userType })
     });
-    alert('Usuario creado correctamente');
+    
+    alert(`Usuario ${userType === 'admin' ? 'ADMIN' : 'OPERADOR'} creado correctamente`);
     document.getElementById('new-user-email').value = '';
     document.getElementById('new-user-password').value = '';
     document.getElementById('new-user-office').value = '';
+    document.getElementById('new-user-type').value = 'operador';
     await loadUserList();
     await loadOffices();
   } catch (e) { alert('Error: ' + e.message); }
@@ -313,4 +371,70 @@ async function createOffice() {
     document.getElementById('new-office-name').value = '';
     await loadOffices();
   } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function loadCalendar() {
+  const office = document.getElementById('calendar-office-filter').value;
+  const days = document.getElementById('calendar-days').value;
+  const grid = document.getElementById('calendar-grid');
+  
+  grid.innerHTML = '<div class="calendar-row" style="justify-content:center;padding:30px;color:#555;">Cargando...</div>';
+  
+  try {
+    const query = office && office !== 'all' ? `?office=${encodeURIComponent(office)}&days=${days}` : `?days=${days}`;
+    const data = await apiFetch(`/api/tess/admin/metrics-daily${query}`);
+    
+    if (!data?.dailyMetrics?.length) {
+      grid.innerHTML = `
+        <div class="calendar-row header-row">
+          <div class="calendar-cell date-cell">FECHA</div>
+          <div class="calendar-cell metric-cell">SALUDOS</div>
+          <div class="calendar-cell metric-cell">LIKES</div>
+          <div class="calendar-cell metric-cell">FOLLOWS</div>
+          <div class="calendar-cell metric-cell">CARTAS</div>
+          <div class="calendar-cell total-cell">TOTAL</div>
+        </div>
+        <div class="calendar-row empty-row">No hay datos para el período seleccionado</div>`;
+      return;
+    }
+    
+    grid.innerHTML = `
+      <div class="calendar-row header-row">
+        <div class="calendar-cell date-cell">FECHA</div>
+        <div class="calendar-cell metric-cell">SALUDOS</div>
+        <div class="calendar-cell metric-cell">LIKES</div>
+        <div class="calendar-cell metric-cell">FOLLOWS</div>
+        <div class="calendar-cell metric-cell">CARTAS</div>
+        <div class="calendar-cell total-cell">TOTAL</div>
+      </div>
+      ${data.dailyMetrics.map(m => {
+        const total = (m.saludos || 0) + (m.likes || 0) + (m.follows || 0) + (m.cartas || 0);
+        return `
+          <div class="calendar-row">
+            <div class="calendar-cell date-cell">${m.date}</div>
+            <div class="calendar-cell metric-cell saludos">${m.saludos || 0}</div>
+            <div class="calendar-cell metric-cell likes">${m.likes || 0}</div>
+            <div class="calendar-cell metric-cell follows">${m.follows || 0}</div>
+            <div class="calendar-cell metric-cell cartas">${m.cartas || 0}</div>
+            <div class="calendar-cell total-cell">${total}</div>
+          </div>
+        `;
+      }).join('')}`;
+    
+  } catch (e) {
+    grid.innerHTML = `<div class="calendar-row empty-row">Error: ${e.message}</div>`;
+  }
+}
+
+async function populateCalendarOfficeFilter() {
+  try {
+    const data = await apiFetch('/api/tess/admin/offices');
+    const select = document.getElementById('calendar-office-filter');
+    select.innerHTML = '<option value="all">Todas las oficinas</option>';
+    if (data.offices) {
+      data.offices.forEach(office => {
+        select.innerHTML += `<option value="${office}">${office}</option>`;
+      });
+    }
+  } catch (e) { console.warn('[ADMIN] populateCalendarOfficeFilter:', e); }
 }
