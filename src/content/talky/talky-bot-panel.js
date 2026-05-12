@@ -1,30 +1,11 @@
 // TESSERACT v23.0 - JARVIS STAR TOOLS (SERVER AUTH)
-// Sistema completo con Eater Learning, IDs 12 dígitos, Barridos
-console.log('🤖 TESSERACT JARVIS v23.0 iniciando...');
-
-// ============ CONFIGURACIÓN ============
+// TESSERACT - Sistema completo con Eater Learning, IDs 12 dígitos, Barridos
 const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
-const ALLOWED_DOMAIN = '@tesseract.com';
-const REQUIRED_KEY_SUFFIX = '*+';
 
-// ============ ESTADO GLOBAL ============
-let isAuthenticated = false;
-let currentUser = null;
 let eaterActive = false;
-let saludosActive = false;
-let cartasActive = false;
-let likesActive = false;
-let followsActive = false;
-let currentStarFilter = 'all';
-let isEnglishMode = false;
-let lastGeneratedMessage = '';
-let currentTab = 'main'; // 'main' o 'star'
-let currentClientName = '';
 let eaterRefreshCount = 0;
-
-let botStats = { messagesSent: 0, contactsProcessed: 0, likesGiven: 0, followsGiven: 0, cartasSent: 0, repliesReceived: 0, repliesResponded: 0 };
-let collectedIds = { Saludo: [], Like: [], Follow: [], Cartas: [] };
 let eaterSuggestions = [];
+let isUsingAI = false;
 
 let saludoMessages = [
   'Hola, ¿cómo estás? Espero que tengas un lindo día.',
@@ -1147,6 +1128,72 @@ function extractHobbies(el) {
 
 function generateSuggestions(name, profile) {
   const { interests, location, bio, age, hasPhoto, hobbies } = profile;
+  
+  const btn = document.getElementById('btnRefreshEater');
+  btn.textContent = '🤖 IA...';
+  
+  // Intentar usar IA primero
+  generateWithAI(name, profile).then(aiSuggestions => {
+    if (aiSuggestions && aiSuggestions.length > 0) {
+      isUsingAI = true;
+      btn.textContent = '🤖 IA';
+      eaterSuggestions = aiSuggestions;
+      displaySuggestions(name, profile);
+    } else {
+      // Fallback a plantillas locales
+      isUsingAI = false;
+      btn.textContent = '🔄 FRASES';
+      generateLocalSuggestions(name, profile);
+    }
+  }).catch(() => {
+    isUsingAI = false;
+    btn.textContent = '🔄 FRASES';
+    generateLocalSuggestions(name, profile);
+  });
+}
+
+async function generateWithAI(name, profile) {
+  try {
+    const stored = await chrome.storage.local.get(['tess_jwt']);
+    const token = stored.tess_jwt;
+    
+    const prompt = `Genera 5 saludos iniciales cortos y personalizados para escribir a una persona llamada ${name || 'ella'}. 
+Perfil: edad ${age || 'no especificada'}, ubicación ${location || 'no especificada'}, intereses: ${interests || 'no especificados'}, hobbies: ${hobbies || 'no especificados'}.
+Cada saludo debe ser diferente, máximo 2 oraciones, cálido y natural.`;
+
+    const response = await fetch(`${TESSERACT_API}/api/chatgpt/chat`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: 'Eres un asistente que genera saludos para sitios de citas. Sé cálido, natural y corto.' },
+          { role: 'user', content: prompt }
+        ],
+        model: 'gpt-3.5-turbo',
+        max_tokens: 500
+      })
+    });
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    if (data.choices && data.choices[0]?.message?.content) {
+      const text = data.choices[0].message.content;
+      // Parsear las líneas generadas
+      const lines = text.split('\n').filter(l => l.trim().length > 10);
+      return lines.slice(0, 5);
+    }
+    return null;
+  } catch (e) {
+    console.warn('[EATER AI] Error:', e.message);
+    return null;
+  }
+}
+
+function generateLocalSuggestions(name, profile) {
   
   const openers = [
     'Hola! Me encantó tu perfil y no pude resistirme a escribirte.',
