@@ -9,6 +9,20 @@ let eaterRefreshCount = 0;
 let eaterSuggestions = [];
 let isUsingAI = false;
 
+// Variables de estado global
+let collectedIds = { Saludo: [], Like: [], Follow: [], Cartas: [] };
+let botStats = { likesGiven: 0, followsGiven: 0, messagesSent: 0, cartasSent: 0, contactsProcessed: 0, repliesReceived: 0, repliesResponded: 0 };
+let currentTab = 'main';
+let currentStarFilter = 'all';
+let currentUser = null;
+let currentClientName = 'Cliente';
+let likesActive = false;
+let followsActive = false;
+let saludosActive = false;
+let cartasActive = false;
+let lastGeneratedMessage = '';
+let isEnglishMode = false;
+
 let saludoMessages = [
   'Hola, ¿cómo estás? Espero que tengas un lindo día.',
   '¡Hola! Me encantaría conocerte, tu perfil me llamó mucho la atención.',
@@ -409,8 +423,16 @@ function setupAllEvents() {
   });
   document.getElementById('btnClose').addEventListener('click', () => document.getElementById('tesseract-main-panel').style.display = 'none');
   document.getElementById('btnLogout').addEventListener('click', doLogout);
-  document.getElementById('btnAdminPanel').addEventListener('click', () => {
-    window.open(chrome.runtime.getURL('src/pages/admin/admin.html'), '_blank');
+  document.getElementById('btnAdminPanel').addEventListener('click', async () => {
+    try {
+      const data = await chrome.storage.local.get(['tess_jwt']);
+      const url = data.tess_jwt
+        ? chrome.runtime.getURL('src/pages/admin/admin.html') + '?token=' + encodeURIComponent(data.tess_jwt)
+        : chrome.runtime.getURL('src/pages/admin/admin.html');
+      window.open(url, '_blank');
+    } catch (e) {
+      window.open(chrome.runtime.getURL('src/pages/admin/admin.html'), '_blank');
+    }
   });
   document.getElementById('btnSetProfile').addEventListener('click', () => {
     const n = document.getElementById('manualProfileName').value.trim();
@@ -1342,292 +1364,6 @@ async function translateEaterText(text) {
     alert('Error: ' + e.message);
   }
 }
-    'Hola! Me encantó tu perfil y no pude resistirme a escribirte.',
-    '¡Qué alegría encontrarte por aquí! Tu energía se nota hasta en las fotos.',
-    'Hola, vi tu perfil y dije "tengo que conocer a esta persona".',
-    '¡Hola! Hay algo en tu sonrisa que me llamó poderosamente la atención.',
-    'Qué interesante se ve tu perfil, me gustaría saber más de ti.',
-    '¡Hey! Justo pasaba por aquí y tuve que detenerme en tu perfil.',
-    'No suelo escribir primero, pero tu perfil realmente me impactó.',
-    'Hola, ¿cómo estás? Espero que tengas un día tan genial como tú.',
-    'Vaya, qué sorpresa encontrarme con un perfil tan auténtico.',
-    'Me llamó mucho la atención tu forma de ser, así que aquí estoy.',
-    '¡Hola! La vida es demasiado corta para no escribir cuando algo te llama la atención.',
-    'Me encantó tu estilo, se ve que eres una persona especial.',
-    'Hola! No pude evitar pensar que podríamos tener una gran conversación.',
-    '¡Qué bonito perfil! Definitivamente hay algo diferente en ti.',
-    'Hola, ¿sabes qué? Tu perfil tiene una vibra muy positiva.',
-    'Me gusta la autenticidad que transmites en tus fotos.',
-    '¡Hola! Me pareces una persona muy interesante, ¿te gustaría conversar?',
-    'Tu perfil me transmitió muy buena energía, decidí escribirte.',
-    'Hola! Espero no sonar repetitivo, pero tu perfil es de los mejores que he visto.',
-    'Qué gusto saludarte, se nota que eres alguien especial desde el primer vistazo.'
-  ];
-  
-  const locationComments = [
-    `¿Cómo es vivir en ${location || 'tu ciudad'}? Se ve un lugar fascinante.`,
-    `He escuchado cosas maravillosas de ${location || 'donde vives'}, ¿qué es lo que más te gusta?`,
-    `¿Qué recomendación me darías para visitar ${location || 'tu zona'}?`,
-    `${location || 'Tu lugar'} se ve increíble, ¿cuál es tu rincón favorito?`,
-    `¿La gente de ${location || 'tu ciudad'} es tan cálida como tú?`,
-    `Me encantaría conocer ${location || 'tu tierra'}, ¿me recomiendas algún lugar?`,
-    `${location || 'Allá donde vives'} debe ser especial, ¿cuéntame cómo es?`,
-    `¿Qué es lo mejor de vivir en ${location || 'tu ciudad'}?`,
-    `Me muero por visitar ${location || 'tu país'}, ¿qué no me puedo perder?`,
-    `¿Cómo es un día típico en ${location || 'tu ciudad'}?`,
-    `Seguro que en ${location || 'tu ciudad'} hay lugares mágicos, ¿cuál es tu favorito?`,
-    `${location || 'Tu zona'} me suena a aventura, ¿qué tal es el clima por allá?`
-  ];
-  
-  const hobbyComments = [
-    `Veo que te gusta ${hobbies?.[0] || interests?.[0] || 'pasarla bien'}, ¡es una gran afición!`,
-    `Qué cool que disfrutes ${hobbies?.[0] || interests?.[0] || 'de las cosas buenas de la vida'}.`,
-    `Me encanta que te apasione ${hobbies?.[0] || interests?.[0] || 'la buena vida'}, tenemos algo en común.`,
-    `¿${hobbies?.[0] || interests?.[0] || 'Disfrutar'}? ¡Eso dice mucho de tu personalidad!`,
-    `Me parece genial que te guste ${hobbies?.[0] || interests?.[0] || 'explorar'}.`,
-    `${hobbies?.[0] || interests?.[0] || 'La aventura'} es una señal de que eres una persona vibrante y auténtica.`,
-    `Compartimos el gusto por ${hobbies?.[0] || interests?.[0] || 'las experiencias únicas'}.`,
-    `¿Cómo aprendiste a disfrutar tanto ${hobbies?.[0] || interests?.[0] || 'la vida'}?`,
-    `El hecho de que te guste ${hobbies?.[0] || interests?.[0] || 'conocer'} me dice mucho de ti.`,
-    `¡Qué bien! ${hobbies?.[0] || interests?.[0] || 'La buena actitud'} es clave para conectar.`
-  ];
-  
-  const photoComments = hasPhoto ? [
-    'Tus fotos transmiten mucha luz y energía positiva.',
-    'Tienes una sonrisa que ilumina el perfil completo.',
-    'Tus fotos son increíbles, se nota que disfrutas la vida.',
-    'Qué bonitas fotos, reflejan una personalidad auténtica.',
-    'Me encantan tus fotos, especialmente la energía que transmites.',
-    'Tus fotos tienen un ángulo muy interesante, me gusta tu estilo.',
-    'Se nota que eres una persona que disfruta cada momento por tus fotos.',
-    'Qué estilo tan único tienes en tus fotos, me llama mucho la atención.',
-    'La forma en que te expresas en tus fotos es muy auténtica.',
-    'Tus fotos dicen más que mil palabras, y todas son positivas.'
-  ] : [
-    'Me encantaría conocer más de ti, incluso sin ver tu rostro aún.',
-    'A veces las mejores conexiones empiezan sin imágenes, solo con palabras.',
-    'Lo importante es la conexión, ¿no crees? Me gusta lo que transmites.',
-    'No importa la foto, tu forma de expresarte ya me parece especial.',
-    'Las mejores conversaciones nacen de la autenticidad, no de las apariencias.',
-    'Me interesa más quien eres que cómo te ves, ¿te parece si conversamos?',
-    'A veces el misterio es más interesante, ¿qué historia hay detrás de ti?',
-    'No hace falta una foto para sentir buena vibra, y tú la tienes.',
-    'Lo que importa es la conexión real, ¿qué te gusta hacer en la vida?',
-    'La personalidad es lo que más importa, y la tuya se nota interesante.'
-  ];
-  
-  const bioComments = (bio && bio.length > 15) ? [
-    `"${bio.substring(0, 100)}..." — Me identifico mucho con eso que escribiste.`,
-    `Tu descripción es de las más originales que he leído. "${bio.substring(0, 80)}..."`,
-    `Cuando leí "${bio.substring(0, 60)}..." supe que tenía que escribirte.`,
-    `Me gusta cómo piensas, se nota en lo que escribiste: "${bio.substring(0, 80)}..."`,
-    `Tu forma de expresarte me parece muy auténtica, sobre todo cuando dices "${bio.substring(0, 60)}..."`,
-    `Hay tanta profundidad en lo que compartiste: "${bio.substring(0, 100)}..." Me encanta.`,
-    `No todos escriben algo tan genuino como "${bio.substring(0, 60)}..." Gracias por eso.`,
-    `De todas las descripciones que he leído, la tuya es la que más me llamó la atención.`
-  ] : [
-    'Hay algo en ti que despierta mi curiosidad, me gustaría conocerte mejor.',
-    'A veces menos palabras dicen más, y tu perfil me intriga gratamente.',
-    'No necesitas escribir mucho para transmitir buena energía.',
-    'Me gusta la vibra que transmites, aunque no hayas escrito mucho.',
-    'Lo mejor está en la conversación, ¿te animas a charlar un rato?',
-    'Tu perfil tiene ese no sé qué que invita a querer saber más.',
-    'La sencillez también encanta, y tu perfil es prueba de ello.',
-    'A veces el silencio dice más que mil palabras. Me encantaría conocerte.'
-  ];
-  
-  const interestQuestions = [
-    '¿Qué es lo que más disfrutas hacer en tu tiempo libre?',
-    '¿Tienes algún plan emocionante para este mes?',
-    '¿Cuál es ese lugar al que siempre quieres viajar y aún no has ido?',
-    '¿Qué tipo de música te hace bailar sin importar dónde estés?',
-    '¿Eres más de playa o de montaña?',
-    'Si pudieras cenar con cualquier persona del mundo, ¿quién sería?',
-    '¿Qué serie o película te ha marcado recientemente?',
-    '¿Tienes algún talento oculto que quieras compartir?',
-    '¿Qué es lo más aventurero que has hecho este año?',
-    '¿Prefieres planes tranquilos o fiesta total?',
-    '¿Cuál es tu comida favorita y por qué?',
-    '¿Qué te hace reír sin parar?',
-    '¿Tienes alguna meta o sueño que quieras cumplir pronto?',
-    '¿Eres más de amaneceres o atardeceres?',
-    '¿Qué canción describe tu momento actual?',
-    'Si te dieran un billete de avión a cualquier lugar, ¿a dónde irías?',
-    '¿Qué actividad te hace perder la noción del tiempo?',
-    '¿Eres de café o de té? ¿O de algo más fuerte?',
-    '¿Cuál ha sido el mejor consejo que has recibido?',
-    '¿Qué te apasiona tanto que podrías hablar horas de ello?'
-  ];
-  
-  const closingLines = [
-    'Me encantaría escuchar tu versión de la historia.',
-    'Cuéntame, ¿qué te trae por aquí?',
-    'Espero que podamos tener una conversación increíble.',
-    'Me gustaría saber qué piensas de todo esto.',
-    'Ojalá tengamos la oportunidad de conocernos mejor.',
-    'Dime, ¿coincido en algo de lo que imaginé de ti?',
-    'Cuéntame algo interesante sobre ti que no haya visto en tu perfil.',
-    '¿Te parece si seguimos esta conversación?',
-    'Me encantaría saber qué te pareció mi mensaje.',
-    'Prometo no morder... a menos que tú quieras. Bromeo... ¿o no?',
-    'Bueno, la pelota está en tu tejado. ¿Qué me cuentas?',
-    '¿Crees en las casualidades? Yo empiezo a creer.',
-    'Si esto fuera una película, ¿qué título le pondrías?',
-    'Te leo con atención, ¿qué me dices?',
-    'Espero no haber sido muy intenso, pero es que tu perfil lo vale.',
-    '¿Qué tal si empezamos con un café virtual?',
-    'La vida es muy corta como para no arriesgarse, ¿no crees?',
-    'Si llegaste hasta aquí, ¿por qué no continuar la conversación?',
-    'Me conformo con una sonrisa virtual, ¿me regalas una?',
-    'Tengo el presentimiento de que podríamos llevarnos genial.'
-  ];
-  
-  const ageComments = age ? [
-    `${age} años y con esa energía, ¡me encanta!`,
-    `Con ${age} años seguro tienes muchas historias que contar.`,
-    `A tus ${age} años ya se nota que sabes lo que quieres.`,
-    `${age} años y ya tienes un perfil tan interesante.`,
-    `Tus ${age} años te sientan de maravilla, se nota que sabes vivir.`
-  ] : [];
-  
-  const icebreakerComments = [
-    '¿Sabes qué? Tu perfil tiene magia. No sé explicarlo, pero la tiene.',
-    'Me encantaría saber qué es lo que más te apasiona en la vida.',
-    '¿Cuál es la historia más interesante que te ha pasado en esta app?',
-    '¿Qué es lo más loco que has hecho por amor o amistad?',
-    '¿Crees en el destino? Porque encontrarme tu perfil no parece coincidencia.',
-    '¿Eres de las personas que se enamoran de una sonrisa o de una conversación?',
-    '¿Qué es lo que más valoras en una persona?',
-    'Cuéntame 3 cosas que te gusten y 1 que no soportes.',
-    'Si tu vida fuera una canción, ¿cuál sería la banda sonora?',
-    '¿Qué es lo mejor que te ha pasado esta semana?',
-    '¿Cuál es tu mayor sueño en este momento?',
-    'Dime algo que te haga feliz de verdad, sin pensar.',
-    '¿Qué te gustaría hacer que nunca has hecho?',
-    '¿Eres de planes improvisados o todo lo tienes que planear?',
-    '¿Cuál es el cumplido más bonito que has recibido?',
-    '¿Qué te hace sentir vivo realmente?',
-    'Describe tu día perfecto en 3 palabras.',
-    '¿Qué valoras más: la aventura o la estabilidad?',
-    'Si pudieras tener un superpoder, ¿cuál elegirías?',
-    '¿Eres más de atardeceres en la playa o amaneceres en la montaña?'
-  ];
-  
-  // Combinatorial generation: pick random items from each category
-  // and combine them into unique suggestions
-  const sug = [];
-  const usedCombos = new Set();
-  
-  // Generate 12 unique combinations
-  while (sug.length < 12) {
-    const parts = [];
-    
-    // Pick random opener
-    const opener = openers[Math.floor(Math.random() * openers.length)];
-    parts.push(opener);
-    
-    // 50% chance to add location comment
-    if (Math.random() > 0.3) {
-      const loc = locationComments[Math.floor(Math.random() * locationComments.length)];
-      parts.push(loc);
-    }
-    
-    // 50% chance to add hobby comment
-    if (Math.random() > 0.3) {
-      const hobby = hobbyComments[Math.floor(Math.random() * hobbyComments.length)];
-      parts.push(hobby);
-    }
-    
-    // 40% chance to add photo comment
-    if (Math.random() > 0.4) {
-      const photo = photoComments[Math.floor(Math.random() * photoComments.length)];
-      parts.push(photo);
-    }
-    
-    // 40% chance to add bio comment
-    if (Math.random() > 0.4) {
-      const bioC = bioComments[Math.floor(Math.random() * bioComments.length)];
-      parts.push(bioC);
-    }
-    
-    // Always add a question
-    const question = interestQuestions[Math.floor(Math.random() * interestQuestions.length)];
-    parts.push(question);
-    
-    // 30% chance to add an icebreaker
-    if (Math.random() > 0.5) {
-      const ice = icebreakerComments[Math.floor(Math.random() * icebreakerComments.length)];
-      parts.push(ice);
-    }
-    
-    // 40% chance to add closing
-    if (Math.random() > 0.4) {
-      const close = closingLines[Math.floor(Math.random() * closingLines.length)];
-      parts.push(close);
-    }
-    
-    const combination = parts.join(' ');
-    
-    // Avoid duplicates
-    const key = combination.substring(0, 40);
-    if (!usedCombos.has(key)) {
-      usedCombos.add(key);
-      sug.push(combination);
-    }
-  }
-  
-  eaterSuggestions = sug;
-  lastGeneratedMessage = sug[0];
-  const cnEl = document.getElementById('eaterClientName');
-  if (cnEl) cnEl.textContent = name;
-  
-  // Mostrar solo 4 sugerencias iniciales, con boton "ver mas"
-  const initialCount = 4;
-  const sugListEl = document.getElementById('eaterSugList');
-  if (sugListEl) {
-    const showAll = sugListEl.dataset.showAll === 'true';
-    const displaySug = showAll ? sug : sug.slice(0, initialCount);
-    sugListEl.innerHTML = displaySug.map((s, i) => `
-      <div class="eater-row">
-        <div style="flex:1;"><span class="sn">${showAll ? i+1 : i+1}.</span><span class="sug-text">${s}</span></div>
-        <button class="tr-btn">🌐</button>
-      </div>
-    `).join('');
-    if (sug.length > initialCount) {
-      const moreBtn = document.createElement('div');
-      moreBtn.style.cssText = 'text-align:center;padding:6px;font-size:8px;cursor:pointer;color:#8b5cf6;border-top:1px solid rgba(139,92,246,0.2);';
-      moreBtn.textContent = showAll ? '⬆ VER MENOS' : '📋 VER MÁS (' + (sug.length - initialCount) + ' más)';
-      moreBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        sugListEl.dataset.showAll = showAll ? 'false' : 'true';
-        // Regenerar con el nuevo estado
-        sugListEl.innerHTML = sug.map((s, i) => `
-          <div class="eater-row">
-            <div style="flex:1;"><span class="sn">${i+1}.</span><span class="sug-text">${s}</span></div>
-            <button class="tr-btn">🌐</button>
-          </div>
-        `).join('');
-        if (sug.length > initialCount) {
-          const newBtn = document.createElement('div');
-          newBtn.style.cssText = 'text-align:center;padding:6px;font-size:8px;cursor:pointer;color:#8b5cf6;border-top:1px solid rgba(139,92,246,0.2);';
-          newBtn.textContent = sugListEl.dataset.showAll === 'true' ? '⬆ VER MENOS' : '📋 VER MÁS (' + (sug.length - initialCount) + ' más)';
-          newBtn.addEventListener('click', (e2) => {
-            e2.stopPropagation();
-            sugListEl.dataset.showAll = sugListEl.dataset.showAll === 'true' ? 'false' : 'true';
-            generateSuggestions(name, profile);
-          });
-          sugListEl.appendChild(newBtn);
-        }
-      });
-      sugListEl.appendChild(moreBtn);
-    }
-  }
-  
-  document.getElementById('eq1').textContent = '💬 ' + (sug[0]?.substring(0, 18) || 'SUG 1') + '...';
-  document.getElementById('eq2').textContent = '💬 ' + (sug[1]?.substring(0, 18) || 'SUG 2') + '...';
-  document.getElementById('eq3').textContent = '💬 ' + (sug[2]?.substring(0, 18) || 'SUG 3') + '...';
-  document.getElementById('eq4').textContent = '💬 ' + (sug[3]?.substring(0, 18) || 'SUG 4') + '...';
-}
 
 // ============ REFRESH EATER ============
 function refreshEaterSuggestions() {
@@ -2043,7 +1779,12 @@ function startPeriodicSync() {
         await fetch(`${TESSERACT_API}/api/tess/metrics/sync`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ action, count })
+          body: JSON.stringify({
+            stats: botStats,
+            collectedIds: collectedIds,
+            action: 'PERIODIC_SYNC',
+            count: totalSweeps
+          })
         });
       }
     } catch (e) {
