@@ -4,6 +4,8 @@ const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
 document.addEventListener('DOMContentLoaded', () => initAdminPanel());
 
 let currentAdminEmail = '';
+let userOffice = null;
+let isOfficeAdmin = false;
 
 async function apiFetch(path, options = {}) {
   const data = await chrome.storage.local.get(['tess_jwt']);
@@ -25,16 +27,28 @@ async function apiFetch(path, options = {}) {
 async function initAdminPanel() {
   try {
     const data = await apiFetch('/api/tess/auth/verify');
-    if (!data || (!data.isAdmin && !data.isDeveloper)) {
+    if (!data || (!data.isAdmin && !data.isDeveloper && !data.isOfficeAdmin)) {
       window.location.href = '/src/pages/login/login.html';
       return;
     }
 
     currentAdminEmail = data.email;
+    userOffice = data.office;
+    isOfficeAdmin = data.isOfficeAdmin;
+    
     document.getElementById('admin-email').textContent = data.email;
 
-    if (data.email === 'adminchevy@tesseract.com') {
-      document.getElementById('dev-section').style.display = 'block';
+    // Si es office admin, automáticamente filtra por su oficina
+    if (isOfficeAdmin && userOffice) {
+      document.getElementById('office-filter').value = userOffice;
+      document.getElementById('office-filter').disabled = true;
+      document.getElementById('btn-create-office').style.display = 'none';
+      document.getElementById('create-office-section').style.display = 'none';
+    }
+
+    // Solo admin maestro puede agregar desarrolladores
+    if (data.email !== 'adminchevy@tesseract.com') {
+      document.getElementById('dev-section').style.display = 'none';
     }
 
     await loadOffices();
@@ -64,6 +78,7 @@ async function initAdminPanel() {
       document.getElementById('storage-debug-container').textContent = 'Haz clic en DUMP STORAGE';
     });
     document.getElementById('btn-create-user').addEventListener('click', createUser);
+    document.getElementById('btn-create-office').addEventListener('click', createOffice);
 
     await loadMetrics();
     await loadUserList();
@@ -281,6 +296,21 @@ async function createUser() {
     document.getElementById('new-user-password').value = '';
     document.getElementById('new-user-office').value = '';
     await loadUserList();
+    await loadOffices();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function createOffice() {
+  const name = document.getElementById('new-office-name')?.value?.trim();
+  if (!name) return alert('Ingresa el nombre de la oficina');
+  
+  try {
+    await apiFetch('/api/tess/admin/create-office', {
+      method: 'POST',
+      body: JSON.stringify({ name })
+    });
+    alert('Oficina creada correctamente');
+    document.getElementById('new-office-name').value = '';
     await loadOffices();
   } catch (e) { alert('Error: ' + e.message); }
 }
