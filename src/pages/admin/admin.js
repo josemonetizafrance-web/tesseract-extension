@@ -1,30 +1,122 @@
-// admin.js - TESSERACT v23.0 (Backend Integrado)
+// admin.js - TESSERACT v23.0
 const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
 
-console.log('[ADMIN] Iniciando...');
-
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('[ADMIN] DOM cargado');
-  initAdminPanel().catch(e => {
-    console.error('[ADMIN] Error:', e);
-    document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#ef4444;"><h1>Error</h1><p>' + e.message + '</p></div>';
-  });
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    // Obtener token de múltiples fuentes posibles
+    let token = null;
+    
+    // Intentar desde chrome.storage.local
+    try {
+      const stored = await new Promise(resolve => chrome.storage.local.get(['tess_jwt'], resolve));
+      token = stored?.tess_jwt;
+    } catch(e) { console.log('chrome.storage no disponible'); }
+    
+    // Si no hay token, intentar desde URL
+    if (!token) {
+      const urlParams = new URLSearchParams(window.location.search);
+      token = urlParams.get('token');
+    }
+    
+    if (!token) {
+      document.body.innerHTML = `
+        <div style="background:#0a0a0f;color:#fff;padding:40px;font-family:monospace;text-align:center;min-height:100vh;">
+          <h2 style="color:#f59e0b;">⚠️ SIN TOKEN DE SESIÓN</h2>
+          <p style="color:#888;margin-top:20px;">Abre el admin panel DESPUÉS de iniciar sesión en el popup.</p>
+          <p style="color:#666;font-size:12px;margin-top:30px;">1. Abre el popup de la extensión<br>2. Inicia sesión<br3. Luego abre el admin panel</p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Verificar con el servidor
+    const verifyRes = await fetch(`${TESSERACT_API}/api/tess/auth/verify`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+    });
+    
+    if (!verifyRes.ok) {
+      document.body.innerHTML = '<div style="background:#0a0a0f;color:#ef4444;padding:40px;font-family:monospace;text-align:center;min-height:100vh;"><h2>❌ SESIÓN INVÁLIDA</h2></div>';
+      return;
+    }
+    
+    const userData = await verifyRes.json();
+    console.log('Usuario verificado:', userData);
+    
+    // Mostrar panel
+    document.getElementById('admin-email').textContent = userData.email;
+    
+    // Cargar datos
+    await loadMetrics();
+    await loadUserList(token);
+    await loadActivityLog(token);
+    
+    setInterval(() => { loadMetrics(); loadActivityLog(token); }, 15000);
+    
+  } catch(e) {
+    console.error('Error:', e);
+    document.body.innerHTML = `<div style="background:#0a0a0f;color:#ef4444;padding:40px;font-family:monospace;">Error: ${e.message}</div>`;
+  }
 });
 
-let currentAdminEmail = '';
-let userOffice = null;
-let isOfficeAdmin = false;
-
-async function apiFetch(path, options = {}) {
-  const data = await chrome.storage.local.get(['tess_jwt']);
-  const headers = { 'Content-Type': 'application/json', ...options.headers };
-  if (data.tess_jwt) headers['Authorization'] = `Bearer ${data.tess_jwt}`;
-
+async function loadMetrics(token) {
   try {
-    const res = await fetch(`${TESSERACT_API}${path}`, { ...options, headers });
-    if (res.status === 401 || res.status === 403) {
-      throw new Error('Sesión expirada');
+    const res = await fetch(`${TESSERACT_API}/api/tess/admin/metrics`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (data.users) {
+      document.getElementById('metric-active-users').textContent = data.users.active || 0;
+      document.getElementById('metric-premium-users').textContent = data.users.premium || 0;
+      document.getElementById('metric-demo-users').textContent = data.users.demo || 0;
     }
+    if (data.today) {
+      document.getElementById('metric-icebreakers').textContent = data.today.icebreakers || 0;
+      document.getElementById('metric-likes').textContent = data.today.likes || 0;
+      document.getElementById('metric-follows').textContent = data.today.follows || 0;
+      document.getElementById('metric-cartas').textContent = data.today.cartas || 0;
+    }
+  } catch(e) { console.error('Metrics error:', e); }
+}
+
+async function loadUserList(token) {
+  try {
+    const res = await fetch(`${TESSERACT_API}/api/tess/admin/users`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    const tbody = document.getElementById('user-table-body');
+    if (!tbody || !data?.users) return;
+    
+    tbody.innerHTML = data.users.map(u => `
+      <tr>
+        <td>${u.email}</td>
+        <td><span style="color:${u.role==='premium'?'#22c55e':u.is_banned?'#ef4444':'#888'};">${u.role?.toUpperCase() || 'demo'}</span></td>
+        <td>••••••••</td>
+        <td>${u.login_count || 0}</td>
+        <td>${u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Nunca'}</td>
+      </tr>
+    `).join('');
+  } catch(e) { console.error('Users error:', e); }
+}
+
+async function loadActivityLog(token) {
+  try {
+    const res = await fetch(`${TESSERACT_API}/api/tess/admin/activity-log?limit=30`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    const container = document.getElementById('log-container');
+    if (!container || !data?.logs) return;
+    
+    container.innerHTML = data.logs.slice(0, 20).map(l => 
+      `<div style="padding:6px 10px;border-bottom:1px solid #222;font-size:11px;color:#aaa;">
+        <span style="color:#8b5cf6;">[${l.created_at ? new Date(l.created_at).toLocaleTimeString() : '--'}]</span>
+        <span style="color:#fff;">${l.email?.split('@')[0] || 'user'}</span>
+        - ${l.action || ''}
+      </div>`
+    ).join('') || '<div style="padding:20px;color:#555;">Sin actividad</div>';
+  } catch(e) { console.error('Activity error:', e); }
+}
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error || `Error ${res.status}`);

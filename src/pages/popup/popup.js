@@ -51,7 +51,12 @@
       });
       var adminBtn = document.getElementById('btn-admin');
       if (adminBtn) adminBtn.addEventListener('click', function () {
-        window.open(chrome.runtime.getURL('src/pages/admin/admin.html'), '_blank');
+        chrome.storage.local.get(['tess_jwt'], function(data) {
+          var token = data.tess_jwt || '';
+          var url = chrome.runtime.getURL('src/pages/admin/admin.html');
+          if (token) url += '?token=' + token;
+          window.open(url, '_blank');
+        });
       });
       document.getElementById('btn-logout').addEventListener('click', function () {
         chrome.storage.local.clear();
