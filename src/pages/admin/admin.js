@@ -246,9 +246,14 @@ async function loadUserList(office = 'all') {
 
 async function loadActivityLog(office = 'all') {
   try {
+    const grid = document.getElementById('activity-grid');
+    if (!grid) {
+      console.warn('[ADMIN] No se encontró activity-grid');
+      return;
+    }
+    
     const query = office && office !== 'all' ? `&office=${encodeURIComponent(office)}` : '';
     const data = await apiFetch(`/api/tess/admin/activity-log?limit=100${query}`);
-    const grid = document.getElementById('activity-grid');
     
     if (!data?.logs?.length) {
       grid.innerHTML = '<div class="activity-row"><div class="activity-cell empty">Sin actividad registrada</div></div>';
@@ -259,15 +264,15 @@ async function loadActivityLog(office = 'all') {
     data.logs.forEach(log => {
       if (!usersMap[log.email]) {
         usersMap[log.email] = { 
-          email: log.email,
+          email: log.email || 'desconocido',
           saludos: 0, 
           likes: 0, 
           follows: 0, 
           cartas: 0, 
-          lastActivity: log.created_at 
+          lastActivity: log.created_at || 0 
         };
       }
-      const action = log.action?.toLowerCase() || '';
+      const action = (log.action || '').toLowerCase();
       const actionType = log.action_type || '';
       
       if (action.includes('saludo') || action.includes('icebreaker') || actionType === 'saludo') {
@@ -283,7 +288,7 @@ async function loadActivityLog(office = 'all') {
         usersMap[log.email].cartas++;
       }
       
-      if (log.created_at > usersMap[log.email].lastActivity) {
+      if (log.created_at && log.created_at > usersMap[log.email].lastActivity) {
         usersMap[log.email].lastActivity = log.created_at;
       }
     });
@@ -314,7 +319,7 @@ async function loadActivityLog(office = 'all') {
   } catch (e) { 
     console.error('[ADMIN] loadActivityLog:', e); 
     const grid = document.getElementById('activity-grid');
-    grid.innerHTML = '<div class="activity-row"><div class="activity-cell empty">Error al cargar: ' + e.message + '</div></div>';
+    if (grid) grid.innerHTML = '<div class="activity-row"><div class="activity-cell empty">Error: ' + e.message + '</div></div>';
   }
 }
 
