@@ -1,7 +1,9 @@
 // TESSERACT v23.0 - JARVIS STAR TOOLS (SERVER AUTH)
 // TESSERACT - Sistema completo con Eater Learning, IDs 12 dígitos, Barridos
 const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
+const ALLOWED_DOMAIN = 'talkytimes.com';
 
+let isAuthenticated = false;
 let eaterActive = false;
 let eaterRefreshCount = 0;
 let eaterSuggestions = [];
