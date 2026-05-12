@@ -27,7 +27,14 @@ async function apiFetch(path, options = {}) {
   console.log('[ADMIN] Response:', res.status, res.ok);
   
   if (res.status === 401 || res.status === 403) {
-    window.location.href = '/src/pages/login/login.html';
+    console.log('[ADMIN] 401/403 - mostrando error en pantalla');
+    document.body.innerHTML = `
+      <div style="padding:40px;text-align:center;color:#ef4444;">
+        <h1>⚠️ Sesión expirada o inválida</h1>
+        <p>Por favor inicia sesión desde el popup de la extensión</p>
+        <button onclick="window.close()" style="padding:10px 20px;margin-top:20px;cursor:pointer;background:#8b5cf6;color:#fff;border:none;border-radius:6px;">Cerrar</button>
+      </div>
+    `;
     return null;
   }
   if (!res.ok) {

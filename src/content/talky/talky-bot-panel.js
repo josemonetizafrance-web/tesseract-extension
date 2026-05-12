@@ -1140,17 +1140,18 @@ function generateSuggestions(name, profile) {
       isUsingAI = true;
       btn.textContent = '🤖 IA';
       eaterSuggestions = aiSuggestions;
-      displaySuggestions(name, profile);
     } else {
-      // Fallback a plantillas locales
       isUsingAI = false;
       btn.textContent = '🔄 FRASES';
       generateLocalSuggestions(name, profile);
     }
+    // Siempre mostrar las sugerencias
+    displaySuggestions(name, profile);
   }).catch(() => {
     isUsingAI = false;
     btn.textContent = '🔄 FRASES';
     generateLocalSuggestions(name, profile);
+    displaySuggestions(name, profile);
   });
 }
 
@@ -1196,8 +1197,134 @@ Cada saludo debe ser diferente, máximo 2 oraciones, cálido y natural.`;
 }
 
 function generateLocalSuggestions(name, profile) {
+  const { interests, location, bio, age, hasPhoto, hobbies } = profile;
   
   const openers = [
+    'Hola! Me encantó tu perfil y no pude resistirme a escribirte.',
+    '¡Qué alegría encontrarte por aquí! Tu energía se nota hasta en las fotos.',
+    'Hola, vi tu perfil y dije "tengo que conocer a esta persona".',
+    '¡Hola! Hay algo en tu sonrisa que me llamó poderosamente la atención.',
+    'Qué interesante se ve tu perfil, me gustaría saber más de ti.',
+    '¡Hey! Justo pasaba por aquí y tuve que detenerme en tu perfil.',
+    'No suelo escribir primero, pero tu perfil realmente me impactó.',
+    'Hola, ¿cómo estás? Espero que tengas un día tan genial como tú.',
+    'Vaya, qué sorpresa encontrarme con un perfil tan auténtico.',
+    'Me llamó mucho la atención tu forma de ser, así que aquí estoy.',
+    '¡Hola! La vida es demasiado corta para no escribir cuando algo te llama la atención.',
+    'Me encantó tu estilo, se ve que eres una persona especial.',
+    'Hola! No pude evitar pensar que podríamos tener una gran conversación.',
+    '¡Qué bonito perfil! Definitivamente hay algo diferente en ti.',
+    'Hola, ¿sabes qué? Tu perfil tiene una vibra muy positiva.',
+    'Me gusta la autenticidad que transmites en tus fotos.',
+    '¡Hola! Me pareces una persona muy interesante, ¿te gustaría conversar?',
+    'Tu perfil me transmitió muy buena energía, decidí escribirte.',
+    'Hola! Espero no sonar repetitivo, pero tu perfil es de los mejores que he visto.',
+    'Qué gusto saludarte, se nota que eres alguien especial desde el primer vistazo.'
+  ];
+  
+  const sug = [];
+  const usedCombos = new Set();
+  
+  for (let i = 0; i < 10; i++) {
+    const parts = [];
+    const opener = openers[Math.floor(Math.random() * openers.length)];
+    parts.push(opener);
+    
+    if (Math.random() > 0.3 && location) {
+      parts.push(`¿Cómo es vivir en ${location}? Se ve un lugar interesante.`);
+    }
+    
+    if (Math.random() > 0.3 && (hobbies || interests)) {
+      const hob = hobbies?.[0] || interests?.[0] || 'cosas interesantes';
+      parts.push(`Me gusta que te apasione ${hob}, tenemos algo en común.`);
+    }
+    
+    parts.push('¿Qué tal va tu día?');
+    
+    const combination = parts.join(' ');
+    const key = combination.substring(0, 40);
+    if (!usedCombos.has(key)) {
+      usedCombos.add(key);
+      sug.push(combination);
+    }
+  }
+  
+  eaterSuggestions = sug;
+  displaySuggestions(name);
+}
+
+function displaySuggestions(name) {
+  const cnEl = document.getElementById('eaterClientName');
+  if (cnEl) cnEl.textContent = name;
+  
+  const sugListEl = document.getElementById('eaterSugList');
+  if (!sugListEl) return;
+  
+  const initialCount = 4;
+  const showAll = sugListEl.dataset.showAll === 'true';
+  const displaySug = showAll ? eaterSuggestions : eaterSuggestions.slice(0, initialCount);
+  
+  sugListEl.innerHTML = displaySug.map((s, i) => `
+    <div class="eater-row" onclick="selectEaterSuggestion('${s.replace(/'/g, "\\'")}')">
+      <div style="flex:1;word-break:break-word;">
+        <span class="sn">${i+1}.</span>
+        <span class="sug-text" style="font-size:11px;line-height:1.3;">${s.length > 60 ? s.substring(0,60)+'...' : s}</span>
+      </div>
+      <button class="tr-btn" onclick="event.stopPropagation();translateEaterText('${s.replace(/'/g, "\\'")}')">🌐</button>
+    </div>
+  `).join('');
+  
+  // Botón ver más
+  const existingMore = sugListEl.querySelector('.more-btn');
+  if (existingMore) existingMore.remove();
+  
+  if (eaterSuggestions.length > initialCount) {
+    const moreBtn = document.createElement('div');
+    moreBtn.className = 'more-btn';
+    moreBtn.style.cssText = 'text-align:center;padding:8px;font-size:10px;cursor:pointer;color:#8b5cf6;border-top:1px solid rgba(139,92,246,0.2);margin-top:4px;';
+    moreBtn.textContent = showAll ? '⬆ VER MENOS' : `📋 VER MÁS (${eaterSuggestions.length - initialCount})`;
+    moreBtn.onclick = () => {
+      sugListEl.dataset.showAll = showAll ? 'false' : 'true';
+      displaySuggestions(name);
+    };
+    sugListEl.appendChild(moreBtn);
+  }
+}
+
+function selectEaterSuggestion(text) {
+  const chatInput = document.getElementById('messageInput') || document.getElementById('chatInput');
+  if (chatInput) {
+    chatInput.value = text;
+    chatInput.focus();
+  }
+}
+
+async function translateEaterText(text) {
+  try {
+    const stored = await chrome.storage.local.get(['tess_jwt']);
+    const token = stored.tess_jwt;
+    
+    const res = await fetch(`${TESSERACT_API}/api/deepl/translate`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ text, target: 'es' })
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      if (data.translatedText) {
+        alert('Traducción:\n\n' + data.translatedText);
+      }
+    } else {
+      alert('Error al traducir');
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
     'Hola! Me encantó tu perfil y no pude resistirme a escribirte.',
     '¡Qué alegría encontrarte por aquí! Tu energía se nota hasta en las fotos.',
     'Hola, vi tu perfil y dije "tengo que conocer a esta persona".',
