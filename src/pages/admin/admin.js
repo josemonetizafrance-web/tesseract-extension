@@ -20,23 +20,45 @@ async function apiFetch(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
   if (data.tess_jwt) headers['Authorization'] = `Bearer ${data.tess_jwt}`;
 
-  const res = await fetch(`${TESSERACT_API}${path}`, { ...options, headers });
-  if (res.status === 401 || res.status === 403) {
-    window.location.href = '/src/pages/login/login.html';
-    return null;
+  try {
+    const res = await fetch(`${TESSERACT_API}${path}`, { ...options, headers });
+    if (res.status === 401 || res.status === 403) {
+      throw new Error('Sesión expirada');
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `Error ${res.status}`);
+    }
+    return res.json();
+  } catch(e) {
+    console.error('[ADMIN] API Error:', e.message);
+    throw e;
   }
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Error ${res.status}`);
-  }
-  return res.json();
 }
 
 async function initAdminPanel() {
   try {
+    const stored = await chrome.storage.local.get(['tess_jwt']);
+    
+    if (!stored.tess_jwt) {
+      document.body.innerHTML = `
+        <div style="padding:40px;text-align:center;color:#f59e0b;font-family:monospace;background:#0a0a0f;min-height:100vh;">
+          <h1>⚠️ SIN SESIÓN</h1>
+          <p style="color:#888;margin:20px 0;">No tienes una sesión activa.</p>
+          <p style="color:#666;font-size:12px;">Inicia sesión desde el popup de la extensión primero.</p>
+        </div>
+      `;
+      return;
+    }
+    
     const data = await apiFetch('/api/tess/auth/verify');
     if (!data || (!data.isAdmin && !data.isDeveloper && !data.isOfficeAdmin)) {
-      window.location.href = '/src/pages/login/login.html';
+      document.body.innerHTML = `
+        <div style="padding:40px;text-align:center;color:#ef4444;font-family:monospace;background:#0a0a0f;min-height:100vh;">
+          <h1>⛔ SIN ACCESO</h1>
+          <p style="color:#888;margin:20px 0;">No tienes permisos de administrador.</p>
+        </div>
+      `;
       return;
     }
 
@@ -44,7 +66,7 @@ async function initAdminPanel() {
     userOffice = data.office;
     isOfficeAdmin = data.isOfficeAdmin;
     
-document.getElementById('admin-email').textContent = data.email;
+    document.getElementById('admin-email').textContent = data.email;
 
     // Si es office admin, automáticamente filtra por su oficina
     if (isOfficeAdmin && userOffice) {
@@ -194,33 +216,27 @@ async function loadUserList(office = 'all') {
 async function loadActivityLog(office = 'all') {
   try {
     const container = document.getElementById('log-container');
-    if (!container) {
-      console.warn('[ADMIN] No se encontró log-container');
-      return;
-    }
+    if (!container) return;
     
     const query = office && office !== 'all' ? `&office=${encodeURIComponent(office)}` : '';
     const data = await apiFetch(`/api/tess/admin/activity-log?limit=50${query}`);
     
     container.innerHTML = '';
-    
     if (!data?.logs?.length) {
-      container.innerHTML = '<div class="log-entry" style="text-align:center;padding:20px;color:#555;">Sin actividad</div>';
+      container.innerHTML = '<div style="padding:20px;text-align:center;color:#555;">Sin actividad</div>';
       return;
     }
     
     data.logs.forEach(entry => {
-      const time = entry.created_at ? new Date(entry.created_at).toLocaleString() : '--:--:--';
+      const time = entry.created_at ? new Date(entry.created_at).toLocaleTimeString() : '--:--';
       const div = document.createElement('div');
-      div.className = 'log-entry';
-      div.innerHTML = `<span class="log-time">${time}</span><span class="log-message">[${entry.email || 'desconocido'}] ${entry.action || ''}</span>`;
+      div.style.cssText = 'padding:8px 12px;border-bottom:1px solid #222;font-size:11px;color:#aaa;';
+      div.innerHTML = `<span style="color:#8b5cf6;">[${time}]</span> <span style="color:#fff;">${entry.email || 'user'}</span> - ${entry.action || ''}`;
       container.appendChild(div);
     });
-    
   } catch (e) { 
-    console.error('[ADMIN] loadActivityLog:', e); 
     const container = document.getElementById('log-container');
-    if (container) container.innerHTML = '<div class="log-entry" style="color:#ef4444;">Error: ' + e.message + '</div>';
+    if (container) container.innerHTML = '<div style="padding:20px;color:#ef4444;">Error: ' + e.message + '</div>';
   }
 }
 
