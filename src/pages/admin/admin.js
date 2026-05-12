@@ -27,9 +27,19 @@ async function apiFetch(path, options = {}) {
 async function initAdminPanel() {
   try {
     const data = await apiFetch('/api/tess/auth/verify');
-    if (!data || (!data.isAdmin && !data.isDeveloper && !data.isOfficeAdmin)) {
+    console.log('[ADMIN] Verify response:', data);
+    
+    // Permitir acceso si es admin, developer, office admin, o el admin maestro
+    const isMasterAdmin = data?.email === 'adminchevy@tesseract.com';
+    
+    if (!data || (!data.isAdmin && !data.isDeveloper && !data.isOfficeAdmin && !isMasterAdmin)) {
       window.location.href = '/src/pages/login/login.html';
       return;
+    }
+    
+    // Forzar isAdmin true para el admin maestro
+    if (isMasterAdmin && !data.isAdmin) {
+      data.isAdmin = true;
     }
 
     currentAdminEmail = data.email;
