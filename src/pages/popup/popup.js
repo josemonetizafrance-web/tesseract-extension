@@ -51,8 +51,8 @@
       });
       var adminBtn = document.getElementById('btn-admin');
       if (adminBtn) adminBtn.addEventListener('click', function () {
-        chrome.storage.local.get(['tess_jwt'], function(data) {
-          var token = data.tess_jwt || '';
+        chrome.storage.local.get(['tess_jwt'], function(storageData) {
+          var token = storageData.tess_jwt || '';
           var url = chrome.runtime.getURL('src/pages/admin/admin.html');
           if (token) url += '?token=' + token;
           window.open(url, '_blank');
