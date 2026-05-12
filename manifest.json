@@ -1,0 +1,52 @@
+{
+    "manifest_version": 3,
+    "name": "TESSERACT",
+    "version": "23.0",
+    "description": "TESSERACT - Sistema Operativo IA",
+    "permissions": ["storage", "tabs", "alarms", "webNavigation", "scripting", "webRequest"],
+    "host_permissions": [
+        "https://tesseract-jblo.onrender.com/*",
+        "https://talkytimes.com/*",
+        "https://www.talkytimes.com/*",
+        "https://amolatina.com/*",
+        "https://www.amolatina.com/*",
+        "https://dating.com/*",
+        "https://www.dating.com/*",
+        "https://yourtravelmates.com/*",
+        "https://www.yourtravelmates.com/*",
+        "https://arabiandate.com/*",
+        "https://www.arabiandate.com/*",
+        "https://luxee.io/*",
+        "https://www.luxee.io/*"
+    ],
+    "icons": {
+        "16": "assets/images/icon16.png",
+        "48": "assets/images/icon48.png",
+        "128": "assets/images/icon128.png"
+    },
+    "action": {
+        "default_title": "TESSERACT",
+        "default_popup": "src/pages/popup/popup.html"
+    },
+    "background": {
+        "service_worker": "src/background/background.js"
+    },
+    "content_scripts": [
+        {
+            "matches": ["https://talkytimes.com/*", "https://www.talkytimes.com/*"],
+            "js": ["src/content/talky/talky-bot-panel.js"],
+            "run_at": "document_end"
+        }
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "src/pages/login/*",
+                "src/pages/dashboard/*",
+                "src/pages/admin/*",
+                "src/modules/*"
+            ],
+            "matches": ["<all_urls>"]
+        }
+    ]
+}

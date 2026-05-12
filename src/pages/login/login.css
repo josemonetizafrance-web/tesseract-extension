@@ -1,0 +1,207 @@
+/* login.css - TESSERACT Cyberpunk Theme */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'JetBrains Mono', monospace;
+    background-color: #0a0a0f;
+    color: #e0e0e0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+}
+
+#bouncing-logo, .bouncing-logo-instance {
+    position: fixed;
+    z-index: 0;
+    pointer-events: none;
+    width: 120px;
+    height: auto;
+    opacity: 0.15;
+    will-change: left, top;
+}
+
+.login-container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 420px;
+    padding: 40px;
+    background: rgba(10, 10, 15, 0.85);
+    border: 1px solid #8b5cf6;
+    border-radius: 4px;
+    box-shadow: 0 0 30px rgba(139, 92, 246, 0.15), 0 0 60px rgba(139, 92, 246, 0.05);
+    backdrop-filter: blur(10px);
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.logo {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.logo svg {
+    width: 100%;
+    height: 100%;
+}
+
+.login-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #8b5cf6;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+}
+
+.subtitle {
+    font-size: 11px;
+    color: #8888a0;
+    letter-spacing: 2px;
+    margin-top: 4px;
+}
+
+/* Messages */
+.message {
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    border-radius: 2px;
+    font-size: 13px;
+    line-height: 1.5;
+    border-left: 3px solid;
+}
+
+.message.error {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: #ef4444;
+    color: #fca5a5;
+}
+
+.message.success {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: #22c55e;
+    color: #86efac;
+}
+
+/* Form */
+.input-group {
+    margin-bottom: 20px;
+}
+
+.input-group label {
+    display: block;
+    font-size: 11px;
+    color: #8888a0;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 12px 16px;
+    background: rgba(15, 15, 25, 0.8);
+    border: 1px solid #333350;
+    border-radius: 2px;
+    color: #e0e0e0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+}
+
+.input-group input::placeholder {
+    color: #555570;
+}
+
+.hint {
+    display: block;
+    font-size: 10px;
+    color: #8b5cf6;
+    margin-top: 6px;
+    opacity: 0.7;
+}
+
+/* Button */
+.btn-primary {
+    width: 100%;
+    padding: 14px;
+    background: #8b5cf6;
+    border: none;
+    border-radius: 2px;
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    margin-top: 8px;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #7c3aed;
+}
+
+.btn-primary:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+.btn-primary:disabled {
+    background: #333350;
+    color: #8888a0;
+    cursor: not-allowed;
+}
+
+/* Footer */
+.login-footer {
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid #333350;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 10px;
+    color: #555570;
+    letter-spacing: 1px;
+}
+
+.version {
+    color: #8b5cf6;
+}
+
+.separator {
+    color: #333350;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .login-container {
+        margin: 16px;
+        padding: 24px;
+    }
+
+    .login-header h1 {
+        font-size: 22px;
+    }
+}
