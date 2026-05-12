@@ -1,7 +1,15 @@
 // admin.js - TESSERACT v23.0 (Backend Integrado)
 const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
 
-document.addEventListener('DOMContentLoaded', () => initAdminPanel());
+console.log('[ADMIN] Iniciando...');
+
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('[ADMIN] DOM cargado');
+  initAdminPanel().catch(e => {
+    console.error('[ADMIN] Error:', e);
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#ef4444;"><h1>Error</h1><p>' + e.message + '</p></div>';
+  });
+});
 
 let currentAdminEmail = '';
 let userOffice = null;
