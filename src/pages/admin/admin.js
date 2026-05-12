@@ -39,6 +39,23 @@ async function apiFetch(path, options = {}) {
 
 async function initAdminPanel() {
   console.log('[ADMIN] Iniciando panel...');
+  
+  // Primero verificar si tenemos token
+  const stored = await chrome.storage.local.get(['tess_jwt']);
+  console.log('[ADMIN] Token storage:', stored);
+  
+  if (!stored.tess_jwt) {
+    console.log('[ADMIN] No hay token, mostrando mensaje en lugar de redirigir');
+    document.body.innerHTML = `
+      <div style="padding:40px;text-align:center;color:#f59e0b;">
+        <h1>⚠️ Sin sesión</h1>
+        <p>Inicia sesión primero desde el popup de la extensión</p>
+        <button onclick="window.close()" style="padding:10px 20px;margin-top:20px;cursor:pointer;">Cerrar</button>
+      </div>
+    `;
+    return;
+  }
+  
   try {
     const data = await apiFetch('/api/tess/auth/verify');
     console.log('[ADMIN] Verify response:', JSON.stringify(data));
