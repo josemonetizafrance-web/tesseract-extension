@@ -1,5 +1,6 @@
 (function () {
   const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
+  var storedToken = '';
 
   function formatTime(ms) {
     if (ms <= 0 || ms === Infinity) return ms === Infinity ? 'Unlimited' : 'Expired';
@@ -24,6 +25,8 @@
     var section = document.getElementById('auth-section');
     if (!section) return;
     if (!data.tess_jwt || !data.user_email) return renderLoggedOut(section);
+    
+    storedToken = data.tess_jwt;
 
     fetch(TESSERACT_API + '/api/tess/auth/verify', {
       headers: { 'Authorization': 'Bearer ' + data.tess_jwt }
@@ -51,12 +54,9 @@
       });
       var adminBtn = document.getElementById('btn-admin');
       if (adminBtn) adminBtn.addEventListener('click', function () {
-        chrome.storage.local.get(['tess_jwt'], function(storageData) {
-          var token = storageData.tess_jwt || '';
-          var url = chrome.runtime.getURL('src/pages/admin/admin.html');
-          if (token) url += '?token=' + token;
-          window.open(url, '_blank');
-        });
+        var url = chrome.runtime.getURL('src/pages/admin/admin.html');
+        if (storedToken) url += '?token=' + storedToken;
+        window.open(url, '_blank');
       });
       document.getElementById('btn-logout').addEventListener('click', function () {
         chrome.storage.local.clear();
