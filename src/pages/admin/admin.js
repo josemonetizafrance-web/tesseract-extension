@@ -16,25 +16,13 @@ let userOffice = null;
 let isOfficeAdmin = false;
 
 async function apiFetch(path, options = {}) {
-  console.log('[ADMIN] Fetch:', path);
   const data = await chrome.storage.local.get(['tess_jwt']);
   const headers = { 'Content-Type': 'application/json', ...options.headers };
   if (data.tess_jwt) headers['Authorization'] = `Bearer ${data.tess_jwt}`;
-  
-  console.log('[ADMIN] Token:', data.tess_jwt ? 'YES' : 'NO');
 
   const res = await fetch(`${TESSERACT_API}${path}`, { ...options, headers });
-  console.log('[ADMIN] Response:', res.status, res.ok);
-  
   if (res.status === 401 || res.status === 403) {
-    console.log('[ADMIN] 401/403 - mostrando error en pantalla');
-    document.body.innerHTML = `
-      <div style="padding:40px;text-align:center;color:#ef4444;">
-        <h1>⚠️ Sesión expirada o inválida</h1>
-        <p>Por favor inicia sesión desde el popup de la extensión</p>
-        <button onclick="window.close()" style="padding:10px 20px;margin-top:20px;cursor:pointer;background:#8b5cf6;color:#fff;border:none;border-radius:6px;">Cerrar</button>
-      </div>
-    `;
+    window.location.href = '/src/pages/login/login.html';
     return null;
   }
   if (!res.ok) {
@@ -45,54 +33,18 @@ async function apiFetch(path, options = {}) {
 }
 
 async function initAdminPanel() {
-  console.log('[ADMIN] Iniciando panel...');
-  
-  // Primero verificar si tenemos token
-  const stored = await chrome.storage.local.get(['tess_jwt']);
-  console.log('[ADMIN] Token storage:', stored);
-  
-  if (!stored.tess_jwt) {
-    console.log('[ADMIN] No hay token, mostrando mensaje en lugar de redirigir');
-    document.body.innerHTML = `
-      <div style="padding:40px;text-align:center;color:#f59e0b;">
-        <h1>⚠️ Sin sesión</h1>
-        <p>Inicia sesión primero desde el popup de la extensión</p>
-        <button onclick="window.close()" style="padding:10px 20px;margin-top:20px;cursor:pointer;">Cerrar</button>
-      </div>
-    `;
-    return;
-  }
-  
   try {
     const data = await apiFetch('/api/tess/auth/verify');
-    console.log('[ADMIN] Verify response:', JSON.stringify(data));
-    
-    // Permitir acceso si es admin, developer, office admin, o el admin maestro
-    const isMasterAdmin = data?.email === 'adminchevy@tesseract.com';
-    
-    console.log('[ADMIN] isMasterAdmin:', isMasterAdmin);
-    console.log('[ADMIN] isAdmin:', data?.isAdmin);
-    console.log('[ADMIN] isDeveloper:', data?.isDeveloper);
-    console.log('[ADMIN] isOfficeAdmin:', data?.isOfficeAdmin);
-    
-    if (!data || (!data.isAdmin && !data.isDeveloper && !data.isOfficeAdmin && !isMasterAdmin)) {
-      console.log('[ADMIN] No autorizado, redirigiendo...');
+    if (!data || (!data.isAdmin && !data.isDeveloper && !data.isOfficeAdmin)) {
       window.location.href = '/src/pages/login/login.html';
       return;
     }
-    
-    // Forzar isAdmin true para el admin maestro
-    if (isMasterAdmin && !data.isAdmin) {
-      data.isAdmin = true;
-    }
-    
-    console.log('[ADMIN] Acceso concedido');
 
     currentAdminEmail = data.email;
     userOffice = data.office;
     isOfficeAdmin = data.isOfficeAdmin;
     
-    document.getElementById('admin-email').textContent = data.email;
+document.getElementById('admin-email').textContent = data.email;
 
     // Si es office admin, automáticamente filtra por su oficina
     if (isOfficeAdmin && userOffice) {
@@ -100,11 +52,6 @@ async function initAdminPanel() {
       document.getElementById('office-filter').disabled = true;
       document.getElementById('btn-create-office').style.display = 'none';
       document.getElementById('create-office-section').style.display = 'none';
-    }
-
-    // Solo admin maestro puede agregar desarrolladores
-    if (data.email !== 'adminchevy@tesseract.com') {
-      document.getElementById('dev-section').style.display = 'none';
     }
 
     await loadOffices();
