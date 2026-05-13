@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "TESSERACT",
-    "version": "23.0",
+    "version": "24.0",
     "description": "TESSERACT - Sistema Operativo IA",
     "permissions": ["storage", "tabs", "alarms", "webNavigation", "scripting", "webRequest"],
     "host_permissions": [
@@ -34,7 +34,14 @@
     "content_scripts": [
         {
             "matches": ["https://talkytimes.com/*", "https://www.talkytimes.com/*"],
-            "js": ["src/content/talky/talky-bot-panel.js"],
+            "js": [
+                "src/content/talky/dom-contact-finder.js",
+                "src/content/talky/auto-answer.js",
+                "src/content/talky/auto-answer-panel.js",
+                "src/content/talky/smart-mailing.js",
+                "src/content/talky/smart-mailing-panel.js",
+                "src/content/talky/talky-bot-panel.js"
+            ],
             "run_at": "document_end"
         }
     ],
@@ -44,9 +51,13 @@
                 "src/pages/login/*",
                 "src/pages/dashboard/*",
                 "src/pages/admin/*",
-                "src/modules/*"
+                "src/modules/*",
+                "src/content/talky/*"
             ],
-            "matches": ["<all_urls>"]
+            "matches": [
+                "https://talkytimes.com/*",
+                "https://www.talkytimes.com/*"
+            ]
         }
     ]
 }

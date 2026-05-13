@@ -1,5 +1,5 @@
-// TESSERACT v23.0 - JARVIS STAR TOOLS (SERVER AUTH)
-// TESSERACT - Sistema completo con Eater Learning, IDs 12 dígitos, Barridos
+// TESSERACT v24.0 - JARVIS STAR TOOLS + AUTO-ANSWER + SMART MAILING (SERVER AUTH)
+// TESSERACT - Sistema completo con Eater Learning, IDs, Auto-respuesta, Mailings
 const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
 const ALLOWED_DOMAIN = 'talkytimes.com';
 
@@ -9,15 +9,48 @@ let eaterRefreshCount = 0;
 let eaterSuggestions = [];
 let isUsingAI = false;
 
+// Variables de estado global
+let collectedIds = { Saludo: [], Like: [], Follow: [], Cartas: [] };
+let botStats = { likesGiven: 0, followsGiven: 0, messagesSent: 0, cartasSent: 0, contactsProcessed: 0, repliesReceived: 0, repliesResponded: 0 };
+let currentTab = 'main';
+let currentStarFilter = 'all';
+let currentUser = null;
+let currentClientName = 'Cliente';
+let likesActive = false;
+let followsActive = false;
+let saludosActive = false;
+let cartasActive = false;
+let lastGeneratedMessage = '';
+let isEnglishMode = false;
+
 let saludoMessages = [
   'Hola, ¿cómo estás? Espero que tengas un lindo día.',
   '¡Hola! Me encantaría conocerte, tu perfil me llamó mucho la atención.',
   'Saludos, ¿cómo va todo? Me gustaría charlar contigo.',
   '¡Hey! Vi tu perfil y no pude resistirme a escribirte.',
-  'Hola, un placer saludarte. ¿Te gustaría conversar un rato?'
+  'Hola, un placer saludarte. ¿Te gustaría conversar un rato?',
+  '¡Qué gusto verte por aquí! Tu perfil tiene una vibra muy especial.',
+  'Hola, hola. Algo me dijo que valía la pena escribirte.',
+  'Me gustó mucho tu estilo, quería conocerte un poco más.',
+  'Hola, me pareció interesante tu perfil y aquí estoy.',
+  '¡Holaaaa! Espero que estés teniendo un gran día.',
+  'Hola, vi tu perfil y pensé que podríamos congeniar.',
+  'Un saludo para ti. ¿Cómo va tu semana?',
+  '¡Hey! No podía irme sin decirte hola.',
+  'Hola, ¿sabes? Tu sonrisa ilumina todo el día.',
+  'Qué alegría encontrarte, se nota que eres alguien auténtico.',
+  'Buenas, no pude evitar fijarme en ti.',
+  'Hola, ¿qué tal? Me encantó la energía de tu perfil.',
+  'Vine a saludar y espero quedarme un rato.',
+  '¡Hola hermosa! Tenía que escribirte hoy.',
+  'Hola, ¿crees en las casualidades? Yo creo que esto es una señal.'
 ];
 
-let cartaMessage = 'Querido/a amigo/a,\n\nTe escribo porque tu perfil me pareció muy interesante y me encantaría tener la oportunidad de conocerte mejor. Creo que podríamos tener una linda amistad.\n\nEspero tu respuesta con ansias.\n\nUn abrazo.';
+let cartaMessages = [
+  'Querido/a amigo/a,\n\nTe escribo porque tu perfil me pareció muy interesante y me encantaría tener la oportunidad de conocerte mejor. Creo que podríamos tener una linda amistad.\n\nEspero tu respuesta con ansias.\n\nUn abrazo.',
+  'Hola,\n\nHe visto tu perfil y me ha parecido fascinante. Me encantaría saber más sobre ti y lo que te apasiona.\n\nOjalá podamos conectar y compartir buenos momentos.\n\nCon cariño.',
+  '¡Saludos!\n\nNo pude evitar escribirte al ver lo especial que parece tu perfil. Me gustaría mucho tener la oportunidad de conocerte y ver si hay química entre nosotros.\n\nEspero tener noticias tuyas pronto.\n\nUn beso.'
+];
 
 // ============ FUNCIÓN CENTRAL: Registrar ID en Star Tools ============
 function registerIdInStarTools(id, category) {
@@ -40,7 +73,7 @@ function registerIdInStarTools(id, category) {
 }
 
 // ============ INICIALIZACIÓN ============
-function initTesseract() {
+async function initTesseract() {
   console.log('[TESSERACT] Inicializando sistema...');
   createMainPanel();
   createEaterBar();
@@ -51,6 +84,11 @@ function initTesseract() {
   startChatWatcher();
   startBackgroundIdCapture(); // Captura en segundo plano
   startProfileWatcher(); // Detectar perfil activo
+
+  // Inicializar módulos v24
+  if (typeof initAutoAnswer === 'function') await initAutoAnswer();
+  if (typeof initSmartMailing === 'function') await initSmartMailing();
+
   // Verificar que storage funciona
   chrome.storage.local.set({ tess_heartbeat: Date.now() }, () => {
     if (chrome.runtime.lastError) {
@@ -81,15 +119,16 @@ function startBackgroundIdCapture() {
     });
   }, 3000);
   
-  // También capturar cuando cambia la URL
+  // Solo capturar IDs si hay barridos activos y cambió la URL
   let lastUrl = location.href;
   setInterval(() => {
+    if (!isAuthenticated) return;
+    if (!likesActive && !followsActive && !saludosActive && !cartasActive) return;
     if (location.href !== lastUrl) {
       lastUrl = location.href;
       setTimeout(() => {
         if (!isAuthenticated) return;
         if (!likesActive && !followsActive && !saludosActive && !cartasActive) return;
-        
         const ids = scanPageForIds();
         ids.forEach(id => {
           if (likesActive) registerIdInStarTools(id, 'Like');
@@ -99,7 +138,7 @@ function startBackgroundIdCapture() {
         });
       }, 1500);
     }
-  }, 1000);
+  }, 2000);
 }
 
 // ============ PANEL PRINCIPAL HTML (CON PESTAÑAS) ============
@@ -221,6 +260,8 @@ function createMainPanel() {
 <div class="tab-nav">
   <button class="tab-btn active" data-tab="main">🎮 BOT</button>
   <button class="tab-btn" data-tab="star">⭐ STAR TOOLS</button>
+  <button class="tab-btn" data-tab="aa">🤖 AUTO-ANSWER</button>
+  <button class="tab-btn" data-tab="mailing">📬 MAILING</button>
 </div>
 
 <!-- PESTAÑA BOT -->
@@ -235,7 +276,7 @@ function createMainPanel() {
 <div class="inp-grp"><label class="inp-lbl">CLAVE DE CIFRADO</label><input type="password" id="encryptKey" class="t-input" placeholder="••••••••*+" autocomplete="off" /><div class="auth-hint">Debe terminar en *+</div></div>
 <button class="btn-auth" id="btnLogin">INICIALIZAR SESIÓN</button>
 <div class="net-bar"><span class="net-dot"></span>TESSERACT NETWORK</div>
-<div class="auth-foot">v22.90 — JARVIS IA</div>
+<div class="auth-foot">v24.0 — JARVIS IA</div>
 </div>
 
 <div id="mainScreen" style="display:none;">
@@ -243,8 +284,6 @@ function createMainPanel() {
 <div class="mod-grid">
 <div class="mod-card"><h4>❤️ LIKES</h4><div class="st" id="likesStatus" style="color:#ffffff;">INACTIVO</div><button id="btnLikesToggle">▶ INICIAR</button></div>
 <div class="mod-card"><h4>➕ FOLLOWS</h4><div class="st" id="followsStatus" style="color:#ffffff;">INACTIVO</div><button id="btnFollowsToggle">▶ INICIAR</button></div>
-<div class="mod-card"><h4>👋 SALUDOS</h4><div class="st" id="saludosStatus" style="color:#ffffff;">INACTIVO</div><button id="btnSaludosToggle">▶ INICIAR</button><button class="cfg" id="btnSaludosConfig">⚙ CONFIG</button></div>
-<div class="mod-card"><h4>📨 CARTAS</h4><div class="st" id="cartasStatus" style="color:#ffffff;">INACTIVO</div><button id="btnCartasToggle">▶ INICIAR</button><button class="cfg" id="btnCartasConfig">⚙ CONFIG</button></div>
 </div>
 <div class="stats-row">
 <div class="stat-mini"><span class="val" id="vLikes">0</span>LIKES</div>
@@ -280,6 +319,41 @@ function createMainPanel() {
 <div class="st-bar"><span id="stCount">TOTAL: 0 IDs</span><div><button id="btnClear">🧹 LIMPIAR</button><button id="btnExport">📋 EXPORTAR</button><button id="btnCopy">📝 COPIAR</button></div></div>
 </div>
 
+<!-- PESTAÑA AUTO-ANSWER -->
+<div id="tabAA" class="tab-content">
+<div class="user-bar">🤖 AUTO-ANSWER — <span id="aaStatusInline">INACTIVO</span></div>
+<div style="padding:10px;">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+    <div class="mod-card"><h4>❤️ LIKE</h4><div class="st" id="aaLikeStatus" style="color:#666;">DESACTIVADO</div></div>
+    <div class="mod-card"><h4>😉 WINK</h4><div class="st" id="aaWinkStatus" style="color:#666;">DESACTIVADO</div></div>
+    <div class="mod-card"><h4>💬 COMMENT</h4><div class="st" id="aaCommentStatus" style="color:#666;">DESACTIVADO</div></div>
+    <div class="mod-card"><h4>🎁 GIFT</h4><div class="st" id="aaGiftStatus" style="color:#666;">DESACTIVADO</div></div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-mini"><span class="val" id="aaTodayResp">0</span>HOY</div>
+    <div class="stat-mini"><span class="val" id="aaDailyLimit">50</span>LÍMITE</div>
+  </div>
+  <button class="btn-auth" id="btnOpenAAConfig" style="margin-top:8px;">⚙ CONFIGURAR AUTO-ANSWER</button>
+</div>
+</div>
+
+<!-- PESTAÑA SMART MAILING -->
+<div id="tabMailing" class="tab-content">
+<div class="user-bar">📬 SMART MAILING — <span id="mlStatusInline">INACTIVO</span></div>
+<div style="padding:10px;">
+  <div class="stats-row">
+    <div class="stat-mini"><span class="val" id="mlSentTodayInline">0</span>ENVIADOS HOY</div>
+    <div class="stat-mini"><span class="val" id="mlDailyLimitInline">30</span>LÍMITE</div>
+    <div class="stat-mini"><span class="val" id="mlQueueCountInline">0</span>EN COLA</div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+    <div class="mod-card"><h4>⏱ Intervalo</h4><div class="st" id="mlIntervalDisplay">60 min</div></div>
+    <div class="mod-card"><h4>💬 Mensaje</h4><div class="st" id="mlMsgPreview" style="font-size:8px;">—</div></div>
+  </div>
+  <button class="btn-auth" id="btnOpenMLConfig" style="margin-top:8px;">⚙ CONFIGURAR SMART MAILING</button>
+</div>
+</div>
+
 </div></div>`;
   document.body.appendChild(p);
   console.log('[TESSERACT] ✅ Panel principal creado');
@@ -308,8 +382,6 @@ function createEaterBar() {
 <span>🧠 EATER</span>
 <button id="eq1">💬 SUG 1</button>
 <button id="eq2">💬 SUG 2</button>
-<button id="eq3">💬 SUG 3</button>
-<button id="eq4">💬 SUG 4</button>
 <button class="emerg" id="eq5">🚨 EMERG</button>
 <button class="tr" id="btnTranslate">🌐 EN</button><button class="cfg" id="btnRefreshEater" style="background:rgba(30,27,75,0.7);border-color:#8b5cf6;">🔄 FRASES</button>
 </div>`;
@@ -376,26 +448,22 @@ function setupAllEvents() {
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       this.classList.add('active');
       currentTab = this.dataset.tab;
-      document.getElementById('tab' + (currentTab === 'main' ? 'Main' : 'Star')).classList.add('active');
+      const tabMap = { main: 'Main', star: 'Star', aa: 'AA', mailing: 'Mailing' };
+      document.getElementById('tab' + (tabMap[currentTab] || 'Main')).classList.add('active');
       if (currentTab === 'star') renderStarIds();
+      if (currentTab === 'aa') updateAATabUI();
+      if (currentTab === 'mailing') updateMLTabUI();
     });
   });
   
   // Botones de barrido
   document.getElementById('btnLikesToggle').addEventListener('click', toggleLikes);
   document.getElementById('btnFollowsToggle').addEventListener('click', toggleFollows);
-  document.getElementById('btnSaludosToggle').addEventListener('click', toggleSaludos);
-  document.getElementById('btnCartasToggle').addEventListener('click', toggleCartas);
-  // Quitar event listeners de botones eliminados
-  document.getElementById('btnSaludosConfig').addEventListener('click', openSaludosConfig);
-  document.getElementById('btnCartasConfig').addEventListener('click', openCartasConfig);
   
   // Eater
   document.getElementById('btnEaterToggle').addEventListener('click', toggleEater);
   document.getElementById('eq1').addEventListener('click', () => copySugToChat(0));
   document.getElementById('eq2').addEventListener('click', () => copySugToChat(1));
-  document.getElementById('eq3').addEventListener('click', () => copySugToChat(2));
-  document.getElementById('eq4').addEventListener('click', () => copySugToChat(3));
   document.getElementById('eq5').addEventListener('click', () => copyToChatInput('🚨 Disculpa, no puedo continuar esta conversación. Que tengas buen día.'));
   document.getElementById('btnTranslate').addEventListener('click', translateLastMessage);
   document.getElementById('btnRefreshEater').addEventListener('click', refreshEaterSuggestions);
@@ -409,8 +477,16 @@ function setupAllEvents() {
   });
   document.getElementById('btnClose').addEventListener('click', () => document.getElementById('tesseract-main-panel').style.display = 'none');
   document.getElementById('btnLogout').addEventListener('click', doLogout);
-  document.getElementById('btnAdminPanel').addEventListener('click', () => {
-    window.open(chrome.runtime.getURL('src/pages/admin/admin.html'), '_blank');
+  document.getElementById('btnAdminPanel').addEventListener('click', async () => {
+    try {
+      const data = await chrome.storage.local.get(['tess_jwt']);
+      const url = data.tess_jwt
+        ? chrome.runtime.getURL('src/pages/admin/admin.html') + '?token=' + encodeURIComponent(data.tess_jwt)
+        : chrome.runtime.getURL('src/pages/admin/admin.html');
+      window.open(url, '_blank');
+    } catch (e) {
+      window.open(chrome.runtime.getURL('src/pages/admin/admin.html'), '_blank');
+    }
   });
   document.getElementById('btnSetProfile').addEventListener('click', () => {
     const n = document.getElementById('manualProfileName').value.trim();
@@ -444,21 +520,35 @@ function setupAllEvents() {
   document.getElementById('btnClear').addEventListener('click', clearIDs);
   document.getElementById('btnExport').addEventListener('click', exportIDs);
   document.getElementById('btnCopy').addEventListener('click', copyIDs);
+
+  // Auto-Answer
+  document.getElementById('btnOpenAAConfig').addEventListener('click', () => {
+    if (typeof openAAPanel === 'function') openAAPanel();
+  });
+
+  // Smart Mailing
+  document.getElementById('btnOpenMLConfig').addEventListener('click', () => {
+    if (typeof openMLPanel === 'function') openMLPanel();
+  });
   
   // Eater suggestions
   document.getElementById('eaterSugList').addEventListener('click', (e) => {
     const trBtn = e.target.closest('.tr-btn');
     const row = e.target.closest('.eater-row');
     if (trBtn && row) {
-      const text = row.querySelector('.sug-text')?.textContent || '';
-      translateText(text).then(t => copyToChatInput(t));
+      const text = trBtn.dataset.sugText || row.querySelector('.sug-text')?.textContent || '';
+      if (text) {
+        translateText(text).then(t => copyToChatInput(t));
+      }
       return;
     }
     if (row) {
-      const text = row.querySelector('.sug-text')?.textContent || row.textContent.replace(/^\d\.\s*/, '');
-      copyToChatInput(text);
-      row.style.background = 'rgba(76,175,80,0.4)';
-      setTimeout(() => row.style.background = '', 600);
+      const text = row.dataset.sugText || row.querySelector('.sug-text')?.textContent || '';
+      if (text) {
+        copyToChatInput(text);
+        row.style.background = 'rgba(76,175,80,0.4)';
+        setTimeout(() => row.style.background = '', 600);
+      }
     }
   });
   
@@ -627,10 +717,6 @@ function scanPageForIds() {
     if (id && /^\d{6,15}$/.test(id)) ids.add(id);
   });
   
-  document.querySelectorAll('[id]').forEach(el => {
-    if (/^\d{6,15}$/.test(el.id)) ids.add(el.id);
-  });
-  
   document.querySelectorAll('a[href]').forEach(a => {
     const m = a.href.match(/\/(\d{6,15})(?:[/?#]|$)/);
     if (m) ids.add(m[1]);
@@ -661,6 +747,8 @@ async function executeLikes() {
       if (!btn.disabled && btn.offsetParent) {
         btn.click();
         given++;
+        botStats.likesGiven++;
+        updateStats();
         await sleep(200);
         
         const profile = btn.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="item"], [class*="result"]');
@@ -679,8 +767,6 @@ async function executeLikes() {
     await sleep(2500);
   }
   
-  botStats.likesGiven += given;
-  updateStats();
   await syncMetricsToStorage('LIKES', given);
   likesActive = false;
   updateModUI('likes', false);
@@ -724,6 +810,8 @@ async function executeFollows() {
       if (!followsActive) break;
       btn.click();
       given++;
+      botStats.followsGiven++;
+      updateStats();
       await sleep(300);
       
       const profile = btn.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="item"], [class*="result"], [class*="contact"]');
@@ -741,8 +829,6 @@ async function executeFollows() {
     await sleep(2500);
   }
   
-  botStats.followsGiven += given;
-  updateStats();
   await syncMetricsToStorage('FOLLOWS', given);
   followsActive = false;
   updateModUI('follows', false);
@@ -831,108 +917,150 @@ async function executeSaludos() {
 }
 
 async function doSaludosSweep(list) {
+  const processedIds = new Set();
   scanPageForIds().forEach(id => registerIdInStarTools(id, 'Saludo'));
   
-  const contacts = list.querySelectorAll('[class*="contact"], [class*="user"], [class*="item"], [class*="member"], [class*="dialog-item"], li');
-  console.log('[SALUDOS] Contactos encontrados:', contacts.length);
   let sent = 0;
   let skipped = 0;
+  let maxIterations = 200;
+  let iter = 0;
   
-  for (const c of contacts) {
-    if (!saludosActive) break;
+  while (saludosActive && iter < maxIterations) {
+    iter++;
+    const contacts = Array.from(list.querySelectorAll('[class*="contact"], [class*="user"], [class*="item"], [class*="member"], [class*="dialog-item"], li'));
+    const activeContact = contacts.find(c => {
+      if (c.offsetParent === null || isPinnedOrSaved(c)) return false;
+      const cid = extractId(c);
+      return !cid || !processedIds.has(cid);
+    });
+    if (!activeContact) break;
     
-    if (!isRecentlyEngaged(c)) {
+    activeContact.click();
+    await sleep(2000);
+    
+    const input = await waitForChatInput(5000);
+    if (!input) {
+      const cid = extractId(activeContact);
+      if (cid) processedIds.add(cid);
       skipped++;
       continue;
     }
     
-    c.click();
-    await sleep(1000);
-    
     const msg = saludoMessages[Math.floor(Math.random() * saludoMessages.length)];
     copyToChatInput(msg);
+    await sleep(800);
+    sendChatMessage();
+    await sleep(1500);
     
-    const id = extractId(c);
-    if (id) registerIdInStarTools(id, 'Saludo');
+    const id = extractId(activeContact);
+    if (id) {
+      processedIds.add(id);
+      registerIdInStarTools(id, 'Saludo');
+    }
     
     scanPageForIds().forEach(newId => registerIdInStarTools(newId, 'Saludo'));
     
     sent++;
-    await sleep(3000);
+    botStats.messagesSent++;
+    botStats.contactsProcessed++;
+    updateStats();
+    await sleep(2000);
   }
   
   scanPageForIds().forEach(id => registerIdInStarTools(id, 'Saludo'));
   
-  botStats.messagesSent += sent;
-  botStats.contactsProcessed += sent;
-  updateStats();
   await syncMetricsToStorage('SALUDOS', sent);
   saludosActive = false;
   updateModUI('saludos', false);
   saveAllStates();
-  console.log('[SALUDOS] ✅ Completado. Enviados:', sent, '| Saltados (sin interés reciente):', skipped, '| Total IDs Saludos:', collectedIds.Saludo.length);
+  console.log('[SALUDOS] ✅ Completado. Enviados:', sent, '| Saltados:', skipped, '| Total IDs Saludos:', collectedIds.Saludo.length);
 }
 
 // ============ EJECUTAR CARTAS (CAPTURA IDs) ============
 async function executeCartas() {
   console.log('[CARTAS] 🚀 Iniciando barrido...');
   
-  const list = document.querySelector('[class*="contact-list"], [class*="chat-list"], [class*="conversation"]');
+  // Buscar lista de contactos/threads con múltiples selectores
+  let list = document.querySelector('[class*="contact-list"], [class*="chat-list"], [class*="conversation"], [class*="thread-list"], [class*="dialog-list"], [class*="inbox"], [class*="message-list"]');
+  
   if (!list) {
-    console.log('[CARTAS] ❌ Lista no encontrada con selectores. Buscando lista genérica...');
-    const altList = document.querySelector('ul, [class*="list"], [role="list"]');
+    console.log('[CARTAS] ❌ Lista no encontrada con selectores específicos. Buscando lista genérica...');
+    // Probar selectores genéricos
+    const altList = document.querySelector('ul, [class*="list"], [role="list"], [class*="items"], [class*="container"] > div, main');
     if (!altList) {
       console.log('[CARTAS] ❌ No se encontró ninguna lista en la página');
+      console.log('[CARTAS] DEBUG - Cuerpo:', document.body.innerHTML.substring(0, 500));
       cartasActive = false;
       updateModUI('cartas', false);
       return;
     }
-    console.log('[CARTAS] Usando lista alternativa:', altList.className || altList.tagName);
+    console.log('[CARTAS] Usando lista alternativa:', altList.className || altList.tagName, '| hijos:', altList.children.length);
     await doCartasSweep(altList);
     return;
   }
   
+  console.log('[CARTAS] Lista encontrada:', list.className || list.tagName, '| hijos:', list.children.length);
   await doCartasSweep(list);
 }
 
 async function doCartasSweep(list) {
+  const processedIds = new Set();
   scanPageForIds().forEach(id => registerIdInStarTools(id, 'Cartas'));
   
-  const contacts = list.querySelectorAll('[class*="contact"], [class*="user"], [class*="item"], [class*="dialog-item"], li');
-  console.log('[CARTAS] Contactos encontrados:', contacts.length);
   let sent = 0;
   let skipped = 0;
+  let maxIterations = 200;
+  let iter = 0;
   
-  for (const c of contacts) {
-    if (!cartasActive) break;
+  while (cartasActive && iter < maxIterations) {
+    iter++;
+    const contacts = Array.from(list.querySelectorAll('[class*="contact"], [class*="user"], [class*="item"], [class*="dialog-item"], [class*="thread"], [class*="conversation"], li, [class*="row"], [class*="member"]'));
+    const activeContact = contacts.find(c => {
+      if (c.offsetParent === null || isPinnedOrSaved(c)) return false;
+      const cid = extractId(c);
+      return !cid || !processedIds.has(cid);
+    });
+    if (!activeContact) break;
     
-    if (!isRecentlyEngaged(c)) {
+    activeContact.click();
+    await sleep(2000);
+    
+    const input = await waitForChatInput(5000);
+    if (!input) {
+      const cid = extractId(activeContact);
+      if (cid) processedIds.add(cid);
       skipped++;
       continue;
     }
     
-    c.click();
-    await sleep(1000);
-    copyToChatInput(cartaMessage);
+    const carta = cartaMessages[Math.floor(Math.random() * cartaMessages.length)];
+    const shortCarta = carta.replace(/\n{2,}/g, ' ').substring(0, 200);
+    copyToChatInput(shortCarta);
+    await sleep(800);
+    sendChatMessage();
+    await sleep(1500);
     
-    const id = extractId(c);
-    if (id) registerIdInStarTools(id, 'Cartas');
+    const id = extractId(activeContact);
+    if (id) {
+      processedIds.add(id);
+      registerIdInStarTools(id, 'Cartas');
+    }
     
     scanPageForIds().forEach(newId => registerIdInStarTools(newId, 'Cartas'));
     
     sent++;
-    await sleep(3000);
+    botStats.cartasSent++;
+    updateStats();
+    await sleep(2000);
   }
   
   scanPageForIds().forEach(id => registerIdInStarTools(id, 'Cartas'));
   
-  botStats.cartasSent += sent;
-  updateStats();
   await syncMetricsToStorage('CARTAS', sent);
   cartasActive = false;
   updateModUI('cartas', false);
   saveAllStates();
-  console.log('[CARTAS] ✅ Completado. Enviados:', sent, '| Saltados (sin interés reciente):', skipped, '| Total IDs Cartas:', collectedIds.Cartas.length);
+  console.log('[CARTAS] ✅ Completado. Enviados:', sent, '| Saltados:', skipped, '| Total IDs Cartas:', collectedIds.Cartas.length);
 }
 
 // ============ RENDER STAR IDS ============
@@ -1009,7 +1137,10 @@ function toggleEater() {
 
 function copySugToChat(index) {
   const sug = eaterSuggestions[index];
-  if (sug) { copyToChatInput(sug); lastGeneratedMessage = sug; }
+  if (!sug) return;
+  copyToChatInput(sug);
+  const eq = document.getElementById('eq' + (index + 1));
+  if (eq) { eq.style.background = 'rgba(76,175,80,0.4)'; setTimeout(() => eq.style.background = '', 600); }
 }
 
 function copyToChatInput(text) {
@@ -1017,15 +1148,51 @@ function copyToChatInput(text) {
   if (!input) return;
   
   if (input.isContentEditable || input.tagName === 'DIV') {
-    input.textContent = text;
+    input.innerHTML = text.replace(/\n/g, '<br>');
   } else {
     input.value = text;
   }
   input.focus();
-  // Disparar input event para que el framework del chat detecte el cambio visualmente
-  // NO se dispara change/submit para evitar envío automático
   try { input.dispatchEvent(new Event('input', { bubbles: true })); } catch(e) {}
   try { input.dispatchEvent(new Event('keyup', { bubbles: true })); } catch(e) {}
+}
+
+function sendChatMessage() {
+  const input = findChatInput();
+  if (!input) return false;
+  input.focus();
+  
+  const hasNewlines = (input.value || input.textContent || '').includes('\n');
+  
+  // Buscar botón de envío primero (más confiable para multilínea)
+  const chatArea = input.closest('[class*="chat"], [class*="message"], form') || document.body;
+  const sendBtn = chatArea.querySelector('button[type="submit"], button[class*="send"], button[aria-label*="enviar"], button[aria-label*="send"], [class*="send-btn"], [class*="btn-send"], button[class*="chat-send"]');
+  
+  if (sendBtn && !sendBtn.disabled) {
+    try { sendBtn.click(); } catch(e) {}
+    return true;
+  }
+  
+  // Fallback: Enter key (solo si no tiene saltos de línea)
+  if (!hasNewlines) {
+    try {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, code: 'Enter', which: 13, bubbles: true, cancelable: true }));
+      input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', keyCode: 13, code: 'Enter', which: 13, bubbles: true, cancelable: true }));
+      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, code: 'Enter', which: 13, bubbles: true, cancelable: true }));
+      if (input.tagName === 'TEXTAREA') {
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    } catch(e) {}
+  }
+  
+  return true;
+}
+
+function isPinnedOrSaved(contactEl) {
+  const text = contactEl.textContent.toLowerCase();
+  if (text.includes('pin') || text.includes('saved') || text.includes('fijado') || text.includes('guardado')) return true;
+  if (contactEl.querySelector('[class*="pin"], [class*="saved"], [class*="star"], [class*="fixed"], [src*="pin"], [src*="star"]')) return true;
+  return false;
 }
 
 // ============ CHAT WATCHER ============
@@ -1078,20 +1245,30 @@ function analyzeMessage(msgEl) {
   }
 }
 
+let eaterProfileTimer = null;
+let lastAnalyzedName = '';
+
 function analyzeClientProfile(clientName) {
-  const profileEl = document.querySelector('[class*="profile-detail"], [class*="user-profile"], [class*="member-info"], [class*="contact-info"]') || document.body;
+  if (!clientName || !isAuthenticated || !eaterActive) return;
+  if (clientName === lastAnalyzedName) return;
+  lastAnalyzedName = clientName;
   
-  const profile = {
-    name: clientName,
-    interests: extractInterests(profileEl),
-    location: extractLocation(profileEl),
-    bio: extractBio(profileEl),
-    age: extractAge(profileEl),
-    hasPhoto: checkPhoto(profileEl),
-    hobbies: extractHobbies(profileEl)
-  };
-  
-  generateSuggestions(clientName, profile);
+  if (eaterProfileTimer) clearTimeout(eaterProfileTimer);
+  eaterProfileTimer = setTimeout(() => {
+    const profileEl = document.querySelector('[class*="profile-detail"], [class*="user-profile"], [class*="member-info"], [class*="contact-info"]') || document.body;
+    
+    const profile = {
+      name: clientName,
+      interests: extractInterests(profileEl),
+      location: extractLocation(profileEl),
+      bio: extractBio(profileEl),
+      age: extractAge(profileEl),
+      hasPhoto: checkPhoto(profileEl),
+      hobbies: extractHobbies(profileEl)
+    };
+    
+    generateSuggestions(clientName, profile);
+  }, 800);
 }
 
 function checkPhoto(el) {
@@ -1116,7 +1293,7 @@ function extractInterests(el) {
   for (const [k, v] of Object.entries(kw)) {
     if (v.some(w => t.includes(w))) interests.push(k);
   }
-  return interests.length > 0 ? interests : ['conversación', 'conocer gente'];
+  return interests;
 }
 
 function extractLocation(el) {
@@ -1145,31 +1322,33 @@ function extractHobbies(el) {
   return h.length > 0 ? h : null;
 }
 
+let generateTimer = null;
+
 function generateSuggestions(name, profile) {
-  const { interests, location, bio, age, hasPhoto, hobbies } = profile;
-  
   const btn = document.getElementById('btnRefreshEater');
-  btn.textContent = '🤖 IA...';
+  if (generateTimer) clearTimeout(generateTimer);
   
-  // Intentar usar IA primero
-  generateWithAI(name, profile).then(aiSuggestions => {
-    if (aiSuggestions && aiSuggestions.length > 0) {
-      isUsingAI = true;
-      btn.textContent = '🤖 IA';
-      eaterSuggestions = aiSuggestions;
-    } else {
+  generateTimer = setTimeout(() => {
+    btn.textContent = '🤖 IA...';
+    
+    generateWithAI(name, profile).then(aiSuggestions => {
+      if (aiSuggestions && aiSuggestions.length > 0) {
+        isUsingAI = true;
+        btn.textContent = '🤖 IA';
+        eaterSuggestions = aiSuggestions;
+      } else {
+        isUsingAI = false;
+        btn.textContent = '🔄 FRASES';
+        generateLocalSuggestions(name, profile);
+      }
+      displaySuggestions(name, profile);
+    }).catch(() => {
       isUsingAI = false;
       btn.textContent = '🔄 FRASES';
       generateLocalSuggestions(name, profile);
-    }
-    // Siempre mostrar las sugerencias
-    displaySuggestions(name, profile);
-  }).catch(() => {
-    isUsingAI = false;
-    btn.textContent = '🔄 FRASES';
-    generateLocalSuggestions(name, profile);
-    displaySuggestions(name, profile);
-  });
+      displaySuggestions(name, profile);
+    });
+  }, 500);
 }
 
 async function generateWithAI(name, profile) {
@@ -1177,9 +1356,9 @@ async function generateWithAI(name, profile) {
     const stored = await chrome.storage.local.get(['tess_jwt']);
     const token = stored.tess_jwt;
     
-    const prompt = `Genera 5 saludos iniciales cortos y personalizados para escribir a una persona llamada ${name || 'ella'}. 
-Perfil: edad ${age || 'no especificada'}, ubicación ${location || 'no especificada'}, intereses: ${interests || 'no especificados'}, hobbies: ${hobbies || 'no especificados'}.
-Cada saludo debe ser diferente, máximo 2 oraciones, cálido y natural.`;
+    const prompt = `Genera 2 frases cortas de citas online con tecnica de push and pull. 
+Deben ser concisas, llamar la atencion, NO personalizadas ni con nombre. 
+Maximo 12 palabras cada una. Sin preguntas. Directas, con gancho y misterio.`;
 
     const response = await fetch(`${TESSERACT_API}/api/chatgpt/chat`, {
       method: 'POST',
@@ -1189,11 +1368,11 @@ Cada saludo debe ser diferente, máximo 2 oraciones, cálido y natural.`;
       },
       body: JSON.stringify({
         messages: [
-          { role: 'system', content: 'Eres un asistente que genera saludos para sitios de citas. Sé cálido, natural y corto.' },
+          { role: 'system', content: 'Genera frases cortas para citas online. Push and pull. Maximo 12 palabras. Sin personalizar. Sin preguntas.' },
           { role: 'user', content: prompt }
         ],
         model: 'gpt-3.5-turbo',
-        max_tokens: 500
+        max_tokens: 100
       })
     });
     
@@ -1202,9 +1381,8 @@ Cada saludo debe ser diferente, máximo 2 oraciones, cálido y natural.`;
     const data = await response.json();
     if (data.choices && data.choices[0]?.message?.content) {
       const text = data.choices[0].message.content;
-      // Parsear las líneas generadas
-      const lines = text.split('\n').filter(l => l.trim().length > 10);
-      return lines.slice(0, 5);
+      const lines = text.split('\n').filter(l => l.trim().length > 5 && l.trim().length < 100);
+      return lines.slice(0, 2);
     }
     return null;
   } catch (e) {
@@ -1214,7 +1392,10 @@ Cada saludo debe ser diferente, máximo 2 oraciones, cálido y natural.`;
 }
 
 function generateLocalSuggestions(name, profile) {
-  const { interests, location, bio, age, hasPhoto, hobbies } = profile;
+  const { interests, location, hobbies } = profile;
+  const hasRealInterests = interests && interests.length > 0;
+  const hasRealHobbies = hobbies && hobbies.length > 0;
+  const hasRealLocation = location && location.length > 0;
   
   const openers = [
     'Hola! Me encantó tu perfil y no pude resistirme a escribirte.',
@@ -1222,41 +1403,105 @@ function generateLocalSuggestions(name, profile) {
     'Hola, vi tu perfil y dije "tengo que conocer a esta persona".',
     '¡Hola! Hay algo en tu sonrisa que me llamó poderosamente la atención.',
     'Qué interesante se ve tu perfil, me gustaría saber más de ti.',
-    '¡Hey! Justo pasaba por aquí y tuve que detenerme en tu perfil.',
     'No suelo escribir primero, pero tu perfil realmente me impactó.',
-    'Hola, ¿cómo estás? Espero que tengas un día tan genial como tú.',
     'Vaya, qué sorpresa encontrarme con un perfil tan auténtico.',
     'Me llamó mucho la atención tu forma de ser, así que aquí estoy.',
-    '¡Hola! La vida es demasiado corta para no escribir cuando algo te llama la atención.',
     'Me encantó tu estilo, se ve que eres una persona especial.',
     'Hola! No pude evitar pensar que podríamos tener una gran conversación.',
     '¡Qué bonito perfil! Definitivamente hay algo diferente en ti.',
     'Hola, ¿sabes qué? Tu perfil tiene una vibra muy positiva.',
     'Me gusta la autenticidad que transmites en tus fotos.',
-    '¡Hola! Me pareces una persona muy interesante, ¿te gustaría conversar?',
     'Tu perfil me transmitió muy buena energía, decidí escribirte.',
-    'Hola! Espero no sonar repetitivo, pero tu perfil es de los mejores que he visto.',
-    'Qué gusto saludarte, se nota que eres alguien especial desde el primer vistazo.'
+    'Qué gusto saludarte, se nota que eres alguien especial desde el primer vistazo.',
+    'Hola, vi algo en tu perfil que me hizo sonreír y aquí estoy.',
+    '¡Buenas! Tu perfil tiene algo magnético, no pude ignorarlo.',
+    '¿Sabes? Normalmente no hago esto, pero tu perfil merece una excepción.',
+    'Hola, me pareces alguien fascinante y tenía que decírtelo.',
+    '¡Hey! Apuesto a que tienes historias increíbles que contar.',
+    'Me topé con tu perfil y pensé: "definitivamente vale la pena".',
+    'Hola, ¿qué tal? Me encanta la vibra positiva que transmites.',
+    'No todo los días encuentro un perfil tan interesante como el tuyo.',
+    '¡Hola! Tu forma de ser se nota auténtica y eso me encanta.',
+    'Vaya, qué grata sorpresa encontrarte. Tu perfil irradia buena energía.',
+    'Hola, ¿crees en las conexiones espontáneas? Porque esto se siente así.',
+    'Me encantó lo que vi en tu perfil, quería saber más de ti.',
+    '¡Hola! Tengo el presentimiento de que tenemos mucho en común.',
+    'Qué bonito encontrarse con alguien tan genuino por aquí.',
+    'Hola, tu sonrisa en la foto principal es simplemente contagiosa.',
+    'No pude pasar de largo sin saludarte, tu perfil es demasiado interesante.',
+    '¡Hola! Se nota que eres una persona con mucha luz propia.',
+    'Tu perfil desprende una energía única, quería conocerte.',
+    'Hola, ¿qué haces en un lugar como este con un perfil tan increíble?',
+    'Me pareces alguien muy interesante, ojalá podamos conectar.',
+    '¡Holaaa! Tengo feeling de que esto podría ser el inicio de algo bonito.'
   ];
   
   const sug = [];
   const usedCombos = new Set();
+  const safeName = name && name !== 'Cliente' ? name : null;
   
-  for (let i = 0; i < 10; i++) {
+  while (sug.length < 2) {
     const parts = [];
     const opener = openers[Math.floor(Math.random() * openers.length)];
     parts.push(opener);
     
-    if (Math.random() > 0.3 && location) {
-      parts.push(`¿Cómo es vivir en ${location}? Se ve un lugar interesante.`);
+    if (hasRealLocation && Math.random() > 0.3) {
+      const locFrase = [
+        `¿Cómo es vivir en ${location}? Se ve un lugar interesante.`,
+        `${location} debe ser un lugar increíble. ¿Qué es lo que más te gusta?`,
+        `He escuchado cosas muy buenas de ${location}, ¿es tan lindo como dicen?`,
+        `¿Qué se siente vivir en ${location}? Me da curiosidad.`
+      ];
+      parts.push(locFrase[Math.floor(Math.random() * locFrase.length)]);
     }
     
-    if (Math.random() > 0.3 && (hobbies || interests)) {
-      const hob = hobbies?.[0] || interests?.[0] || 'cosas interesantes';
-      parts.push(`Me gusta que te apasione ${hob}, tenemos algo en común.`);
+    if (hasRealHobbies && Math.random() > 0.3) {
+      const hob = hobbies[0];
+      const hobFrase = [
+        `Veo que te gusta ${hob}, a mí también.`,
+        `${hob} suena genial, ¿desde cuándo lo practicas?`,
+        `Qué cool que te guste ${hob}, es algo que admiro.`,
+        `${hob} me parece súper interesante, ¿cómo empezaste?`
+      ];
+      parts.push(hobFrase[Math.floor(Math.random() * hobFrase.length)]);
+    } else if (hasRealInterests && Math.random() > 0.3) {
+      const interest = interests[0];
+      const intFrase = [
+        `Me gusta que te apasione ${interest}, es algo que valoro.`,
+        `${interest} suena fascinante, cuéntame más sobre eso.`,
+        `Qué bien que disfrutes de ${interest}, eso dice mucho de ti.`,
+        `Me encanta la gente apasionada por ${interest}.`
+      ];
+      parts.push(intFrase[Math.floor(Math.random() * intFrase.length)]);
     }
     
-    parts.push('¿Qué tal va tu día?');
+    const closing = [
+      '¿Qué tal va tu día?',
+      'Cuéntame algo sobre ti.',
+      '¿Cómo va todo?',
+      'Espero que estés teniendo una linda semana.',
+      '¿Qué te trae por aquí?',
+      '¿De dónde eres?',
+      '¿Qué te gusta hacer en tu tiempo libre?',
+      '¿Cómo describirías tu personalidad?',
+      '¿Qué es lo que más disfrutas en la vida?',
+      'Platícame un poco de ti.',
+      '¿Cuál es tu plan favorito para un fin de semana?',
+      '¿Eres más de playa o de montaña?',
+      '¿Café o té? Pregunta importante.',
+      'Cuéntame, ¿qué te hace feliz?',
+      '¿Tienes alguna mascota?',
+      '¿Qué tipo de música te gusta?',
+      '¿Cuál es tu lugar favorito para viajar?',
+      'Dime, ¿qué es lo que más te apasiona hacer?',
+      '¿Eres aventurero o más tranquilo?',
+      '¿Qué fue lo mejor que te pasó esta semana?'
+    ];
+    if (safeName && Math.random() > 0.4) {
+      parts.push(`Cuéntame más de ti, ${safeName}.`);
+    } else {
+      parts.push(closing[Math.floor(Math.random() * closing.length)]);
+    }
     
     const combination = parts.join(' ');
     const key = combination.substring(0, 40);
@@ -1277,35 +1522,24 @@ function displaySuggestions(name) {
   const sugListEl = document.getElementById('eaterSugList');
   if (!sugListEl) return;
   
-  const initialCount = 4;
-  const showAll = sugListEl.dataset.showAll === 'true';
-  const displaySug = showAll ? eaterSuggestions : eaterSuggestions.slice(0, initialCount);
+  const maxShow = 2;
+  const displaySug = eaterSuggestions.slice(0, maxShow);
   
   sugListEl.innerHTML = displaySug.map((s, i) => `
-    <div class="eater-row" onclick="selectEaterSuggestion('${s.replace(/'/g, "\\'")}')">
+    <div class="eater-row" data-sug-text="${s.replace(/"/g, '&quot;')}">
       <div style="flex:1;word-break:break-word;">
         <span class="sn">${i+1}.</span>
         <span class="sug-text" style="font-size:11px;line-height:1.3;">${s.length > 60 ? s.substring(0,60)+'...' : s}</span>
       </div>
-      <button class="tr-btn" onclick="event.stopPropagation();translateEaterText('${s.replace(/'/g, "\\'")}')">🌐</button>
+      <button class="tr-btn" data-action="translate" data-sug-text="${s.replace(/"/g, '&quot;')}">🌐</button>
     </div>
   `).join('');
   
-  // Botón ver más
-  const existingMore = sugListEl.querySelector('.more-btn');
-  if (existingMore) existingMore.remove();
-  
-  if (eaterSuggestions.length > initialCount) {
-    const moreBtn = document.createElement('div');
-    moreBtn.className = 'more-btn';
-    moreBtn.style.cssText = 'text-align:center;padding:8px;font-size:10px;cursor:pointer;color:#8b5cf6;border-top:1px solid rgba(139,92,246,0.2);margin-top:4px;';
-    moreBtn.textContent = showAll ? '⬆ VER MENOS' : `📋 VER MÁS (${eaterSuggestions.length - initialCount})`;
-    moreBtn.onclick = () => {
-      sugListEl.dataset.showAll = showAll ? 'false' : 'true';
-      displaySuggestions(name);
-    };
-    sugListEl.appendChild(moreBtn);
-  }
+  // Actualizar botones eq1, eq2 de la barra flotante
+  const eq1 = document.getElementById('eq1');
+  const eq2 = document.getElementById('eq2');
+  if (eq1) eq1.textContent = '\uD83D\uDCAC ' + (eaterSuggestions[0]?.substring(0, 18) || 'SUG 1') + '...';
+  if (eq2) eq2.textContent = '\uD83D\uDCAC ' + (eaterSuggestions[1]?.substring(0, 18) || 'SUG 2') + '...';
 }
 
 function selectEaterSuggestion(text) {
@@ -1341,292 +1575,6 @@ async function translateEaterText(text) {
   } catch(e) {
     alert('Error: ' + e.message);
   }
-}
-    'Hola! Me encantó tu perfil y no pude resistirme a escribirte.',
-    '¡Qué alegría encontrarte por aquí! Tu energía se nota hasta en las fotos.',
-    'Hola, vi tu perfil y dije "tengo que conocer a esta persona".',
-    '¡Hola! Hay algo en tu sonrisa que me llamó poderosamente la atención.',
-    'Qué interesante se ve tu perfil, me gustaría saber más de ti.',
-    '¡Hey! Justo pasaba por aquí y tuve que detenerme en tu perfil.',
-    'No suelo escribir primero, pero tu perfil realmente me impactó.',
-    'Hola, ¿cómo estás? Espero que tengas un día tan genial como tú.',
-    'Vaya, qué sorpresa encontrarme con un perfil tan auténtico.',
-    'Me llamó mucho la atención tu forma de ser, así que aquí estoy.',
-    '¡Hola! La vida es demasiado corta para no escribir cuando algo te llama la atención.',
-    'Me encantó tu estilo, se ve que eres una persona especial.',
-    'Hola! No pude evitar pensar que podríamos tener una gran conversación.',
-    '¡Qué bonito perfil! Definitivamente hay algo diferente en ti.',
-    'Hola, ¿sabes qué? Tu perfil tiene una vibra muy positiva.',
-    'Me gusta la autenticidad que transmites en tus fotos.',
-    '¡Hola! Me pareces una persona muy interesante, ¿te gustaría conversar?',
-    'Tu perfil me transmitió muy buena energía, decidí escribirte.',
-    'Hola! Espero no sonar repetitivo, pero tu perfil es de los mejores que he visto.',
-    'Qué gusto saludarte, se nota que eres alguien especial desde el primer vistazo.'
-  ];
-  
-  const locationComments = [
-    `¿Cómo es vivir en ${location || 'tu ciudad'}? Se ve un lugar fascinante.`,
-    `He escuchado cosas maravillosas de ${location || 'donde vives'}, ¿qué es lo que más te gusta?`,
-    `¿Qué recomendación me darías para visitar ${location || 'tu zona'}?`,
-    `${location || 'Tu lugar'} se ve increíble, ¿cuál es tu rincón favorito?`,
-    `¿La gente de ${location || 'tu ciudad'} es tan cálida como tú?`,
-    `Me encantaría conocer ${location || 'tu tierra'}, ¿me recomiendas algún lugar?`,
-    `${location || 'Allá donde vives'} debe ser especial, ¿cuéntame cómo es?`,
-    `¿Qué es lo mejor de vivir en ${location || 'tu ciudad'}?`,
-    `Me muero por visitar ${location || 'tu país'}, ¿qué no me puedo perder?`,
-    `¿Cómo es un día típico en ${location || 'tu ciudad'}?`,
-    `Seguro que en ${location || 'tu ciudad'} hay lugares mágicos, ¿cuál es tu favorito?`,
-    `${location || 'Tu zona'} me suena a aventura, ¿qué tal es el clima por allá?`
-  ];
-  
-  const hobbyComments = [
-    `Veo que te gusta ${hobbies?.[0] || interests?.[0] || 'pasarla bien'}, ¡es una gran afición!`,
-    `Qué cool que disfrutes ${hobbies?.[0] || interests?.[0] || 'de las cosas buenas de la vida'}.`,
-    `Me encanta que te apasione ${hobbies?.[0] || interests?.[0] || 'la buena vida'}, tenemos algo en común.`,
-    `¿${hobbies?.[0] || interests?.[0] || 'Disfrutar'}? ¡Eso dice mucho de tu personalidad!`,
-    `Me parece genial que te guste ${hobbies?.[0] || interests?.[0] || 'explorar'}.`,
-    `${hobbies?.[0] || interests?.[0] || 'La aventura'} es una señal de que eres una persona vibrante y auténtica.`,
-    `Compartimos el gusto por ${hobbies?.[0] || interests?.[0] || 'las experiencias únicas'}.`,
-    `¿Cómo aprendiste a disfrutar tanto ${hobbies?.[0] || interests?.[0] || 'la vida'}?`,
-    `El hecho de que te guste ${hobbies?.[0] || interests?.[0] || 'conocer'} me dice mucho de ti.`,
-    `¡Qué bien! ${hobbies?.[0] || interests?.[0] || 'La buena actitud'} es clave para conectar.`
-  ];
-  
-  const photoComments = hasPhoto ? [
-    'Tus fotos transmiten mucha luz y energía positiva.',
-    'Tienes una sonrisa que ilumina el perfil completo.',
-    'Tus fotos son increíbles, se nota que disfrutas la vida.',
-    'Qué bonitas fotos, reflejan una personalidad auténtica.',
-    'Me encantan tus fotos, especialmente la energía que transmites.',
-    'Tus fotos tienen un ángulo muy interesante, me gusta tu estilo.',
-    'Se nota que eres una persona que disfruta cada momento por tus fotos.',
-    'Qué estilo tan único tienes en tus fotos, me llama mucho la atención.',
-    'La forma en que te expresas en tus fotos es muy auténtica.',
-    'Tus fotos dicen más que mil palabras, y todas son positivas.'
-  ] : [
-    'Me encantaría conocer más de ti, incluso sin ver tu rostro aún.',
-    'A veces las mejores conexiones empiezan sin imágenes, solo con palabras.',
-    'Lo importante es la conexión, ¿no crees? Me gusta lo que transmites.',
-    'No importa la foto, tu forma de expresarte ya me parece especial.',
-    'Las mejores conversaciones nacen de la autenticidad, no de las apariencias.',
-    'Me interesa más quien eres que cómo te ves, ¿te parece si conversamos?',
-    'A veces el misterio es más interesante, ¿qué historia hay detrás de ti?',
-    'No hace falta una foto para sentir buena vibra, y tú la tienes.',
-    'Lo que importa es la conexión real, ¿qué te gusta hacer en la vida?',
-    'La personalidad es lo que más importa, y la tuya se nota interesante.'
-  ];
-  
-  const bioComments = (bio && bio.length > 15) ? [
-    `"${bio.substring(0, 100)}..." — Me identifico mucho con eso que escribiste.`,
-    `Tu descripción es de las más originales que he leído. "${bio.substring(0, 80)}..."`,
-    `Cuando leí "${bio.substring(0, 60)}..." supe que tenía que escribirte.`,
-    `Me gusta cómo piensas, se nota en lo que escribiste: "${bio.substring(0, 80)}..."`,
-    `Tu forma de expresarte me parece muy auténtica, sobre todo cuando dices "${bio.substring(0, 60)}..."`,
-    `Hay tanta profundidad en lo que compartiste: "${bio.substring(0, 100)}..." Me encanta.`,
-    `No todos escriben algo tan genuino como "${bio.substring(0, 60)}..." Gracias por eso.`,
-    `De todas las descripciones que he leído, la tuya es la que más me llamó la atención.`
-  ] : [
-    'Hay algo en ti que despierta mi curiosidad, me gustaría conocerte mejor.',
-    'A veces menos palabras dicen más, y tu perfil me intriga gratamente.',
-    'No necesitas escribir mucho para transmitir buena energía.',
-    'Me gusta la vibra que transmites, aunque no hayas escrito mucho.',
-    'Lo mejor está en la conversación, ¿te animas a charlar un rato?',
-    'Tu perfil tiene ese no sé qué que invita a querer saber más.',
-    'La sencillez también encanta, y tu perfil es prueba de ello.',
-    'A veces el silencio dice más que mil palabras. Me encantaría conocerte.'
-  ];
-  
-  const interestQuestions = [
-    '¿Qué es lo que más disfrutas hacer en tu tiempo libre?',
-    '¿Tienes algún plan emocionante para este mes?',
-    '¿Cuál es ese lugar al que siempre quieres viajar y aún no has ido?',
-    '¿Qué tipo de música te hace bailar sin importar dónde estés?',
-    '¿Eres más de playa o de montaña?',
-    'Si pudieras cenar con cualquier persona del mundo, ¿quién sería?',
-    '¿Qué serie o película te ha marcado recientemente?',
-    '¿Tienes algún talento oculto que quieras compartir?',
-    '¿Qué es lo más aventurero que has hecho este año?',
-    '¿Prefieres planes tranquilos o fiesta total?',
-    '¿Cuál es tu comida favorita y por qué?',
-    '¿Qué te hace reír sin parar?',
-    '¿Tienes alguna meta o sueño que quieras cumplir pronto?',
-    '¿Eres más de amaneceres o atardeceres?',
-    '¿Qué canción describe tu momento actual?',
-    'Si te dieran un billete de avión a cualquier lugar, ¿a dónde irías?',
-    '¿Qué actividad te hace perder la noción del tiempo?',
-    '¿Eres de café o de té? ¿O de algo más fuerte?',
-    '¿Cuál ha sido el mejor consejo que has recibido?',
-    '¿Qué te apasiona tanto que podrías hablar horas de ello?'
-  ];
-  
-  const closingLines = [
-    'Me encantaría escuchar tu versión de la historia.',
-    'Cuéntame, ¿qué te trae por aquí?',
-    'Espero que podamos tener una conversación increíble.',
-    'Me gustaría saber qué piensas de todo esto.',
-    'Ojalá tengamos la oportunidad de conocernos mejor.',
-    'Dime, ¿coincido en algo de lo que imaginé de ti?',
-    'Cuéntame algo interesante sobre ti que no haya visto en tu perfil.',
-    '¿Te parece si seguimos esta conversación?',
-    'Me encantaría saber qué te pareció mi mensaje.',
-    'Prometo no morder... a menos que tú quieras. Bromeo... ¿o no?',
-    'Bueno, la pelota está en tu tejado. ¿Qué me cuentas?',
-    '¿Crees en las casualidades? Yo empiezo a creer.',
-    'Si esto fuera una película, ¿qué título le pondrías?',
-    'Te leo con atención, ¿qué me dices?',
-    'Espero no haber sido muy intenso, pero es que tu perfil lo vale.',
-    '¿Qué tal si empezamos con un café virtual?',
-    'La vida es muy corta como para no arriesgarse, ¿no crees?',
-    'Si llegaste hasta aquí, ¿por qué no continuar la conversación?',
-    'Me conformo con una sonrisa virtual, ¿me regalas una?',
-    'Tengo el presentimiento de que podríamos llevarnos genial.'
-  ];
-  
-  const ageComments = age ? [
-    `${age} años y con esa energía, ¡me encanta!`,
-    `Con ${age} años seguro tienes muchas historias que contar.`,
-    `A tus ${age} años ya se nota que sabes lo que quieres.`,
-    `${age} años y ya tienes un perfil tan interesante.`,
-    `Tus ${age} años te sientan de maravilla, se nota que sabes vivir.`
-  ] : [];
-  
-  const icebreakerComments = [
-    '¿Sabes qué? Tu perfil tiene magia. No sé explicarlo, pero la tiene.',
-    'Me encantaría saber qué es lo que más te apasiona en la vida.',
-    '¿Cuál es la historia más interesante que te ha pasado en esta app?',
-    '¿Qué es lo más loco que has hecho por amor o amistad?',
-    '¿Crees en el destino? Porque encontrarme tu perfil no parece coincidencia.',
-    '¿Eres de las personas que se enamoran de una sonrisa o de una conversación?',
-    '¿Qué es lo que más valoras en una persona?',
-    'Cuéntame 3 cosas que te gusten y 1 que no soportes.',
-    'Si tu vida fuera una canción, ¿cuál sería la banda sonora?',
-    '¿Qué es lo mejor que te ha pasado esta semana?',
-    '¿Cuál es tu mayor sueño en este momento?',
-    'Dime algo que te haga feliz de verdad, sin pensar.',
-    '¿Qué te gustaría hacer que nunca has hecho?',
-    '¿Eres de planes improvisados o todo lo tienes que planear?',
-    '¿Cuál es el cumplido más bonito que has recibido?',
-    '¿Qué te hace sentir vivo realmente?',
-    'Describe tu día perfecto en 3 palabras.',
-    '¿Qué valoras más: la aventura o la estabilidad?',
-    'Si pudieras tener un superpoder, ¿cuál elegirías?',
-    '¿Eres más de atardeceres en la playa o amaneceres en la montaña?'
-  ];
-  
-  // Combinatorial generation: pick random items from each category
-  // and combine them into unique suggestions
-  const sug = [];
-  const usedCombos = new Set();
-  
-  // Generate 12 unique combinations
-  while (sug.length < 12) {
-    const parts = [];
-    
-    // Pick random opener
-    const opener = openers[Math.floor(Math.random() * openers.length)];
-    parts.push(opener);
-    
-    // 50% chance to add location comment
-    if (Math.random() > 0.3) {
-      const loc = locationComments[Math.floor(Math.random() * locationComments.length)];
-      parts.push(loc);
-    }
-    
-    // 50% chance to add hobby comment
-    if (Math.random() > 0.3) {
-      const hobby = hobbyComments[Math.floor(Math.random() * hobbyComments.length)];
-      parts.push(hobby);
-    }
-    
-    // 40% chance to add photo comment
-    if (Math.random() > 0.4) {
-      const photo = photoComments[Math.floor(Math.random() * photoComments.length)];
-      parts.push(photo);
-    }
-    
-    // 40% chance to add bio comment
-    if (Math.random() > 0.4) {
-      const bioC = bioComments[Math.floor(Math.random() * bioComments.length)];
-      parts.push(bioC);
-    }
-    
-    // Always add a question
-    const question = interestQuestions[Math.floor(Math.random() * interestQuestions.length)];
-    parts.push(question);
-    
-    // 30% chance to add an icebreaker
-    if (Math.random() > 0.5) {
-      const ice = icebreakerComments[Math.floor(Math.random() * icebreakerComments.length)];
-      parts.push(ice);
-    }
-    
-    // 40% chance to add closing
-    if (Math.random() > 0.4) {
-      const close = closingLines[Math.floor(Math.random() * closingLines.length)];
-      parts.push(close);
-    }
-    
-    const combination = parts.join(' ');
-    
-    // Avoid duplicates
-    const key = combination.substring(0, 40);
-    if (!usedCombos.has(key)) {
-      usedCombos.add(key);
-      sug.push(combination);
-    }
-  }
-  
-  eaterSuggestions = sug;
-  lastGeneratedMessage = sug[0];
-  const cnEl = document.getElementById('eaterClientName');
-  if (cnEl) cnEl.textContent = name;
-  
-  // Mostrar solo 4 sugerencias iniciales, con boton "ver mas"
-  const initialCount = 4;
-  const sugListEl = document.getElementById('eaterSugList');
-  if (sugListEl) {
-    const showAll = sugListEl.dataset.showAll === 'true';
-    const displaySug = showAll ? sug : sug.slice(0, initialCount);
-    sugListEl.innerHTML = displaySug.map((s, i) => `
-      <div class="eater-row">
-        <div style="flex:1;"><span class="sn">${showAll ? i+1 : i+1}.</span><span class="sug-text">${s}</span></div>
-        <button class="tr-btn">🌐</button>
-      </div>
-    `).join('');
-    if (sug.length > initialCount) {
-      const moreBtn = document.createElement('div');
-      moreBtn.style.cssText = 'text-align:center;padding:6px;font-size:8px;cursor:pointer;color:#8b5cf6;border-top:1px solid rgba(139,92,246,0.2);';
-      moreBtn.textContent = showAll ? '⬆ VER MENOS' : '📋 VER MÁS (' + (sug.length - initialCount) + ' más)';
-      moreBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        sugListEl.dataset.showAll = showAll ? 'false' : 'true';
-        // Regenerar con el nuevo estado
-        sugListEl.innerHTML = sug.map((s, i) => `
-          <div class="eater-row">
-            <div style="flex:1;"><span class="sn">${i+1}.</span><span class="sug-text">${s}</span></div>
-            <button class="tr-btn">🌐</button>
-          </div>
-        `).join('');
-        if (sug.length > initialCount) {
-          const newBtn = document.createElement('div');
-          newBtn.style.cssText = 'text-align:center;padding:6px;font-size:8px;cursor:pointer;color:#8b5cf6;border-top:1px solid rgba(139,92,246,0.2);';
-          newBtn.textContent = sugListEl.dataset.showAll === 'true' ? '⬆ VER MENOS' : '📋 VER MÁS (' + (sug.length - initialCount) + ' más)';
-          newBtn.addEventListener('click', (e2) => {
-            e2.stopPropagation();
-            sugListEl.dataset.showAll = sugListEl.dataset.showAll === 'true' ? 'false' : 'true';
-            generateSuggestions(name, profile);
-          });
-          sugListEl.appendChild(newBtn);
-        }
-      });
-      sugListEl.appendChild(moreBtn);
-    }
-  }
-  
-  document.getElementById('eq1').textContent = '💬 ' + (sug[0]?.substring(0, 18) || 'SUG 1') + '...';
-  document.getElementById('eq2').textContent = '💬 ' + (sug[1]?.substring(0, 18) || 'SUG 2') + '...';
-  document.getElementById('eq3').textContent = '💬 ' + (sug[2]?.substring(0, 18) || 'SUG 3') + '...';
-  document.getElementById('eq4').textContent = '💬 ' + (sug[3]?.substring(0, 18) || 'SUG 4') + '...';
 }
 
 // ============ REFRESH EATER ============
@@ -1864,13 +1812,16 @@ function saveSaludosConfig() {
 }
 
 function openCartasConfig() {
-  document.getElementById('cartaText').value = cartaMessage;
+  document.getElementById('cartaText').value = cartaMessages.join('\n---\n');
   document.getElementById('cartasModal').style.display = 'block';
 }
 
 function saveCartasConfig() {
-  cartaMessage = document.getElementById('cartaText').value.trim();
-  if (!cartaMessage) cartaMessage = 'Querido/a amigo/a, me encantaría conocerte mejor.';
+  const raw = document.getElementById('cartaText').value.trim();
+  if (raw) {
+    cartaMessages = raw.split('---').map(m => m.trim()).filter(m => m.length > 0);
+  }
+  if (!cartaMessages.length) cartaMessages = ['Querido/a amigo/a, me encantaría conocerte mejor.'];
   document.getElementById('cartasModal').style.display = 'none';
   saveAllStates();
 }
@@ -1884,6 +1835,16 @@ function findButton(labels) {
     if (labels.some(l => text.includes(l.toLowerCase()) || title.includes(l.toLowerCase()))) {
       if (b.offsetParent) return b;
     }
+  }
+  return null;
+}
+
+async function waitForChatInput(timeoutMs) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const input = findChatInput();
+    if (input) return input;
+    await sleep(200);
   }
   return null;
 }
@@ -2040,14 +2001,25 @@ function startPeriodicSync() {
     try {
       const token = await new Promise(r => chrome.storage.local.get('tess_jwt', d => r(d.tess_jwt)));
       if (token) {
-        await fetch(`${TESSERACT_API}/api/tess/metrics/sync`, {
+        const res = await fetch(`${TESSERACT_API}/api/tess/metrics/sync`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ action, count })
+          body: JSON.stringify({
+            stats: botStats,
+            collectedIds: collectedIds,
+            action: 'PERIODIC_SYNC',
+            count: totalSweeps
+          })
         });
+        if (res.status === 401) {
+          console.warn('[TESS] Token expirado en periodic sync');
+          chrome.storage.local.remove('tess_jwt');
+        } else if (!res.ok) {
+          console.warn('[TESS] Periodic sync error:', res.status);
+        }
       }
     } catch (e) {
-      // Error silencioso si el servidor no está disponible
+      console.warn('[TESS] Periodic sync error (offline?):', e.message);
     }
 
     // También guardar local como respaldo
@@ -2073,6 +2045,59 @@ function startPeriodicSync() {
   }, 10000);
 }
 
+// ============ AUTO-ANSWER TAB UI ============
+function updateAATabUI() {
+  const cfg = typeof getAAConfig === 'function' ? getAAConfig() : null;
+  if (!cfg) return;
+
+  document.getElementById('aaStatusInline').textContent = cfg.enabled ? 'ACTIVO' : 'INACTIVO';
+  document.getElementById('aaStatusInline').style.color = cfg.enabled ? '#4CAF50' : '#666';
+
+  const evts = ['like', 'wink', 'comment', 'gift'];
+  evts.forEach(ev => {
+    const el = document.getElementById('aa' + ev.charAt(0).toUpperCase() + ev.slice(1) + 'Status');
+    if (el) {
+      const enabled = cfg.events?.[ev]?.enabled;
+      el.textContent = enabled ? 'ACTIVO' : 'DESACTIVADO';
+      el.style.color = enabled ? '#4CAF50' : '#666';
+    }
+  });
+
+  document.getElementById('aaTodayResp').textContent = cfg.respondedToday || 0;
+  document.getElementById('aaDailyLimit').textContent = cfg.maxDaily || 50;
+}
+
+// ============ SMART MAILING TAB UI ============
+function updateMLTabUI() {
+  const cfg = typeof getMailingConfig === 'function' ? getMailingConfig() : null;
+  if (!cfg) return;
+
+  document.getElementById('mlStatusInline').textContent = cfg.enabled ? 'ACTIVO' : 'INACTIVO';
+  document.getElementById('mlStatusInline').style.color = cfg.enabled ? '#4CAF50' : '#666';
+
+  document.getElementById('mlSentTodayInline').textContent = cfg.sentToday || 0;
+  document.getElementById('mlDailyLimitInline').textContent = cfg.maxDaily || 30;
+  document.getElementById('mlIntervalDisplay').textContent = (cfg.intervalMinutes || 60) + ' min';
+
+  const preview = (cfg.messageTemplate || '').slice(0, 40);
+  document.getElementById('mlMsgPreview').textContent = preview + (preview.length >= 40 ? '...' : '');
+
+  // Queue count
+  if (typeof loadMailingConfig === 'function') {
+    chrome.storage.local.get(['tess_ids'], (data) => {
+      const ids = data.tess_ids || {};
+      let total = 0;
+      (cfg.sources?.targetCategories || []).forEach(cat => {
+        total += (ids[cat] || []).length;
+      });
+      if (cfg.sources?.useManualList && cfg.sources?.manualIds) {
+        total += cfg.sources.manualIds.length;
+      }
+      document.getElementById('mlQueueCountInline').textContent = total;
+    });
+  }
+}
+
 // ============ STORAGE ============
 async function saveAllStates() {
   await chrome.storage.local.set({
@@ -2080,7 +2105,7 @@ async function saveAllStates() {
     tess_eater: eaterActive, tess_likes: likesActive, tess_follows: followsActive,
     tess_saludos: saludosActive, tess_cartas: cartasActive,
     tess_stats: botStats, tess_ids: collectedIds,
-    tess_saludo_msgs: saludoMessages, tess_carta_msg: cartaMessage,
+    tess_saludo_msgs: saludoMessages, tess_carta_msg: cartaMessages,
     bot_likesGiven: botStats.likesGiven,
     bot_followsGiven: botStats.followsGiven,
     bot_cartasSent: botStats.cartasSent,
@@ -2119,7 +2144,13 @@ async function loadAllStates() {
     if (r.tess_ids) collectedIds = r.tess_ids;
     if (r.tess_stats) botStats = r.tess_stats;
     if (r.tess_saludo_msgs) saludoMessages = r.tess_saludo_msgs;
-    if (r.tess_carta_msg) cartaMessage = r.tess_carta_msg;
+    if (r.tess_carta_msg) {
+      if (typeof r.tess_carta_msg === 'string') {
+        cartaMessages = [r.tess_carta_msg];
+      } else if (Array.isArray(r.tess_carta_msg)) {
+        cartaMessages = r.tess_carta_msg;
+      }
+    }
     updateStats();
     renderStarIds();
   } catch (e) { console.error('[TESSERACT] Error cargando:', e); }
@@ -2134,7 +2165,7 @@ async function syncMetricsToStorage(action, count) {
     try {
       const token = await new Promise(r => chrome.storage.local.get('tess_jwt', d => r(d.tess_jwt)));
       if (token) {
-        await fetch(`${TESSERACT_API}/api/tess/metrics/sync`, {
+        const res = await fetch(`${TESSERACT_API}/api/tess/metrics/sync`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({
@@ -2144,6 +2175,14 @@ async function syncMetricsToStorage(action, count) {
             count: count || 1
           })
         });
+        if (res.status === 401) {
+          console.warn('[TESS] Token expirado en syncMetricsToStorage');
+          chrome.storage.local.remove('tess_jwt');
+        } else if (!res.ok) {
+          console.warn('[TESS] syncMetricsToStorage server error:', res.status);
+        }
+      } else {
+        console.warn('[TESS] No hay token para sync');
       }
     } catch (e) {
       console.warn('[TESSERACT] Server sync failed (offline?):', e.message);
@@ -2203,6 +2242,13 @@ chrome.runtime.onMessage.addListener((req, sender, res) => {
       if (registered) {
         console.log('[STAR-TOOLS] 🔗 ID del bot real registrado:', req.clientId, '→', cat);
       }
+    }
+    res && res({ success: true });
+  }
+  // ── SMART MAILING: ejecutar ronda ──
+  if (req.action === 'MAILING_EXECUTE_ROUND') {
+    if (typeof executeMailingRound === 'function') {
+      executeMailingRound();
     }
     res && res({ success: true });
   }

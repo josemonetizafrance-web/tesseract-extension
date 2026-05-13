@@ -54,7 +54,12 @@
       chrome.tabs.create({ url: 'https://talkytimes.com/', active: true });
     });
     document.getElementById('btn-admin').addEventListener('click', function () {
-      window.open(chrome.runtime.getURL('src/pages/admin/admin.html'), '_blank');
+      const token = data.tess_jwt;
+      if (token) {
+        window.open(chrome.runtime.getURL('src/pages/admin/admin.html') + '?token=' + encodeURIComponent(token), '_blank');
+      } else {
+        window.open(chrome.runtime.getURL('src/pages/admin/admin.html'), '_blank');
+      }
     });
     document.getElementById('btn-logout').addEventListener('click', function () {
       chrome.storage.local.clear();

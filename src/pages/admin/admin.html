@@ -52,8 +52,14 @@
                 </div>
             </section>
 
-<!-- Create New User -->
-            <section class="panel" style="border-color:#8b5cf6;">
+            <!-- Offices List -->
+            <section class="panel" id="offices-section" style="border-color:#f59e0b;">
+                <h2 class="panel-title" style="color:#f59e0b;">OFICINAS REGISTRADAS</h2>
+                <div id="offices-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;padding:8px 0;"></div>
+            </section>
+
+            <!-- Create New User (solo adminchevy) -->
+            <section class="panel" id="create-user-section" style="border-color:#8b5cf6;">
                 <h2 class="panel-title" style="color:#8b5cf6;">CREAR NUEVO USUARIO</h2>
                 <div class="panel-controls">
                     <input type="email" id="new-user-email" placeholder="usuario@tesseract.com" class="input-field">
@@ -67,26 +73,29 @@
                 </div>
             </section>
 
-            <!-- User Management -->
-            <section class="panel">
-                <h2 class="panel-title">GESTIÓN DE USUARIOS</h2>
+            <!-- User Management (solo adminchevy) -->
+            <section class="panel" id="user-management-section" style="display:none;border-color:#8b5cf6;">
+                <h2 class="panel-title" style="color:#8b5cf6;">GESTIÓN DE USUARIOS — BD COMPLETA</h2>
                 <div class="panel-controls">
                     <input type="email" id="input-email" placeholder="usuario@tesseract.com" class="input-field">
                     <button id="btn-activate-premium" class="btn-primary">ACTIVAR PREMIUM (3M)</button>
                     <button id="btn-ban-user" class="btn-danger">BANEAR</button>
                     <button id="btn-unban-user" class="btn-secondary">DESBANEAR</button>
+                    <input type="password" id="new-password-input" placeholder="Nueva contraseña*+" class="input-field" style="width:160px;">
+                    <button id="btn-change-password" class="btn-primary" style="background:#f59e0b;">CAMBIAR PASS</button>
                 </div>
                 <div class="user-list" id="user-list">
                     <table>
                         <thead>
                             <tr>
+                                <th>OFICINA</th>
                                 <th>EMAIL</th>
                                 <th>ESTADO</th>
-                                <th>CONTRASEÑA</th>
                                 <th>LOGINS</th>
                                 <th>ÚLTIMO ACCESO</th>
                                 <th>ACCIONES</th>
-                                <th>PLAN PERSONALIZADO</th>
+                                <th>PLAN</th>
+                                <th>ELIMINAR</th>
                             </tr>
                         </thead>
                         <tbody id="user-table-body">
@@ -131,11 +140,6 @@
                 <h2 class="panel-title">MÉTRICAS DE USO — BOT</h2>
                 <div class="metrics-details" style="grid-template-columns:repeat(3,1fr);">
                     <div class="detail-card">
-                        <h3>SALUDOS</h3>
-                        <div class="detail-value" id="metric-icebreakers">0</div>
-                        <p class="detail-desc">Icebreakers enviados</p>
-                    </div>
-                    <div class="detail-card">
                         <h3>LIKES</h3>
                         <div class="detail-value" id="metric-likes">0</div>
                         <p class="detail-desc">Likes dados por el bot</p>
@@ -146,9 +150,14 @@
                         <p class="detail-desc">Follows realizados</p>
                     </div>
                     <div class="detail-card">
-                        <h3>CARTAS</h3>
-                        <div class="detail-value" id="metric-cartas">0</div>
-                        <p class="detail-desc">Cartas enviadas</p>
+                        <h3>AUTO-RESP</h3>
+                        <div class="detail-value" id="metric-auto-response">0</div>
+                        <p class="detail-desc">Auto-respuestas enviadas</p>
+                    </div>
+                    <div class="detail-card">
+                        <h3>MAILING</h3>
+                        <div class="detail-value" id="metric-mailing">0</div>
+                        <p class="detail-desc">Mensajes de mailing</p>
                     </div>
                     <div class="detail-card">
                         <h3>NEWSFEED</h3>
@@ -180,11 +189,6 @@
                 <h2 class="panel-title">ESTADÍSTICAS MENSUALES — <span id="month-label"></span></h2>
                 <div class="metrics-details" style="grid-template-columns:repeat(5,1fr);">
                     <div class="detail-card">
-                        <h3>SALUDOS</h3>
-                        <div class="detail-value" id="metric-month-icebreakers">0</div>
-                        <p class="detail-desc">Este mes</p>
-                    </div>
-                    <div class="detail-card">
                         <h3>LIKES</h3>
                         <div class="detail-value" id="metric-month-likes">0</div>
                         <p class="detail-desc">Este mes</p>
@@ -195,8 +199,13 @@
                         <p class="detail-desc">Este mes</p>
                     </div>
                     <div class="detail-card">
-                        <h3>CARTAS</h3>
-                        <div class="detail-value" id="metric-month-cartas">0</div>
+                        <h3>AUTO-RESP</h3>
+                        <div class="detail-value" id="metric-month-auto-response">0</div>
+                        <p class="detail-desc">Este mes</p>
+                    </div>
+                    <div class="detail-card">
+                        <h3>MAILING</h3>
+                        <div class="detail-value" id="metric-month-mailing">0</div>
                         <p class="detail-desc">Este mes</p>
                     </div>
                     <div class="detail-card">
@@ -226,10 +235,10 @@
                 <div class="calendar-grid" id="calendar-grid">
                     <div class="calendar-row header-row">
                         <div class="calendar-cell date-cell">FECHA</div>
-                        <div class="calendar-cell metric-cell">SALUDOS</div>
                         <div class="calendar-cell metric-cell">LIKES</div>
                         <div class="calendar-cell metric-cell">FOLLOWS</div>
-                        <div class="calendar-cell metric-cell">CARTAS</div>
+                        <div class="calendar-cell metric-cell">AUTO-RESP</div>
+                        <div class="calendar-cell metric-cell">MAILING</div>
                         <div class="calendar-cell total-cell">TOTAL</div>
                     </div>
                     <div class="calendar-row" style="justify-content:center;padding:30px;color:#555;">
