@@ -39,9 +39,9 @@
       var html =
         '<div class="status-bar"><span>Estado:</span><span class="status-badge ' + cls + '">' + (s.status || '').toUpperCase() + '</span></div>' +
         '<div class="email-display">' + a.email + '</div>' +
-        (s.timeRemaining > 0 && s.timeRemaining !== Infinity
+        (s.timeRemaining > 0 && s.timeRemaining !== Infinity && s.timeRemaining < 999999999999990
           ? '<div class="time-remaining">Tiempo restante: ' + formatTime(s.timeRemaining) + '</div>'
-          : s.timeRemaining === Infinity
+          : s.timeRemaining === Infinity || s.timeRemaining >= 999999999999990
             ? '<div class="time-remaining">Acceso ilimitado</div>'
             : '<div class="time-remaining" style="color:#ef4444;">Expirado</div>') +
         '<button class="btn btn-primary" id="btn-dashboard">ABRIR DASHBOARD</button>' +
