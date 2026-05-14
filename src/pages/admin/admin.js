@@ -75,6 +75,11 @@ async function initAdminPanel() {
       document.getElementById('create-user-section').style.display = 'none';
     }
 
+    // Storage Debug solo para admin maestro
+    if (isMasterAdmin) {
+      document.getElementById('storage-debug-section').style.display = 'block';
+    }
+
     // Mostrar usuarios para todos (no solo admin maestro)
     document.getElementById('user-management-section').style.display = 'block';
     document.getElementById('dev-section').style.display = isMasterAdmin ? 'block' : 'none';
