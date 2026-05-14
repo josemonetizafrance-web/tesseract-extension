@@ -2,9 +2,19 @@
 // Invitaciones programadas a perfiles usando chrome.alarms
 // La generación de mensajes con IA se hace a través del servidor (Groq API Key)
 // Fuentes de contactos: Active Limits (MAIL), Messages Active, Contact List (DOM)
+// NO se procesan contactos Pinneados o Guardados
 
 const MAILING_STORAGE_KEY = 'tess_mailing_config';
 const MAILING_QUEUE_KEY = 'tess_mailing_queue';
+
+function isContactPinnedOrSaved(contactEl) {
+  try {
+    const text = contactEl.textContent.toLowerCase();
+    if (text.includes('pin') || text.includes('saved') || text.includes('fijado') || text.includes('guardado')) return true;
+    if (contactEl.querySelector('[class*="pin"], [class*="saved"], [class*="star"], [class*="fixed"], [src*="pin"], [src*="star"], [data-pin], [data-saved]')) return true;
+    return false;
+  } catch (e) { return false; }
+}
 
 const DEFAULT_MAILING_CONFIG = {
   enabled: false,
@@ -119,18 +129,17 @@ function _extractIdsFromHrefs(elements) {
   return ids;
 }
 
-// Obtener IDs desde Active Limits (MAIL)
+// Obtener IDs desde Active Limits (MAIL) - excluye pinneados/guardados
 function getIdsFromMailingActiveLimits() {
   const ids = new Set();
-  // Buscar en todos los enlaces de la página y filtrar por contexto de "Active" / "Limits"
   const allAnchors = document.querySelectorAll('a[href]');
   allAnchors.forEach(a => {
     const href = a.href || '';
     const match = href.match(/\/(\d{6,15})(?:[/?#]|$)/);
     if (match) {
-      // Verificar que está dentro de una sección activa
       const parent = a.closest('[class*="active"], [class*="limit"], [class*="Active"], [id*="active"]');
       if (parent) {
+        if (isContactPinnedOrSaved(parent)) return;
         ids.add(match[1]);
       }
     }
@@ -139,10 +148,9 @@ function getIdsFromMailingActiveLimits() {
   return Array.from(ids);
 }
 
-// Obtener IDs desde Messages - Active conversations
+// Obtener IDs desde Messages - Active conversations - excluye pinneados/guardados
 function getIdsFromMessagesActive() {
   const ids = new Set();
-  // Selectores típicos de la sección de mensajes activos
   const containerSelectors = [
     '[class*="message"][class*="active"]',
     '[class*="conversation"][class*="active"]',
@@ -161,6 +169,7 @@ function getIdsFromMessagesActive() {
     try {
       const containers = document.querySelectorAll(cs);
       for (const container of containers) {
+        if (isContactPinnedOrSaved(container)) continue;
         for (const ls of linkSelectors) {
           const links = container.querySelectorAll(ls);
           for (const link of links) {
@@ -190,12 +199,14 @@ function getIdsFromMessagesActive() {
   return Array.from(ids);
 }
 
-// Obtener IDs desde Contact List (DOM general)
+// Obtener IDs desde Contact List (DOM general) - excluye pinneados/guardados
 function getIdsFromContactList() {
   const ids = new Set();
   try {
     const allLinks = document.querySelectorAll('a[href]');
     for (const link of allLinks) {
+      const parent = link.closest('[class*="contact"], [class*="member"], [class*="profile"], [class*="item"]');
+      if (parent && isContactPinnedOrSaved(parent)) continue;
       const href = link.href || '';
       const match = href.match(/\/(\d{6,15})(?:[/?#]|$)/);
       if (match) ids.add(match[1]);
