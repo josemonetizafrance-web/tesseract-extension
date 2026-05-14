@@ -5,6 +5,31 @@
 // NO se procesan contactos Pinneados o Guardados
 
 const AUTO_ANSWER_STORAGE_KEY = 'tess_auto_answer_config';
+const AA_CONTACTED_HISTORY_KEY = 'tess_aa_contacted_history';
+
+async function isContactAlreadyContacted(profileId) {
+  try {
+    const data = await chrome.storage.local.get([AA_CONTACTED_HISTORY_KEY]);
+    const history = data[AA_CONTACTED_HISTORY_KEY] || {};
+    return history[profileId] === true;
+  } catch (e) { return false; }
+}
+
+async function markContactAsContacted(profileId) {
+  try {
+    const data = await chrome.storage.local.get([AA_CONTACTED_HISTORY_KEY]);
+    const history = data[AA_CONTACTED_HISTORY_KEY] || {};
+    history[profileId] = true;
+    await chrome.storage.local.set({ [AA_CONTACTED_HISTORY_KEY]: history });
+  } catch (e) { console.error('[AA] Error guardando historial:', e); }
+}
+
+async function clearAAHistory() {
+  try {
+    await chrome.storage.local.remove(AA_CONTACTED_HISTORY_KEY);
+    console.log('[AA] Historial limpiado');
+  } catch (e) {}
+}
 
 function isContactPinnedOrSavedAA(contactEl) {
   try {
@@ -252,6 +277,11 @@ async function executeGreetingSweep() {
 
     const profileId = ids[i];
     if (processedIds.has(profileId)) continue;
+    
+    if (await isContactAlreadyContacted(profileId)) {
+      console.log('[AA] Saltando ID ya contactado:', profileId);
+      continue;
+    }
     processedIds.add(profileId);
 
     // Abrir chat del perfil
@@ -271,6 +301,7 @@ async function executeGreetingSweep() {
 
     // Enviar
     await sendResponse(response);
+    await markContactAsContacted(profileId);
     sent++;
 
     await sleep(getRandomDelay(aaConfig.delay.min, aaConfig.delay.max));
@@ -651,8 +682,33 @@ async function updateAAScanSources(sources) {
 // ============ Init ============
 async function initAutoAnswer() {
   await loadAAConfig();
+  await initAAHistoryFromCollected();
   if (aaConfig.enabled) startAAObserver();
   console.log('[AA] Module initialized, enabled:', aaConfig.enabled);
+}
+
+async function initAAHistoryFromCollected() {
+  try {
+    const data = await chrome.storage.local.get(['tess_ids']);
+    const ids = data.tess_ids || {};
+    const historyData = await chrome.storage.local.get([AA_CONTACTED_HISTORY_KEY]);
+    let history = historyData[AA_CONTACTED_HISTORY_KEY] || {};
+    let added = 0;
+    for (const cat of ['Like', 'Follow', 'Saludo', 'Cartas']) {
+      if (Array.isArray(ids[cat])) {
+        for (const id of ids[cat]) {
+          if (id && !history[id]) {
+            history[id] = true;
+            added++;
+          }
+        }
+      }
+    }
+    if (added > 0) {
+      await chrome.storage.local.set({ [AA_CONTACTED_HISTORY_KEY]: history });
+      console.log('[AA] Historial inicializado con', added, 'IDs de tess_ids');
+    }
+  } catch (e) { console.error('[AA] Error inicializando historial:', e); }
 }
 
 // ============ GLOBAL ACCESSORS (for panels) ============
