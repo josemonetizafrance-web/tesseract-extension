@@ -1511,11 +1511,17 @@ async function generateWithAI(name, profile) {
     const stored = await chrome.storage.local.get(['tess_jwt']);
     const token = stored.tess_jwt;
     
-    const prompt = `Genera 3 frases push-pull para iniciar conversación en app de citas.
-Cada frase: MAXIMO 6 PALABRAS. Contexto básico. Sin nombres.
-Ejemplos: "Me gustas pero no sé si respondes", "Tengo curiosidad por ti", "Algo me dice que sí".
+    const randomSeed = Math.floor(Math.random() * 10000);
+    const prompt = `Genera 3 frases push-pull ÚNICAS y VARIADAS para iniciar conversación en app de citas.
+Cada frase: 4-8 palabras. Estilo: directo, misterioso, provocativo.
+NUNCA repitas: "me gustas", "curioso", "conversar", "hola", "hola".
+Ejemplos distintos: "Tu sonrisa me intrigue", "Algo me dice que vales la pena", "¿Y si esta vez sí?", "Tengo corazonada contigo", "No puedo dejar de pensar...", "¿responderás?".
+
+Semilla aleatoria #${randomSeed} - genera combinaciones TOTALMENTE DIFERENTES.
 Responde SOLO las 3 frases, una por línea, nada más.`;
 
+    console.log('[EATER AI] Llamando a IA con seed:', randomSeed);
+    
     const response = await fetch(`${TESSERACT_API}/api/chatgpt/chat`, {
       method: 'POST',
       headers: { 
@@ -1524,21 +1530,25 @@ Responde SOLO las 3 frases, una por línea, nada más.`;
       },
       body: JSON.stringify({
         messages: [
-          { role: 'system', content: 'Genera frases cortas para citas online. Push and pull. Maximo 12 palabras. Sin personalizar. Sin preguntas.' },
+          { role: 'system', content: 'Eres un experto en dating coaching. Generas frases push-pull únicas, cortas (4-8 palabras), directas, sin repetir patrones. Siempre distintas.' },
           { role: 'user', content: prompt }
         ],
         model: 'gpt-3.5-turbo',
-        max_tokens: 50
+        max_tokens: 80
       })
     });
     
+    console.log('[EATER AI] Response status:', response.status);
     if (!response.ok) return null;
     
     const data = await response.json();
+    console.log('[EATER AI] Response data:', data);
+    
     if (data.choices && data.choices[0]?.message?.content) {
       const text = data.choices[0].message.content;
-      const lines = text.split('\n').filter(l => l.trim().length > 5 && l.trim().length < 100);
-      return lines.slice(0, 2);
+      const lines = text.split('\n').filter(l => l.trim().length > 3 && l.trim().length < 50);
+      console.log('[EATER AI] Frases generadas:', lines);
+      return lines.slice(0, 3);
     }
     return null;
   } catch (e) {
