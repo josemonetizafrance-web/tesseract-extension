@@ -116,14 +116,15 @@
         }
         const result = await res.json();
         console.log('[SUPPORT] Response:', result);
-          statusEl.textContent = '✅ Mensaje enviado! El administrador te contactará.';
-          document.getElementById('support-message').value = '';
-          document.getElementById('support-subject').value = '';
-          setTimeout(() => supportModal.style.display = 'none', 2000);
-        } else {
-          statusEl.textContent = '❌ ' + (result.error || 'Error al enviar');
-        }
-      } catch (err) {
+          if (result.success || res.ok) {
+            statusEl.textContent = '✅ Mensaje enviado! El administrador te contactará.';
+            document.getElementById('support-message').value = '';
+            document.getElementById('support-subject').value = '';
+            setTimeout(() => supportModal.style.display = 'none', 2000);
+          } else {
+            statusEl.textContent = '❌ ' + (result.error || 'Error al enviar');
+          }
+        } catch (err) {
         statusEl.textContent = '❌ Error de conexión';
       }
       
