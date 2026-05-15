@@ -630,7 +630,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       if (currentTab === 'blacklist') renderBlacklistTab();
     });
   });
-  });
   
   // Botones de barrido
   document.getElementById('btnLikesToggle').addEventListener('click', toggleLikes);
