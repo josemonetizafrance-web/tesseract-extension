@@ -105,7 +105,8 @@ function registerIdInStarTools(id, category) {
 
 // ============ INICIALIZACIÓN ============
 async function initTesseract() {
-  console.log('[TESSERACT] Inicializando sistema...');
+  try {
+    console.log('[TESSERACT] 🚀 Inicializando sistema...');
   createMainPanel();
   createEaterBar();
   createSaludosModal();
@@ -129,6 +130,9 @@ async function initTesseract() {
     }
   });
   console.log('[TESSERACT] ✅ Sistema listo - JARVIS activo');
+  } catch (e) {
+    console.error('[TESSERACT] ❌ ERROR:', e);
+  }
 }
 
 // ============ CAPTURA DE IDs EN SEGUNDO PLANO ============
@@ -2269,10 +2273,17 @@ async function syncMetricsToStorage(action, count) {
 }
 
 // ============ INICIAR ============
+console.log('[TESSERACT] 🚀 Script cargado, iniciando en 1s...');
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => setTimeout(initTesseract, 1000));
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('[TESSERACT] 📄 DOM Loaded, ejecutando...');
+    setTimeout(initTesseract, 1000);
+  });
 } else {
-  setTimeout(initTesseract, 1000);
+  setTimeout(() => {
+    console.log('[TESSERACT] 📄 Ya cargado, ejecutando...');
+    initTesseract();
+  }, 1000);
 }
 
 chrome.runtime.onMessage.addListener((req, sender, res) => {
