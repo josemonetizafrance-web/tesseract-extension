@@ -453,8 +453,8 @@ function createMainPanel() {
 </div>
 
 <!-- ICEBREAKERS -->
-<div class="eater-box" style="margin-top:8px;background:#000;border:1px solid #22c55e;border-radius:8px;">
-<h4 style="font-size:9px;letter-spacing:1px;margin:8px 0;text-align:center;color:#22c55e;">🎯 ICEBREAKERS (Click = Enviar)</h4>
+<div class="eater-box" style="margin-top:8px;background:#000;border:1px solid #8b5cf6;border-radius:8px;">
+<h4 style="font-size:11px;letter-spacing:1px;margin:8px 0;text-align:center;color:#8b5cf6;">🎯 ICEBREAKERS (Click = Enviar)</h4>
 <div id="icebreakersList" style="display:flex;flex-wrap:wrap;gap:4px;padding:4px;justify-content:center;max-height:80px;overflow-y:auto;">
 </div>
 </div>
@@ -1643,9 +1643,7 @@ function generateLocalSuggestions(name, profile) {
   const hasRealHobbies = hobbies && hobbies.length > 0;
   const hasRealLocation = location && location.length > 0;
   
-  // Sugerencias cortas con push-pull y contexto
-  const openers = [
-    // Push-pull clásicos (cortos)
+  const candidates = [
     'Me gustas, pero no sé si me vas a responder...',
     'Tu perfil me tiene curioso... ¿serás interesante?',
     'Tengo una corazonada sobre ti...',
@@ -1656,14 +1654,14 @@ function generateLocalSuggestions(name, profile) {
     'Veo tu perfil y pienso "ella/él podría ser"...',
     'Mi instinto me dice que vales la pena...',
     '¿Qué tal sinos llevamos mejor de lo esperado?',
-    // Con contexto
-    location && hasRealLocation ? `Vivo cerca de ${location}, ¿y tú?` : 'Me alegra encontrarte aquí!',
-    interests && hasRealInterests ? `Veo que te gusta ${interests[0]}... interesante!` : 'Tu energía me gusta!',
-    hobbies && hasRealHobbies ? `También pratico ${hobbies[0]}!` : 'Me encantó tu perfil!',
+    location && hasRealLocation ? `Vivo cerca de ${location}, ¿y tú?` : null,
+    interests && hasRealInterests ? `Veo que te gusta ${interests[0]}... interesante!` : null,
+    hobbies && hasRealHobbies ? `También pratico ${hobbies[0]}!` : null,
   ].filter(s => s);
   
-eaterSuggestions = openers;
-  displaySuggestions(name);
+  // Mezclar y tomar 3 aleatorias
+  const shuffled = [...candidates].sort(() => Math.random() - 0.5);
+  eaterSuggestions = shuffled.slice(0, 3);
 }
 
 function displaySuggestions(name) {
