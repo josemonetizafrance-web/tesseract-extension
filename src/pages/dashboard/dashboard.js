@@ -65,5 +65,54 @@
       chrome.storage.local.clear();
       window.location.href = chrome.runtime.getURL('src/pages/login/login.html');
     });
+
+    // Support button handlers
+    const supportModal = document.getElementById('support-modal');
+    document.getElementById('btn-support').addEventListener('click', function () {
+      supportModal.style.display = 'flex';
+      document.getElementById('support-status').textContent = '';
+    });
+    document.getElementById('btn-close-support').addEventListener('click', function () {
+      supportModal.style.display = 'none';
+    });
+    document.getElementById('btn-send-support').addEventListener('click', async function () {
+      const subject = document.getElementById('support-subject').value.trim();
+      const message = document.getElementById('support-message').value.trim();
+      const statusEl = document.getElementById('support-status');
+      
+      if (!message) {
+        statusEl.textContent = '⚠️ Escribe un mensaje';
+        return;
+      }
+      
+      this.textContent = 'Enviando...';
+      this.disabled = true;
+      
+      try {
+        const res = await fetch(`${TESSERACT_API}/api/tess/support/message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            email: data.user_email, 
+            subject: subject || 'Consulta de usuario',
+            message: message 
+          })
+        });
+        const result = await res.json();
+        if (res.ok) {
+          statusEl.textContent = '✅ Mensaje enviado! El administrador te contactará.';
+          document.getElementById('support-message').value = '';
+          document.getElementById('support-subject').value = '';
+          setTimeout(() => supportModal.style.display = 'none', 2000);
+        } else {
+          statusEl.textContent = '❌ ' + (result.error || 'Error al enviar');
+        }
+      } catch (err) {
+        statusEl.textContent = '❌ Error de conexión';
+      }
+      
+      this.textContent = 'Enviar';
+      this.disabled = false;
+    });
   });
 })();
