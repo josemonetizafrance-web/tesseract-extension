@@ -35,6 +35,52 @@ function isBlacklisted(contactId) {
   return blacklist.includes(contactId);
 }
 
+// Guardar blacklist en servidor
+async function saveBlacklist() {
+  try {
+    const stored = await chrome.storage.local.get(['tess_jwt']);
+    if (stored.tess_jwt) {
+      await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + stored.tess_jwt },
+        body: JSON.stringify({ blacklist })
+      });
+    }
+  } catch (e) {
+    console.log('[BLACKLIST] Error guardando:', e.message);
+  }
+}
+
+// Renderizar pestaña blacklist
+function renderBlacklistTab() {
+  const listEl = document.getElementById('blList');
+  const countEl = document.getElementById('blCount');
+  if (!listEl) return;
+  if (countEl) countEl.textContent = blacklist.length + ' contactos';
+  
+  if (blacklist.length === 0) {
+    listEl.innerHTML = '<p style="color:#666;text-align:center;">No hay contactos bloqueados</p>';
+    return;
+  }
+  
+  listEl.innerHTML = blacklist.map((id, i) => 
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid rgba(139,92,246,0.15);">
+      <span style="color:#888;font-size:9px;width:20px;">${i+1}</span>
+      <span style="flex:1;font-size:12px;font-weight:bold;letter-spacing:1px;color:#ef4444;">${id}</span>
+      <button class="bl-remove" data-idx="${i}" style="background:rgba(239,68,68,0.2);border:1px solid #ef4444;color:#ef4444;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:9px;">✕</button>
+    </div>`
+  ).join('');
+  
+  listEl.querySelectorAll('.bl-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx);
+      blacklist.splice(idx, 1);
+      saveBlacklist();
+      renderBlacklistTab();
+    });
+  });
+}
+
 // Iniciar carga de blacklist
 loadBlacklist();
 
@@ -369,6 +415,7 @@ function createMainPanel() {
   <button class="tab-btn" data-tab="star">⭐ STAR TOOLS</button>
   <button class="tab-btn" data-tab="aa">🤖 AUTO-ANSWER</button>
   <button class="tab-btn" data-tab="mailing">📬 MAILING</button>
+  <button class="tab-btn" data-tab="blacklist">🚫 BLACKLIST</button>
 </div>
 
 <!-- PESTAÑA BOT -->
@@ -466,6 +513,20 @@ function createMainPanel() {
     <div class="mod-card"><h4>💬 Mensaje</h4><div class="st" id="mlMsgPreview" style="font-size:8px;">—</div></div>
   </div>
   <button class="btn-auth" id="btnOpenMLConfig" style="margin-top:8px;">⚙ CONFIGURAR SMART MAILING</button>
+</div>
+</div>
+
+<!-- PESTAÑA BLACKLIST -->
+<div id="tabBlacklist" class="tab-content">
+<div class="user-bar">🚫 BLACKLIST — <span id="blCount">0 contactos</span></div>
+<div style="padding:10px;">
+  <div class="inp-grp"><label class="inp-lbl">AGREGAR ID A BLACKLIST</label><input type="text" id="blInput" class="t-input" placeholder="ID del contacto" /></div>
+  <button class="btn-auth" id="btnBlAdd" style="margin-top:4px;">🚫 BLOQUEAR</button>
+  <div style="margin-top:10px;max-height:250px;overflow-y:auto;background:#0a0a0a;padding:8px;border:1px solid #333;border-radius:4px;">
+    <div id="blList" style="font-size:10px;color:#ccc;">
+      <p style="color:#666;text-align:center;">Cargando...</p>
+    </div>
+  </div>
 </div>
 </div>
 
@@ -664,6 +725,25 @@ function setupAllEvents() {
     if (typeof openMLPanel === 'function') openMLPanel();
   });
   
+  // Blacklist
+  document.getElementById('btnBlAdd').addEventListener('click', () => {
+    const input = document.getElementById('blInput');
+    const id = input.value.trim();
+    if (!id) return;
+    if (!blacklist.includes(id)) {
+      blacklist.push(id);
+      saveBlacklist();
+      renderBlacklistTab();
+      input.value = '';
+    } else {
+      alert('⚠️ Este contacto ya está en blacklist');
+    }
+  });
+  document.getElementById('blInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('btnBlAdd').click();
+  });
+  renderBlacklistTab();
+
   // Eater suggestions
   document.getElementById('eaterSugList').addEventListener('click', (e) => {
     const trBtn = e.target.closest('.tr-btn');
