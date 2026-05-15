@@ -114,5 +114,83 @@
       this.textContent = 'Enviar';
       this.disabled = false;
     });
+
+    // Blacklist handlers
+    const blacklistModal = document.getElementById('blacklist-modal');
+    document.getElementById('btn-blacklist').addEventListener('click', async function () {
+      blacklistModal.style.display = 'flex';
+      loadBlacklist();
+    });
+    document.getElementById('btn-close-blacklist').addEventListener('click', function () {
+      blacklistModal.style.display = 'none';
+    });
+
+    async function loadBlacklist() {
+      const listEl = document.getElementById('blacklist-list');
+      listEl.innerHTML = '<p style="color:#666;font-size:11px;">Cargando...</p>';
+      try {
+        const res = await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
+          headers: { 'Authorization': 'Bearer ' + data.tess_jwt }
+        });
+        const data = await res.json();
+        if (res.ok && data.blacklist && data.blacklist.length > 0) {
+          listEl.innerHTML = data.blacklist.map(id => 
+            `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #333;">
+              <span style="font-size:11px;color:#ccc;">${id}</span>
+              <button class="btn-remove-bl" data-id="${id}" style="background:#ef4444;color:#fff;border:none;padding:4px 8px;border-radius:2px;font-size:10px;cursor:pointer;">✕</button>
+            </div>`
+          ).join('');
+          document.querySelectorAll('.btn-remove-bl').forEach(btn => {
+            btn.addEventListener('click', async function () {
+              await removeFromBlacklist(this.dataset.id);
+              loadBlacklist();
+            });
+          });
+        } else {
+          listEl.innerHTML = '<p style="color:#666;font-size:11px;text-align:center;">No hay contactos en blacklist</p>';
+        }
+      } catch (e) {
+        listEl.innerHTML = '<p style="color:#ef4444;font-size:11px;">Error al cargar</p>';
+      }
+    }
+
+    async function addToBlacklist(contactId) {
+      const statusEl = document.getElementById('blacklist-status');
+      if (!contactId) {
+        statusEl.textContent = '⚠️ Ingresa un ID';
+        return;
+      }
+      try {
+        const res = await fetch(`${TESSERACT_API}/api/tess/blacklist/add`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.tess_jwt },
+          body: JSON.stringify({ contactId })
+        });
+        if (res.ok) {
+          statusEl.textContent = '✅ Agregado a blacklist';
+          document.getElementById('blacklist-input').value = '';
+          loadBlacklist();
+        } else {
+          statusEl.textContent = '❌ Error al agregar';
+        }
+      } catch (e) {
+        statusEl.textContent = '❌ Error de conexión';
+      }
+    }
+
+    async function removeFromBlacklist(contactId) {
+      try {
+        await fetch(`${TESSERACT_API}/api/tess/blacklist/remove`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.tess_jwt },
+          body: JSON.stringify({ contactId })
+        });
+      } catch (e) {}
+    }
+
+    document.getElementById('btn-add-blacklist').addEventListener('click', function () {
+      const input = document.getElementById('blacklist-input').value.trim();
+      addToBlacklist(input);
+    });
   });
 })();
