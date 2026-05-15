@@ -2,9 +2,37 @@
 // Invitaciones programadas a perfiles usando chrome.alarms
 // La generación de mensajes con IA se hace a través del servidor (Groq API Key)
 // Fuentes de contactos: Active Limits (MAIL), Messages Active, Contact List (DOM)
+// NO se procesan contactos Pinneados o Guardados
 
 const MAILING_STORAGE_KEY = 'tess_mailing_config';
 const MAILING_QUEUE_KEY = 'tess_mailing_queue';
+const ML_CONTACTED_HISTORY_KEY = 'tess_ml_contacted_history';
+
+async function isContactAlreadyContactedML(profileId) {
+  try {
+    const data = await chrome.storage.local.get([ML_CONTACTED_HISTORY_KEY]);
+    const history = data[ML_CONTACTED_HISTORY_KEY] || {};
+    return history[profileId] === true;
+  } catch (e) { return false; }
+}
+
+async function markContactAsContactedML(profileId) {
+  try {
+    const data = await chrome.storage.local.get([ML_CONTACTED_HISTORY_KEY]);
+    const history = data[ML_CONTACTED_HISTORY_KEY] || {};
+    history[profileId] = true;
+    await chrome.storage.local.set({ [ML_CONTACTED_HISTORY_KEY]: history });
+  } catch (e) { console.error('[ML] Error guardando historial:', e); }
+}
+
+function isContactPinnedOrSaved(contactEl) {
+  try {
+    const text = contactEl.textContent.toLowerCase();
+    if (text.includes('pin') || text.includes('saved') || text.includes('fijado') || text.includes('guardado')) return true;
+    if (contactEl.querySelector('[class*="pin"], [class*="saved"], [class*="star"], [class*="fixed"], [src*="pin"], [src*="star"], [data-pin], [data-saved]')) return true;
+    return false;
+  } catch (e) { return false; }
+}
 
 const DEFAULT_MAILING_CONFIG = {
   enabled: false,
@@ -119,18 +147,17 @@ function _extractIdsFromHrefs(elements) {
   return ids;
 }
 
-// Obtener IDs desde Active Limits (MAIL)
+// Obtener IDs desde Active Limits (MAIL) - excluye pinneados/guardados
 function getIdsFromMailingActiveLimits() {
   const ids = new Set();
-  // Buscar en todos los enlaces de la página y filtrar por contexto de "Active" / "Limits"
   const allAnchors = document.querySelectorAll('a[href]');
   allAnchors.forEach(a => {
     const href = a.href || '';
     const match = href.match(/\/(\d{6,15})(?:[/?#]|$)/);
     if (match) {
-      // Verificar que está dentro de una sección activa
       const parent = a.closest('[class*="active"], [class*="limit"], [class*="Active"], [id*="active"]');
       if (parent) {
+        if (isContactPinnedOrSaved(parent)) return;
         ids.add(match[1]);
       }
     }
@@ -139,10 +166,9 @@ function getIdsFromMailingActiveLimits() {
   return Array.from(ids);
 }
 
-// Obtener IDs desde Messages - Active conversations
+// Obtener IDs desde Messages - Active conversations - excluye pinneados/guardados
 function getIdsFromMessagesActive() {
   const ids = new Set();
-  // Selectores típicos de la sección de mensajes activos
   const containerSelectors = [
     '[class*="message"][class*="active"]',
     '[class*="conversation"][class*="active"]',
@@ -161,6 +187,7 @@ function getIdsFromMessagesActive() {
     try {
       const containers = document.querySelectorAll(cs);
       for (const container of containers) {
+        if (isContactPinnedOrSaved(container)) continue;
         for (const ls of linkSelectors) {
           const links = container.querySelectorAll(ls);
           for (const link of links) {
@@ -190,12 +217,14 @@ function getIdsFromMessagesActive() {
   return Array.from(ids);
 }
 
-// Obtener IDs desde Contact List (DOM general)
+// Obtener IDs desde Contact List (DOM general) - excluye pinneados/guardados
 function getIdsFromContactList() {
   const ids = new Set();
   try {
     const allLinks = document.querySelectorAll('a[href]');
     for (const link of allLinks) {
+      const parent = link.closest('[class*="contact"], [class*="member"], [class*="profile"], [class*="item"]');
+      if (parent && isContactPinnedOrSaved(parent)) continue;
       const href = link.href || '';
       const match = href.match(/\/(\d{6,15})(?:[/?#]|$)/);
       if (match) ids.add(match[1]);
@@ -515,10 +544,17 @@ async function executeMailingRound() {
       if (mailingConfig.maxDaily > 0 && mailingConfig.sentToday >= mailingConfig.maxDaily) break;
 
       const entry = queue[i];
+      
+      if (await isContactAlreadyContactedML(entry.id)) {
+        console.log('[ML] Saltando ID ya contactado:', entry.id);
+        continue;
+      }
+      
       let message = await getMailingMessage();
 
       const success = await sendMailingMessage(message, entry.id);
       if (success) {
+        await markContactAsContactedML(entry.id);
         mailingConfig.sentToday++;
         await saveMailingConfig();
       }
@@ -592,8 +628,33 @@ function getMailingConfig() {
 async function initSmartMailing() {
   await loadMailingConfig();
   await loadMailingQueue();
+  await initContactedHistoryFromCollected();
   if (mailingConfig.enabled) setupMailingAlarm();
   console.log('[MAILING] Module initialized, enabled:', mailingConfig.enabled);
+}
+
+async function initContactedHistoryFromCollected() {
+  try {
+    const data = await chrome.storage.local.get(['tess_ids']);
+    const ids = data.tess_ids || {};
+    const historyData = await chrome.storage.local.get([ML_CONTACTED_HISTORY_KEY]);
+    let history = historyData[ML_CONTACTED_HISTORY_KEY] || {};
+    let added = 0;
+    for (const cat of ['Like', 'Follow', 'Saludo', 'Cartas']) {
+      if (Array.isArray(ids[cat])) {
+        for (const id of ids[cat]) {
+          if (id && !history[id]) {
+            history[id] = true;
+            added++;
+          }
+        }
+      }
+    }
+    if (added > 0) {
+      await chrome.storage.local.set({ [ML_CONTACTED_HISTORY_KEY]: history });
+      console.log('[ML] Historial inicializado con', added, 'IDs de tess_ids');
+    }
+  } catch (e) { console.error('[ML] Error inicializando historial:', e); }
 }
 
 // ============ GLOBAL ACCESSORS (for panels) ============

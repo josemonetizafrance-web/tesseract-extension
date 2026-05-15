@@ -751,7 +751,7 @@ async function executeLikes() {
         await sleep(200);
         
         const profile = btn.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="item"], [class*="result"]');
-        if (profile) {
+        if (profile && !isPinnedOrSaved(profile)) {
           const id = extractId(profile);
           if (id) registerIdInStarTools(id, 'Like');
         }
@@ -814,7 +814,7 @@ async function executeFollows() {
       await sleep(300);
       
       const profile = btn.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="item"], [class*="result"], [class*="contact"]');
-      if (profile) {
+      if (profile && !isPinnedOrSaved(profile)) {
         const id = extractId(profile);
         if (id) registerIdInStarTools(id, 'Follow');
       }

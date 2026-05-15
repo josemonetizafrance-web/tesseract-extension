@@ -34,9 +34,9 @@
       badge.className = 'status-badge status-' + status;
 
       var timeEl = document.getElementById('time-remaining');
-      if (remaining > 0 && remaining !== Infinity) {
+      if (remaining > 0 && remaining !== Infinity && remaining < 999999999999990) {
         timeEl.textContent = 'Tiempo restante: ' + formatTime(remaining);
-      } else if (remaining === Infinity) {
+      } else if (remaining === Infinity || remaining >= 999999999999990) {
         timeEl.textContent = 'Acceso ilimitado';
       } else {
         timeEl.textContent = 'Tu acceso ha expirado';
