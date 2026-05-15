@@ -1,5 +1,5 @@
 (function () {
-  const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
+  const TESSERACT_API = window.TESSERACT_API || 'https://tesseract-jblo.onrender.com';
 
   function formatTime(ms) {
     if (ms <= 0 || ms === Infinity) return ms === Infinity ? 'Ilimitado' : 'Expirado';
