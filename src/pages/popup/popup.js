@@ -1,5 +1,5 @@
 (function () {
-  const TESSERACT_API = window.TESSERACT_API || 'https://tesseract-jblo.onrender.com';
+  const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
   var storedToken = '';
 
   function formatTime(ms) {

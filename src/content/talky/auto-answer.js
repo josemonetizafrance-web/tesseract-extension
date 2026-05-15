@@ -6,7 +6,7 @@
 
 const AUTO_ANSWER_STORAGE_KEY = 'tess_auto_answer_config';
 const AA_CONTACTED_HISTORY_KEY = 'tess_aa_contacted_history';
-const TESSERACT_API = window.TESSERACT_API || 'https://tesseract-jblo.onrender.com';
+const TESSERACT_API = (typeof window !== 'undefined' && window.TESSERACT_API) || 'https://tesseract-jblo.onrender.com';
 
 // Variables blacklist
 let aaBlacklist = [];
