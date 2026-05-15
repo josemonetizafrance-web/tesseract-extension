@@ -7,7 +7,7 @@
 const MAILING_STORAGE_KEY = 'tess_mailing_config';
 const MAILING_QUEUE_KEY = 'tess_mailing_queue';
 const ML_CONTACTED_HISTORY_KEY = 'tess_ml_contacted_history';
-const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
+const TESSERACT_API = window.TESSERACT_API || 'https://tesseract-jblo.onrender.com';
 
 // Variables blacklist
 let mlBlacklist = [];

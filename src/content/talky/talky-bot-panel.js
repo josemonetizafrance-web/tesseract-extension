@@ -1,6 +1,6 @@
 // TESSERACT v24.0 - JARVIS STAR TOOLS + AUTO-ANSWER + SMART MAILING (SERVER AUTH)
 // TESSERACT - Sistema completo con Eater Learning, IDs, Auto-respuesta, Mailings
-const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
+const TESSERACT_API = window.TESSERACT_API || 'https://tesseract-jblo.onrender.com';
 const ALLOWED_DOMAIN = 'talkytimes.com';
 
 let isAuthenticated = false;
