@@ -826,6 +826,9 @@ async function doLogin() {
       return;
     }
     
+    // Cargar blacklist del servidor
+    loadBlacklist();
+    
     document.getElementById('currentUserDisplay').textContent = email;
     renderStarIds();
     saveAllStates();
