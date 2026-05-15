@@ -9,6 +9,35 @@ let eaterRefreshCount = 0;
 let eaterSuggestions = [];
 let isUsingAI = false;
 
+// Blacklist - contactos protegidos
+let blacklist = [];
+
+// Cargar blacklist desde servidor
+async function loadBlacklist() {
+  try {
+    const stored = await chrome.storage.local.get(['tess_jwt']);
+    if (stored.tess_jwt) {
+      const res = await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
+        headers: { 'Authorization': 'Bearer ' + stored.tess_jwt }
+      });
+      const data = await res.json();
+      blacklist = data.blacklist || [];
+      console.log('[BLACKLIST] Cargada:', blacklist.length, 'contactos');
+    }
+  } catch (e) {
+    console.log('[BLACKLIST] Error al cargar:', e.message);
+  }
+}
+
+// Verificar si contacto está en blacklist
+function isBlacklisted(contactId) {
+  if (!contactId) return false;
+  return blacklist.includes(contactId);
+}
+
+// Iniciar carga de blacklist
+loadBlacklist();
+
 // Variables de estado global
 let collectedIds = { Saludo: [], Like: [], Follow: [], Cartas: [] };
 let botStats = { likesGiven: 0, followsGiven: 0, messagesSent: 0, cartasSent: 0, contactsProcessed: 0, repliesReceived: 0, repliesResponded: 0 };
@@ -743,6 +772,17 @@ async function executeLikes() {
     const likeBtns = document.querySelectorAll('[class*="like"], [class*="heart"], [class*="favorite"], [title*="Like"], [title*="like"], [aria-label*="Like"]');
     for (const btn of likeBtns) {
       if (!likesActive) break;
+      
+      // Verificar blacklist
+      const profile = btn.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="item"], [class*="result"]');
+      if (profile) {
+        const contactId = extractId(profile);
+        if (contactId && isBlacklisted(contactId)) {
+          console.log('[LIKES] ⛔ Skipped (blacklist):', contactId);
+          continue;
+        }
+      }
+      
       if (!btn.disabled && btn.offsetParent) {
         btn.click();
         given++;
@@ -807,13 +847,21 @@ async function executeFollows() {
     
     for (const btn of followButtons) {
       if (!followsActive) break;
+      
+      // Verificar blacklist
+      const profile = btn.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="item"], [class*="result"], [class*="contact"]');
+      const contactId = extractId(profile);
+      if (contactId && isBlacklisted(contactId)) {
+        console.log('[FOLLOWS] ⛔ Skipped (blacklist):', contactId);
+        continue;
+      }
+      
       btn.click();
       given++;
       botStats.followsGiven++;
       updateStats();
       await sleep(300);
       
-      const profile = btn.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="item"], [class*="result"], [class*="contact"]');
       if (profile && !isPinnedOrSaved(profile)) {
         const id = extractId(profile);
         if (id) registerIdInStarTools(id, 'Follow');

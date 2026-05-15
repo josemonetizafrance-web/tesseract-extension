@@ -2,10 +2,37 @@
 // Detecta eventos (likes, winks, comments, gifts) y responde automáticamente
 // Usa DOM Contact Finder para contexto adicional de contactos
 // La generación de respuestas con IA se hace a través del servidor (Groq API Key)
-// NO se procesan contactos Pinneados o Guardados
+// NO se procesan contactos Pinneados o Guardados ni contactos en Blacklist
 
 const AUTO_ANSWER_STORAGE_KEY = 'tess_auto_answer_config';
 const AA_CONTACTED_HISTORY_KEY = 'tess_aa_contacted_history';
+const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
+
+// Variables blacklist
+let aaBlacklist = [];
+
+// Cargar blacklist
+async function loadAABlacklist() {
+  try {
+    const stored = await chrome.storage.local.get(['tess_jwt']);
+    if (stored.tess_jwt) {
+      const res = await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
+        headers: { 'Authorization': 'Bearer ' + stored.tess_jwt }
+      });
+      const data = await res.json();
+      aaBlacklist = data.blacklist || [];
+    }
+  } catch (e) {}
+}
+
+// Verificar blacklist
+function isInAABlacklist(contactId) {
+  if (!contactId) return false;
+  return aaBlacklist.includes(contactId);
+}
+
+// Iniciar carga
+loadAABlacklist();
 
 async function isContactAlreadyContacted(profileId) {
   try {
@@ -600,6 +627,12 @@ function startAAObserver() {
 
       for (const eventType of [...new Set(detections)]) {
         if (aaConfig.events[eventType] && aaConfig.events[eventType].enabled) {
+          // Verificar blacklist
+          if (currentProfileId && isInAABlacklist(currentProfileId)) {
+            console.log('[AA] ⛔ Skip (blacklist):', currentProfileId);
+            return;
+          }
+          
           if (currentProfileId) {
             aaLastProfileId = currentProfileId;
             aaProfileCooldowns[currentProfileId] = Date.now();

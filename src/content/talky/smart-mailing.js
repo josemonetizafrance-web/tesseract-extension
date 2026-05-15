@@ -2,11 +2,38 @@
 // Invitaciones programadas a perfiles usando chrome.alarms
 // La generación de mensajes con IA se hace a través del servidor (Groq API Key)
 // Fuentes de contactos: Active Limits (MAIL), Messages Active, Contact List (DOM)
-// NO se procesan contactos Pinneados o Guardados
+// NO se procesan contactos Pinneados o Guardados ni contactos en Blacklist
 
 const MAILING_STORAGE_KEY = 'tess_mailing_config';
 const MAILING_QUEUE_KEY = 'tess_mailing_queue';
 const ML_CONTACTED_HISTORY_KEY = 'tess_ml_contacted_history';
+const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
+
+// Variables blacklist
+let mlBlacklist = [];
+
+// Cargar blacklist
+async function loadMLBlacklist() {
+  try {
+    const stored = await chrome.storage.local.get(['tess_jwt']);
+    if (stored.tess_jwt) {
+      const res = await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
+        headers: { 'Authorization': 'Bearer ' + stored.tess_jwt }
+      });
+      const data = await res.json();
+      mlBlacklist = data.blacklist || [];
+    }
+  } catch (e) {}
+}
+
+// Verificar blacklist
+function isInMLBlacklist(contactId) {
+  if (!contactId) return false;
+  return mlBlacklist.includes(contactId);
+}
+
+// Iniciar carga
+loadMLBlacklist();
 
 async function isContactAlreadyContactedML(profileId) {
   try {
@@ -544,6 +571,12 @@ async function executeMailingRound() {
       if (mailingConfig.maxDaily > 0 && mailingConfig.sentToday >= mailingConfig.maxDaily) break;
 
       const entry = queue[i];
+      
+      // Verificar blacklist
+      if (isInMLBlacklist(entry.id)) {
+        console.log('[ML] ⛔ Saltando (blacklist):', entry.id);
+        continue;
+      }
       
       if (await isContactAlreadyContactedML(entry.id)) {
         console.log('[ML] Saltando ID ya contactado:', entry.id);
