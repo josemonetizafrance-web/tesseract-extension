@@ -663,24 +663,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       window.open(chrome.runtime.getURL('src/pages/admin/admin.html'), '_blank');
     }
   });
-  document.getElementById('btnBlacklist')?.addEventListener('click', async () => {
-    if (blacklist.length === 0) {
-      alert('🚫 Blacklist vacía\n\nLos contactos bloqueados aparecerán aquí.');
-      return;
-    }
-    const lista = blacklist.join('\n');
-    const input = prompt('🚫 BLACKLIST\n\n' + lista + '\n\nIngresa un ID para agregar (o cancela):');
-    if (input && input.trim()) {
-      const id = input.trim();
-      if (!blacklist.includes(id)) {
-        blacklist.push(id);
-        saveBlacklist();
-        alert('✅ Contacto ' + id + ' agregado a blacklist');
-      } else {
-        alert('⚠️ Este contacto ya está en blacklist');
-      }
-    }
-  });
   document.getElementById('btnSetProfile').addEventListener('click', () => {
     const n = document.getElementById('manualProfileName').value.trim();
     const id = document.getElementById('manualProfileId').value.trim();
