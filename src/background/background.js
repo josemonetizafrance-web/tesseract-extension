@@ -1,5 +1,5 @@
 ﻿// background.js - TESSERACT v24.0 (Backend Integrado + Smart Mailing)
-const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
+var TESSERACT_API = 'https://tesseract-jblo.onrender.com';
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('TESSERACT v24.0 installed');

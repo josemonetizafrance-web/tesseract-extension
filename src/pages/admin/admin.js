@@ -1,5 +1,5 @@
 // admin.js - TESSERACT v24.0
-const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
+var TESSERACT_API = 'https://tesseract-jblo.onrender.com';
 
 let currentToken = '';
 let currentAdminEmail = '';
