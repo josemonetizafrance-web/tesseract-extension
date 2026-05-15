@@ -101,7 +101,7 @@ function initIcebreakers() {
 
 // Variables de estado global
 let collectedIds = { Saludo: [], Like: [], Follow: [], Cartas: [] };
-let botStats = { likesGiven: 0, followsGiven: 0, messagesSent: 0, cartasSent: 0, contactsProcessed: 0, repliesReceived: 0, repliesResponded: 0 };
+let botStats = { likesGiven: 0, followsGiven: 0, messagesSent: 0, cartasSent: 0, contactsProcessed: 0, repliesReceived: 0, repliesResponded: 0, icebreakersSent: 0 };
 let currentTab = 'main';
 let currentStarFilter = 'all';
 let currentUser = null;
