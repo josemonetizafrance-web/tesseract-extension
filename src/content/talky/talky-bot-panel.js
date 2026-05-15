@@ -39,64 +39,78 @@ function isBlacklisted(contactId) {
 loadBlacklist();
 
 // ============ ICEBREAKERS ============
-const icebreakers = [
-  // Personalidad
+const icebreakersPool = [
   '¿Qué te define en 3 palabras?',
   '¿Cuál es tu mayor talento oculto?',
-  '¿Qué te hace unique?',
-  // Preferencias
   '¿Café o té? ☕',
   '¿Playa o montaña? 🏖️',
   '¿Película o serie? 🎬',
-  // Viajes
   '¿Cuál ha sido tu viaje más increíble?',
   '¿Destino soñado?',
-  '¿Prefieres explorar lo conocido o lo nuevo?',
-  // Lifestyle
   '¿Cómo es tu día perfecto?',
   '¿Qué haces los domingos?',
   '¿Madrugar o trasnochar? 🌙',
-  // Conversación
   '¿De qué no puedes parar de hablar?',
-  '¿Qué me perdería si no te conociera?',
   '¿Qué te hace reír? 😄',
-  // Profundo
   '¿Qué te inspira actualmente?',
   '¿Qué lección reciente aprendiste?',
-  '¿Qué valoras más en una persona?'
+  '¿Qué valoras más en una persona?',
+  '¿Tu comida favorita? 🍕',
+  '¿Qué serie recomiendas? 📺',
+  '¿Qué música escuchas? 🎵',
+  '¿Prefieres ciudad o campo?',
+  '¿Qué haces para relajarte?'
 ];
+
+let icebreakersAvailable = [];
+
+function shuffleIcebreakers() {
+  icebreakersAvailable = [...icebreakersPool].sort(() => Math.random() - 0.5);
+}
 
 function initIcebreakers() {
   const container = document.getElementById('icebreakersList');
   if (!container) return;
   
-  container.innerHTML = icebreakers.map((ib, i) => 
-    `<button class="ice-btn" data-idx="${i}" style="background:rgba(34,197,94,0.2);border:1px solid #22c55e;color:#fff;padding:4px 8px;border-radius:12px;font-size:8px;cursor:pointer;font-family:'Orbitron',sans-serif;">
-      ${ib.substring(0, 25)}${ib.length > 25 ? '...' : ''}
-    </button>`
-  ).join('');
+  shuffleIcebreakers();
+  renderIcebreakers(container);
   
   container.addEventListener('click', async (e) => {
     const btn = e.target.closest('.ice-btn');
     if (!btn) return;
     const idx = parseInt(btn.dataset.idx);
-    const text = icebreakers[idx];
+    const text = icebreakersAvailable[idx];
+    if (!text) return;
     
-    // Copiar y enviar
     const input = findChatInput();
     if (input) {
       input.value = text;
       input.dispatchEvent(new Event('input', { bubbles: true }));
       
-      // Buscar botón de enviar
       const sendBtn = findSendButton();
       if (sendBtn) {
         sendBtn.click();
-        btn.style.background = 'rgba(34,197,94,0.8)';
-        setTimeout(() => btn.style.background = 'rgba(34,197,94,0.2)', 500);
+        botStats.icebreakersSent++;
+        console.log('[ICEBREAKER] Enviado:', text, '| Total:', botStats.icebreakersSent);
+        
+        // Eliminar el icebreaker usado y agregar uno nuevo
+        icebreakersAvailable.splice(idx, 1);
+        const newItem = icebreakersPool[Math.floor(Math.random() * icebreakersPool.length)];
+        icebreakersAvailable.push(newItem);
+        
+        renderIcebreakers(container);
       }
     }
   });
+}
+
+function renderIcebreakers(container) {
+  const show = icebreakersAvailable.slice(0, 8);
+  container.innerHTML = show.map((ib, i) => 
+    `<button class="ice-btn" data-idx="${i}" style="background:rgba(34,197,94,0.2);border:1px solid #22c55e;color:#fff;padding:4px 8px;border-radius:12px;font-size:8px;cursor:pointer;font-family:'Orbitron',sans-serif;">
+      ${ib.substring(0, 22)}${ib.length > 22 ? '...' : ''}
+    </button>`
+  ).join('');
 }
 
 // Variables de estado global
