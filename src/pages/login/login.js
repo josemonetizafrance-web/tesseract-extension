@@ -1,5 +1,5 @@
-// login.js - TESSERACT v23.0 (Backend Integrado)
-const TESSERACT_API = 'https://tesseract-jblo.onrender.com';
+// login.js - TESSERACT v24.0 (Login System)
+const TESSERACT_API = 'http://localhost:3000';
 
 const loginEmail = document.getElementById('login-email');
 const loginPass = document.getElementById('login-password');
@@ -64,15 +64,15 @@ function showLoginVersion() {
   try {
     const manifest = chrome.runtime?.getManifest();
     const el = document.getElementById('login-version');
-    if (el) el.textContent = 'v' + (manifest?.version || '23.0');
+    if (el) el.textContent = 'v' + (manifest?.version || '24.0');
   } catch (e) {}
 }
 
 function showError(msg) {
-  errorMsg.innerText = msg;
+  errorMsg.innerText = "⚠️ " + msg;
   errorMsg.style.display = 'block';
   successMsg.style.display = 'none';
-  setTimeout(() => { errorMsg.style.display = 'none'; }, 5000);
+  setTimeout(() => { errorMsg.style.display = 'none'; }, 8000);
 }
 
 function showSuccess(msg) {
@@ -92,7 +92,6 @@ async function doLogin() {
   clearFeedback();
 
   if (!email) return showError('Ingresa un correo electrónico.');
-  if (!email.endsWith('@tesseract.com')) return showError('Solo @tesseract.com.');
   if (!pass) return showError('Ingresa una contraseña.');
   if (pass.length < 6) return showError('Mínimo 6 caracteres.');
   if (!pass.endsWith('*+')) return showError('Debe terminar en *+.');
@@ -101,7 +100,7 @@ async function doLogin() {
   btnDoLogin.disabled = true;
 
   try {
-    const res = await fetch(`${TESSERACT_API}/api/tess/auth/login`, {
+    const res = await fetch(`${TESSERACT_API}/api/tess/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: pass })
@@ -110,27 +109,31 @@ async function doLogin() {
     const data = await res.json();
 
     if (!res.ok) {
-      btnDoLogin.innerText = 'INITIALIZE SESSION';
+      btnDoLogin.innerText = 'INICIAR SESIÓN';
       btnDoLogin.disabled = false;
       return showError(data.error || 'Error al iniciar sesión.');
     }
 
-    await chrome.storage.local.set({
-      tess_jwt: data.token,
-      tess_auth: true,
-      tess_user: data.user.email,
-      user_email: data.user.email,
-      isAdmin: data.user.isAdmin,
-      isDeveloper: data.user.isDeveloper,
-      subscriptionStatus: data.user.role
-    });
-
-    try { chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS', email: data.user.email }); } catch (e) {}
-
-    window.location.href = chrome.runtime.getURL('src/pages/dashboard/dashboard.html');
-
+    if (data.token) {
+      await chrome.storage.local.set({
+        tess_jwt: data.token,
+        tess_auth: true,
+        tess_user: data.user.email,
+        user_email: data.user.email,
+        isAdmin: data.user.isAdmin,
+        isDeveloper: data.user.isDeveloper,
+        isOfficeAdmin: data.user.isOfficeAdmin,
+        user_office: data.user.office || null,
+        isApproved: data.user.isApproved,
+        subscriptionStatus: data.user.role
+      });
+      
+      try { chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS', email: data.user.email }); } catch (e) {}
+      
+      window.location.href = chrome.runtime.getURL('src/pages/dashboard/dashboard.html');
+    }
   } catch (error) {
-    btnDoLogin.innerText = 'INITIALIZE SESSION';
+    btnDoLogin.innerText = 'INICIAR SESIÓN';
     btnDoLogin.disabled = false;
     showError('Error de conexión: ' + error.message);
   }
@@ -156,11 +159,9 @@ if (document.readyState === 'loading') {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.valid && data.subscription?.status !== 'expired') {
+        if (data.valid) {
           window.location.href = chrome.runtime.getURL('src/pages/dashboard/dashboard.html');
         }
-      } else {
-        await chrome.storage.local.remove('tess_jwt');
       }
     }
   } catch (e) {}

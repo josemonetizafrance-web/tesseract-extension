@@ -65,7 +65,8 @@ async function initAdminPanel() {
     currentAdminEmail = data.email;
     userOffice = data.office;
     isOfficeAdmin = data.isOfficeAdmin;
-    const isMasterAdmin = data.email === 'adminchevy@tesseract.com';
+    // Master admin es Developer en el servidor
+    const isMasterAdmin = data.isDeveloper === true || data.isAdmin === true;
     
     document.getElementById('admin-email').textContent = data.email;
 
@@ -241,7 +242,7 @@ async function loadUserList(office = 'all') {
 
     console.log('[ADMIN] Usuarios cargados:', data.users.length);
     data.users.forEach(u => {
-      const isMaster = u.email === 'adminchevy@tesseract.com';
+      const isMaster = u.is_developer === 1 || u.is_developer === true;
       let statusText = u.role, statusClass = 'status-demo';
       if (isMaster || u.is_developer) { statusText = 'DESARROLLADOR'; statusClass = 'status-premium'; }
       else if (u.role === 'premium') { statusText = 'PREMIUM'; statusClass = 'status-premium'; }

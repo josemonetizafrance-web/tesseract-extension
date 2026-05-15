@@ -18,7 +18,9 @@ let currentUser = null;
 let currentClientName = 'Cliente';
 let likesActive = false;
 let followsActive = false;
+// Variables para Saludos Masivos (deshabilitado UI, código disponible)
 let saludosActive = false;
+// Variables para Cartas (deshabilitado UI, código disponible)
 let cartasActive = false;
 let lastGeneratedMessage = '';
 let isEnglishMode = false;
@@ -107,15 +109,13 @@ function startBackgroundIdCapture() {
   // Escanear cada 3 segundos mientras haya barridos activos
   setInterval(() => {
     if (!isAuthenticated) return;
-    if (!likesActive && !followsActive && !saludosActive && !cartasActive) return;
+    if (!likesActive && !followsActive) return;
     
     const ids = scanPageForIds();
     
     ids.forEach(id => {
       if (likesActive) registerIdInStarTools(id, 'Like');
       if (followsActive) registerIdInStarTools(id, 'Follow');
-      if (saludosActive) registerIdInStarTools(id, 'Saludo');
-      if (cartasActive) registerIdInStarTools(id, 'Cartas');
     });
   }, 3000);
   
@@ -123,18 +123,16 @@ function startBackgroundIdCapture() {
   let lastUrl = location.href;
   setInterval(() => {
     if (!isAuthenticated) return;
-    if (!likesActive && !followsActive && !saludosActive && !cartasActive) return;
+    if (!likesActive && !followsActive) return;
     if (location.href !== lastUrl) {
       lastUrl = location.href;
       setTimeout(() => {
         if (!isAuthenticated) return;
-        if (!likesActive && !followsActive && !saludosActive && !cartasActive) return;
+        if (!likesActive && !followsActive) return;
         const ids = scanPageForIds();
         ids.forEach(id => {
           if (likesActive) registerIdInStarTools(id, 'Like');
           if (followsActive) registerIdInStarTools(id, 'Follow');
-          if (saludosActive) registerIdInStarTools(id, 'Saludo');
-          if (cartasActive) registerIdInStarTools(id, 'Cartas');
         });
       }, 1500);
     }
@@ -659,8 +657,9 @@ function doLogout() {
 // ============ MÓDULOS ============
 function toggleLikes() { likesActive = !likesActive; updateModUI('likes', likesActive); if(likesActive) executeLikes(); saveAllStates(); }
 function toggleFollows() { followsActive = !followsActive; updateModUI('follows', followsActive); if(followsActive) executeFollows(); saveAllStates(); }
-function toggleSaludos() { saludosActive = !saludosActive; updateModUI('saludos', saludosActive); if(saludosActive) executeSaludos(); saveAllStates(); }
-function toggleCartas() { cartasActive = !cartasActive; updateModUI('cartas', cartasActive); if(cartasActive) executeCartas(); saveAllStates(); }
+// Funciones de toggle deshabilitadas (mantener código para futuro)
+function toggleSaludos() { console.log('[TESSERACT] Saludos Masivos deshabilitado'); }
+function toggleCartas() { console.log('[TESSERACT] Cartas deshabilitado'); }
 
 function updateModUI(mod, active) {
   const st = document.getElementById(mod + 'Status');
@@ -2105,28 +2104,20 @@ async function saveAllStates() {
     tess_eater: eaterActive, tess_likes: likesActive, tess_follows: followsActive,
     tess_saludos: saludosActive, tess_cartas: cartasActive,
     tess_stats: botStats, tess_ids: collectedIds,
-    tess_saludo_msgs: saludoMessages, tess_carta_msg: cartaMessages,
     bot_likesGiven: botStats.likesGiven,
     bot_followsGiven: botStats.followsGiven,
-    bot_cartasSent: botStats.cartasSent,
     bot_messagesSent: botStats.messagesSent,
-    bot_sweepCount: (collectedIds.Like?.length || 0) + (collectedIds.Follow?.length || 0) +
-                    (collectedIds.Saludo?.length || 0) + (collectedIds.Cartas?.length || 0),
-    bot_repliesReceived: botStats.repliesReceived,
-    bot_repliesResponded: botStats.repliesResponded,
+    bot_sweepCount: (collectedIds.Like?.length || 0) + (collectedIds.Follow?.length || 0),
     bot_idsLikes: collectedIds.Like?.length || 0,
-    bot_idsFollows: collectedIds.Follow?.length || 0,
-    bot_idsSaludos: collectedIds.Saludo?.length || 0,
-    bot_idsCartas: collectedIds.Cartas?.length || 0
+    bot_idsFollows: collectedIds.Follow?.length || 0
   });
 }
 
 async function loadAllStates() {
   try {
-    const r = await chrome.storage.local.get([
+const r = await chrome.storage.local.get([
       'tess_auth', 'tess_user', 'tess_eater', 'tess_likes', 'tess_follows',
-      'tess_saludos', 'tess_cartas', 'tess_stats', 'tess_ids',
-      'tess_saludo_msgs', 'tess_carta_msg'
+      'tess_saludos', 'tess_cartas', 'tess_stats', 'tess_ids'
     ]);
     if (r.tess_auth && r.tess_user) {
       isAuthenticated = true; currentUser = r.tess_user;
@@ -2161,6 +2152,10 @@ async function syncMetricsToStorage(action, count) {
   try {
     console.log('[TESSERACT] syncMetricsToStorage:', action, count);
 
+    // Obtener la oficina del usuario
+    const userData = await new Promise(r => chrome.storage.local.get(['user_office', 'tess_user'], d => r(d)));
+    const userOffice = userData.user_office || null;
+
     // Enviar al servidor
     try {
       const token = await new Promise(r => chrome.storage.local.get('tess_jwt', d => r(d.tess_jwt)));
@@ -2172,7 +2167,8 @@ async function syncMetricsToStorage(action, count) {
             stats: botStats,
             collectedIds: collectedIds,
             action: action,
-            count: count || 1
+            count: count || 1,
+            office: userOffice
           })
         });
         if (res.status === 401) {
