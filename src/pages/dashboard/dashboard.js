@@ -91,7 +91,10 @@
       try {
         const res = await fetch(`${TESSERACT_API}/api/tess/support/message`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + data.tess_jwt
+          },
           body: JSON.stringify({ 
             email: data.user_email, 
             subject: subject || 'Consulta de usuario',
