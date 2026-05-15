@@ -107,8 +107,8 @@ function initIcebreakers() {
 function renderIcebreakers(container) {
   const show = icebreakersAvailable.slice(0, 8);
   container.innerHTML = show.map((ib, i) => 
-    `<button class="ice-btn" data-idx="${i}" style="background:rgba(34,197,94,0.2);border:1px solid #22c55e;color:#fff;padding:4px 8px;border-radius:12px;font-size:8px;cursor:pointer;font-family:'Orbitron',sans-serif;">
-      ${ib.substring(0, 22)}${ib.length > 22 ? '...' : ''}
+    `<button class="ice-btn" data-idx="${i}" style="background:rgba(139,92,246,0.2);border:1px solid #8b5cf6;color:#fff;padding:6px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-family:'Orbitron',sans-serif;">
+      ${ib.substring(0, 18)}${ib.length > 18 ? '..' : ''}
     </button>`
   ).join('');
 }
@@ -1662,13 +1662,39 @@ function refreshEaterSuggestions() {
     hasPhoto: checkPhoto(profileEl),
     hobbies: extractHobbies(profileEl)
   };
-  generateSuggestions(clientName + ' (' + eaterRefreshCount + ')', profile);
+  
   const btn = document.getElementById('btnRefreshEater');
   if (btn) {
-    btn.textContent = '\uD83D\uDD04 ' + eaterRefreshCount;
-    btn.style.background = 'rgba(139,92,246,0.3)';
-    setTimeout(() => { if (btn) btn.style.background = 'rgba(30,27,75,0.7)'; }, 300);
+    btn.textContent = '🤖 IA...';
+    btn.style.background = 'rgba(139,92,246,0.5)';
   }
+  
+  generateWithAI(clientName, profile).then(aiSuggestions => {
+    if (aiSuggestions && aiSuggestions.length > 0) {
+      isUsingAI = true;
+      eaterSuggestions = aiSuggestions;
+      if (btn) {
+        btn.textContent = '🤖 IA #' + eaterRefreshCount;
+        btn.style.background = 'rgba(139,92,246,0.3)';
+      }
+    } else {
+      isUsingAI = false;
+      generateLocalSuggestions(clientName, profile);
+      if (btn) {
+        btn.textContent = '🔄 FRASES #' + eaterRefreshCount;
+        btn.style.background = 'rgba(30,27,75,0.7)';
+      }
+    }
+    displaySuggestions(clientName);
+  }).catch(() => {
+    isUsingAI = false;
+    generateLocalSuggestions(clientName, profile);
+    if (btn) {
+      btn.textContent = '🔄 FRASES #' + eaterRefreshCount;
+      btn.style.background = 'rgba(30,27,75,0.7)';
+    }
+    displaySuggestions(clientName);
+  });
 }
 
 // ============ TRADUCCIÓN ============
