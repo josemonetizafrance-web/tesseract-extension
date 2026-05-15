@@ -1409,9 +1409,10 @@ async function generateWithAI(name, profile) {
     const stored = await chrome.storage.local.get(['tess_jwt']);
     const token = stored.tess_jwt;
     
-    const prompt = `Genera 2 frases cortas de citas online con tecnica de push and pull. 
-Deben ser concisas, llamar la atencion, NO personalizadas ni con nombre. 
-Maximo 12 palabras cada una. Sin preguntas. Directas, con gancho y misterio.`;
+    const prompt = `Genera 3 frases push-pull para iniciar conversación en app de citas.
+Cada frase: MAXIMO 6 PALABRAS. Contexto básico. Sin nombres.
+Ejemplos: "Me gustas pero no sé si respondes", "Tengo curiosidad por ti", "Algo me dice que sí".
+Responde SOLO las 3 frases, una por línea, nada más.`;
 
     const response = await fetch(`${TESSERACT_API}/api/chatgpt/chat`, {
       method: 'POST',
@@ -1425,7 +1426,7 @@ Maximo 12 palabras cada una. Sin preguntas. Directas, con gancho y misterio.`;
           { role: 'user', content: prompt }
         ],
         model: 'gpt-3.5-turbo',
-        max_tokens: 100
+        max_tokens: 50
       })
     });
     
@@ -1450,63 +1451,27 @@ function generateLocalSuggestions(name, profile) {
   const hasRealHobbies = hobbies && hobbies.length > 0;
   const hasRealLocation = location && location.length > 0;
   
+  // Sugerencias cortas con push-pull y contexto
   const openers = [
-    'Hola! Me encantó tu perfil y no pude resistirme a escribirte.',
-    '¡Qué alegría encontrarte por aquí! Tu energía se nota hasta en las fotos.',
-    'Hola, vi tu perfil y dije "tengo que conocer a esta persona".',
-    '¡Hola! Hay algo en tu sonrisa que me llamó poderosamente la atención.',
-    'Qué interesante se ve tu perfil, me gustaría saber más de ti.',
-    'No suelo escribir primero, pero tu perfil realmente me impactó.',
-    'Vaya, qué sorpresa encontrarme con un perfil tan auténtico.',
-    'Me llamó mucho la atención tu forma de ser, así que aquí estoy.',
-    'Me encantó tu estilo, se ve que eres una persona especial.',
-    'Hola! No pude evitar pensar que podríamos tener una gran conversación.',
-    '¡Qué bonito perfil! Definitivamente hay algo diferente en ti.',
-    'Hola, ¿sabes qué? Tu perfil tiene una vibra muy positiva.',
-    'Me gusta la autenticidad que transmites en tus fotos.',
-    'Tu perfil me transmitió muy buena energía, decidí escribirte.',
-    'Qué gusto saludarte, se nota que eres alguien especial desde el primer vistazo.',
-    'Hola, vi algo en tu perfil que me hizo sonreír y aquí estoy.',
-    '¡Buenas! Tu perfil tiene algo magnético, no pude ignorarlo.',
-    '¿Sabes? Normalmente no hago esto, pero tu perfil merece una excepción.',
-    'Hola, me pareces alguien fascinante y tenía que decírtelo.',
-    '¡Hey! Apuesto a que tienes historias increíbles que contar.',
-    'Me topé con tu perfil y pensé: "definitivamente vale la pena".',
-    'Hola, ¿qué tal? Me encanta la vibra positiva que transmites.',
-    'No todo los días encuentro un perfil tan interesante como el tuyo.',
-    '¡Hola! Tu forma de ser se nota auténtica y eso me encanta.',
-    'Vaya, qué grata sorpresa encontrarte. Tu perfil irradia buena energía.',
-    'Hola, ¿crees en las conexiones espontáneas? Porque esto se siente así.',
-    'Me encantó lo que vi en tu perfil, quería saber más de ti.',
-    '¡Hola! Tengo el presentimiento de que tenemos mucho en común.',
-    'Qué bonito encontrarse con alguien tan genuino por aquí.',
-    'Hola, tu sonrisa en la foto principal es simplemente contagiosa.',
-    'No pude pasar de largo sin saludarte, tu perfil es demasiado interesante.',
-    '¡Hola! Se nota que eres una persona con mucha luz propia.',
-    'Tu perfil desprende una energía única, quería conocerte.',
-    'Hola, ¿qué haces en un lugar como este con un perfil tan increíble?',
-    'Me pareces alguien muy interesante, ojalá podamos conectar.',
-    '¡Holaaa! Tengo feeling de que esto podría ser el inicio de algo bonito.'
-  ];
+    // Push-pull clásicos (cortos)
+    'Me gustas, pero no sé si me vas a responder...',
+    'Tu perfil me tiene curioso... ¿serás interesante?',
+    'Tengo una corazonada sobre ti...',
+    'Algo me dice que deberíamos conversar...',
+    'No puedo dejar de pensar en tu sonrisa...',
+    '¿Y si esta vez sí funciona? 🤔',
+    'Me atraes... pero quiero saber si eres tú quien dice algo.',
+    'Veo tu perfil y pienso "ella/él podría ser"...',
+    'Mi instinto me dice que vales la pena...',
+    '¿Qué tal sinos llevamos mejor de lo esperado?',
+    // Con contexto
+    location && hasRealLocation ? `Vivo cerca de ${location}, ¿y tú?` : 'Me alegra encontrarte aquí!',
+    interests && hasRealInterests ? `Veo que te gusta ${interests[0]}... interesante!` : 'Tu energía me gusta!',
+    hobbies && hasRealHobbies ? `También pratico ${hobbies[0]}!` : 'Me encantó tu perfil!',
+  ].filter(s => s);
   
-  const sug = [];
-  const usedCombos = new Set();
-  const safeName = name && name !== 'Cliente' ? name : null;
-  
-  while (sug.length < 2) {
-    const parts = [];
-    const opener = openers[Math.floor(Math.random() * openers.length)];
-    parts.push(opener);
-    
-    if (hasRealLocation && Math.random() > 0.3) {
-      const locFrase = [
-        `¿Cómo es vivir en ${location}? Se ve un lugar interesante.`,
-        `${location} debe ser un lugar increíble. ¿Qué es lo que más te gusta?`,
-        `He escuchado cosas muy buenas de ${location}, ¿es tan lindo como dicen?`,
-        `¿Qué se siente vivir en ${location}? Me da curiosidad.`
-      ];
-      parts.push(locFrase[Math.floor(Math.random() * locFrase.length)]);
-    }
+  eaterSuggestions = openers;
+}
     
     if (hasRealHobbies && Math.random() > 0.3) {
       const hob = hobbies[0];
@@ -1925,9 +1890,11 @@ function findChatInput() {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function updateStats() {
+  console.log('[STATS] Updating - Likes:', botStats.likesGiven, 'Follows:', botStats.followsGiven);
   const vLikes = document.getElementById('vLikes');
   const vFollows = document.getElementById('vFollows');
   const vMsgs = document.getElementById('vMsgs');
+  console.log('[STATS] Elements - vLikes:', !!vLikes, 'vFollows:', !!vFollows, 'vMsgs:', !!vMsgs);
   if (vLikes) vLikes.textContent = botStats.likesGiven;
   if (vFollows) vFollows.textContent = botStats.followsGiven;
   if (vMsgs) vMsgs.textContent = botStats.messagesSent;
