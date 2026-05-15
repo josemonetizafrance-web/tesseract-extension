@@ -90,6 +90,7 @@
       
       console.log('[SUPPORT] Enviando a:', TESSERACT_API);
       console.log('[SUPPORT] Email:', data.user_email);
+      console.log('[SUPPORT] JWT:', data.tess_jwt ? 'OK' : 'MISSING');
       
       try {
         const res = await fetch(`${TESSERACT_API}/api/tess/support/message`, {
@@ -105,9 +106,16 @@
           })
         });
         console.log('[SUPPORT] Response status:', res.status);
+        if (!res.ok) {
+          const errText = await res.text();
+          console.log('[SUPPORT] Error response:', errText);
+          statusEl.textContent = '❌ Error: ' + res.status;
+          this.textContent = 'Enviar';
+          this.disabled = false;
+          return;
+        }
         const result = await res.json();
         console.log('[SUPPORT] Response:', result);
-        if (res.ok) {
           statusEl.textContent = '✅ Mensaje enviado! El administrador te contactará.';
           document.getElementById('support-message').value = '';
           document.getElementById('support-subject').value = '';

@@ -38,6 +38,67 @@ function isBlacklisted(contactId) {
 // Iniciar carga de blacklist
 loadBlacklist();
 
+// ============ ICEBREAKERS ============
+const icebreakers = [
+  // Personalidad
+  '¿Qué te define en 3 palabras?',
+  '¿Cuál es tu mayor talento oculto?',
+  '¿Qué te hace unique?',
+  // Preferencias
+  '¿Café o té? ☕',
+  '¿Playa o montaña? 🏖️',
+  '¿Película o serie? 🎬',
+  // Viajes
+  '¿Cuál ha sido tu viaje más increíble?',
+  '¿Destino soñado?',
+  '¿Prefieres explorar lo conocido o lo nuevo?',
+  // Lifestyle
+  '¿Cómo es tu día perfecto?',
+  '¿Qué haces los domingos?',
+  '¿Madrugar o trasnochar? 🌙',
+  // Conversación
+  '¿De qué no puedes parar de hablar?',
+  '¿Qué me perdería si no te conociera?',
+  '¿Qué te hace reír? 😄',
+  // Profundo
+  '¿Qué te inspira actualmente?',
+  '¿Qué lección reciente aprendiste?',
+  '¿Qué valoras más en una persona?'
+];
+
+function initIcebreakers() {
+  const container = document.getElementById('icebreakersList');
+  if (!container) return;
+  
+  container.innerHTML = icebreakers.map((ib, i) => 
+    `<button class="ice-btn" data-idx="${i}" style="background:rgba(34,197,94,0.2);border:1px solid #22c55e;color:#fff;padding:4px 8px;border-radius:12px;font-size:8px;cursor:pointer;font-family:'Orbitron',sans-serif;">
+      ${ib.substring(0, 25)}${ib.length > 25 ? '...' : ''}
+    </button>`
+  ).join('');
+  
+  container.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.ice-btn');
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.idx);
+    const text = icebreakers[idx];
+    
+    // Copiar y enviar
+    const input = findChatInput();
+    if (input) {
+      input.value = text;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      
+      // Buscar botón de enviar
+      const sendBtn = findSendButton();
+      if (sendBtn) {
+        sendBtn.click();
+        btn.style.background = 'rgba(34,197,94,0.8)';
+        setTimeout(() => btn.style.background = 'rgba(34,197,94,0.2)', 500);
+      }
+    }
+  });
+}
+
 // Variables de estado global
 let collectedIds = { Saludo: [], Like: [], Follow: [], Cartas: [] };
 let botStats = { likesGiven: 0, followsGiven: 0, messagesSent: 0, cartasSent: 0, contactsProcessed: 0, repliesReceived: 0, repliesResponded: 0 };
@@ -109,6 +170,7 @@ async function initTesseract() {
     console.log('[TESSERACT] 🚀 Inicializando sistema...');
   createMainPanel();
   createEaterBar();
+  initIcebreakers();
   createSaludosModal();
   createCartasModal();
   setupAllEvents();
@@ -327,6 +389,14 @@ function createMainPanel() {
 <div class="eater-sugs" id="eaterSuggestions">
 <div class="eater-sugs-hdr"><span>🎯 SUGERENCIAS PARA EL CLIENTE</span><span id="eaterClientName" style="font-size:7px;"></span></div>
 <div class="eater-sugs-list" id="eaterSugList"></div>
+</div>
+</div>
+
+<!-- ICEBREAKERS -->
+<div class="eater-box" style="margin-top:8px;background:#000;border:1px solid #22c55e;border-radius:8px;">
+<h4 style="font-size:9px;letter-spacing:1px;margin:8px 0;text-align:center;color:#22c55e;">🎯 ICEBREAKERS (Click = Enviar)</h4>
+<div id="icebreakersList" style="display:flex;flex-wrap:wrap;gap:4px;padding:4px;justify-content:center;max-height:80px;overflow-y:auto;">
+</div>
 </div>
 </div>
 <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">
