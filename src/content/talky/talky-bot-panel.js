@@ -791,6 +791,7 @@ async function executeLikes() {
         btn.click();
         given++;
         botStats.likesGiven++;
+        console.log('[LIKES] Like dado! Total:', botStats.likesGiven);
         updateStats();
         await sleep(200);
         
@@ -863,6 +864,7 @@ async function executeFollows() {
       btn.click();
       given++;
       botStats.followsGiven++;
+      console.log('[FOLLOWS] Follow dado! Total:', botStats.followsGiven);
       updateStats();
       await sleep(300);
       

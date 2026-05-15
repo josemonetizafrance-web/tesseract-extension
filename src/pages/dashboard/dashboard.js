@@ -88,6 +88,9 @@
       this.textContent = 'Enviando...';
       this.disabled = true;
       
+      console.log('[SUPPORT] Enviando a:', TESSERACT_API);
+      console.log('[SUPPORT] Email:', data.user_email);
+      
       try {
         const res = await fetch(`${TESSERACT_API}/api/tess/support/message`, {
           method: 'POST',
@@ -101,7 +104,9 @@
             message: message 
           })
         });
+        console.log('[SUPPORT] Response status:', res.status);
         const result = await res.json();
+        console.log('[SUPPORT] Response:', result);
         if (res.ok) {
           statusEl.textContent = '✅ Mensaje enviado! El administrador te contactará.';
           document.getElementById('support-message').value = '';
