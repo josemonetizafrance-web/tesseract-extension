@@ -1540,66 +1540,7 @@ function generateLocalSuggestions(name, profile) {
     hobbies && hasRealHobbies ? `También pratico ${hobbies[0]}!` : 'Me encantó tu perfil!',
   ].filter(s => s);
   
-  eaterSuggestions = openers;
-}
-    
-    if (hasRealHobbies && Math.random() > 0.3) {
-      const hob = hobbies[0];
-      const hobFrase = [
-        `Veo que te gusta ${hob}, a mí también.`,
-        `${hob} suena genial, ¿desde cuándo lo practicas?`,
-        `Qué cool que te guste ${hob}, es algo que admiro.`,
-        `${hob} me parece súper interesante, ¿cómo empezaste?`
-      ];
-      parts.push(hobFrase[Math.floor(Math.random() * hobFrase.length)]);
-    } else if (hasRealInterests && Math.random() > 0.3) {
-      const interest = interests[0];
-      const intFrase = [
-        `Me gusta que te apasione ${interest}, es algo que valoro.`,
-        `${interest} suena fascinante, cuéntame más sobre eso.`,
-        `Qué bien que disfrutes de ${interest}, eso dice mucho de ti.`,
-        `Me encanta la gente apasionada por ${interest}.`
-      ];
-      parts.push(intFrase[Math.floor(Math.random() * intFrase.length)]);
-    }
-    
-    const closing = [
-      '¿Qué tal va tu día?',
-      'Cuéntame algo sobre ti.',
-      '¿Cómo va todo?',
-      'Espero que estés teniendo una linda semana.',
-      '¿Qué te trae por aquí?',
-      '¿De dónde eres?',
-      '¿Qué te gusta hacer en tu tiempo libre?',
-      '¿Cómo describirías tu personalidad?',
-      '¿Qué es lo que más disfrutas en la vida?',
-      'Platícame un poco de ti.',
-      '¿Cuál es tu plan favorito para un fin de semana?',
-      '¿Eres más de playa o de montaña?',
-      '¿Café o té? Pregunta importante.',
-      'Cuéntame, ¿qué te hace feliz?',
-      '¿Tienes alguna mascota?',
-      '¿Qué tipo de música te gusta?',
-      '¿Cuál es tu lugar favorito para viajar?',
-      'Dime, ¿qué es lo que más te apasiona hacer?',
-      '¿Eres aventurero o más tranquilo?',
-      '¿Qué fue lo mejor que te pasó esta semana?'
-    ];
-    if (safeName && Math.random() > 0.4) {
-      parts.push(`Cuéntame más de ti, ${safeName}.`);
-    } else {
-      parts.push(closing[Math.floor(Math.random() * closing.length)]);
-    }
-    
-    const combination = parts.join(' ');
-    const key = combination.substring(0, 40);
-    if (!usedCombos.has(key)) {
-      usedCombos.add(key);
-      sug.push(combination);
-    }
-  }
-  
-  eaterSuggestions = sug;
+eaterSuggestions = openers;
   displaySuggestions(name);
 }
 

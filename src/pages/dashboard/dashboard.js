@@ -78,6 +78,7 @@
     document.getElementById('btn-send-support').addEventListener('click', async function () {
       const subject = document.getElementById('support-subject').value.trim();
       const message = document.getElementById('support-message').value.trim();
+      const contactEmail = document.getElementById('support-email').value.trim();
       const statusEl = document.getElementById('support-status');
       
       if (!message) {
@@ -85,11 +86,16 @@
         return;
       }
       
+      if (!contactEmail) {
+        statusEl.textContent = '⚠️ Ingresa tu email de contacto';
+        return;
+      }
+      
       this.textContent = 'Enviando...';
       this.disabled = true;
       
       console.log('[SUPPORT] Enviando a:', TESSERACT_API);
-      console.log('[SUPPORT] Email:', data.user_email);
+      console.log('[SUPPORT] Email:', contactEmail);
       console.log('[SUPPORT] JWT:', data.tess_jwt ? 'OK' : 'MISSING');
       
       try {
@@ -100,7 +106,7 @@
             'Authorization': 'Bearer ' + data.tess_jwt
           },
           body: JSON.stringify({ 
-            email: data.user_email, 
+            email: contactEmail, 
             subject: subject || 'Consulta de usuario',
             message: message 
           })
