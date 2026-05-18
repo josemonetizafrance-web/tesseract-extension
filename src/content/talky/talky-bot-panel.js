@@ -1032,33 +1032,29 @@ function scanPageForIds() {
   return Array.from(ids);
 }
 
-// ============ EJECUTAR LIKE & FOLLOW (ABRE PERFILES INDIVIDUALMENTE) ============
-async function executeLikeFollow() {
-  console.log('[LIKEFOLLOW] 🚀 Iniciando barrido abriendo perfiles...');
-  updateModUI('likeFollow', true);
+// ============ DETECTAR CONTEXTO DEL BARRIDO ============
+function detectLFContext() {
+  var url = location.href.toLowerCase();
+  if (url.includes('/search') || url.includes('/browse') || url.includes('/find') || url.includes('/explore')) return 'search';
+  if (url.includes('/message') || url.includes('/chat') || url.includes('/conversation') || url.includes('/dialog') || url.includes('/inbox') || url.includes('/list')) return 'messages';
+  if (url.includes('/mail') || url.includes('/carta') || url.includes('/letter') || url.includes('/email')) return 'mail';
+  if (document.querySelector('[class*="search-result"], [class*="browse-result"], [class*="profile-card"]')) return 'search';
+  if (document.querySelector('[class*="contact-list"], [class*="chat-list"], [class*="conversation-list"]')) return 'messages';
+  if (document.querySelector('[class*="mail-list"], [class*="inbox-list"], [class*="letter-list"]')) return 'mail';
+  // Si detectamos un chat abierto, intentar con la lista de contactos cercana
+  if (document.querySelector('[class*="chat"]')) return 'messages';
+  return 'search';
+}
 
-  // Ir a búsqueda si no estamos ahí
-  if (!location.href.includes('/search') && !location.href.includes('/browse')) {
-    const searchBtn = findButton(['Buscar', 'Search', 'buscar', 'search', 'Browse']);
-    if (searchBtn) { searchBtn.click(); await sleep(2000); }
-  }
-
-  let page = 0, totalGiven = 0;
-
-  while (likeFollowActive && page < 50) {
-    page++;
-    let pageActions = 0;
-
-    // Recolectar IDs de perfiles en la página de búsqueda
-    var profileIds = [];
-    var profileAnchors = document.querySelectorAll(
-      'a[href*="/profile/"], a[href*="/member/"], a[href*="/user/"]'
-    );
-    profileAnchors.forEach(function (a) {
+// ============ RECOLECTAR CONTACTOS SEGÚN CONTEXTO ============
+function collectLFContacts(context) {
+  var ids = [];
+  if (context === 'search') {
+    var anchors = document.querySelectorAll('a[href*="/profile/"], a[href*="/member/"], a[href*="/user/"]');
+    anchors.forEach(function (a) {
       if (!a.offsetParent) return;
       var m = a.href && a.href.match(/\/(\d{6,15})(\/|$)/);
-      if (m && profileIds.indexOf(m[1]) === -1) {
-        // Verificar si tiene foto en la card
+      if (m && ids.indexOf(m[1]) === -1) {
         var card = a.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="result"]');
         var hasPhoto = false;
         if (card) {
@@ -1070,70 +1066,124 @@ async function executeLikeFollow() {
             hasPhoto = !(!bg || bg === 'none');
           }
         }
-        if (hasPhoto) profileIds.push(m[1]);
+        if (hasPhoto) ids.push(m[1]);
       }
     });
+    return ids.slice(0, 12);
+  }
+  if (context === 'messages') {
+    var list = document.querySelector('[class*="contact-list"], [class*="chat-list"], [class*="conversation"], [class*="dialog"], [class*="messages"]');
+    if (!list) return ids;
+    var items = list.querySelectorAll('[class*="contact"], [class*="user"], [class*="item"], [class*="dialog-item"], [class*="thread"], li, [class*="row"]');
+    items.forEach(function (item) {
+      if (item.offsetParent === null || isPinnedOrSaved(item)) return;
+      var id = extractId(item);
+      if (id && ids.indexOf(id) === -1) ids.push(id);
+    });
+    return ids;
+  }
+  if (context === 'mail') {
+    var list = document.querySelector('[class*="inbox"], [class*="mail-list"], [class*="letter-list"], [class*="message-list"]');
+    if (!list) return ids;
+    var items = list.querySelectorAll('[class*="item"], [class*="mail"], [class*="letter"], li, [class*="row"], [class*="message"]');
+    items.forEach(function (item) {
+      if (item.offsetParent === null) return;
+      // Solo contactos con carta sin responder
+      var txt = item.textContent.toLowerCase();
+      if (txt.includes('respondido') || txt.includes('replied') || txt.includes('enviado') || txt.includes('sent')) return;
+      var id = extractId(item);
+      if (id && ids.indexOf(id) === -1) ids.push(id);
+    });
+    return ids;
+  }
+  return ids;
+}
 
-    // Limitar a 12 por página
-    if (profileIds.length === 0) {
-      console.log('[LIKEFOLLOW] Sin perfiles con foto en pagina', page);
+// ============ NAVEGAR AL PERFIL DESDE CUALQUIER CONTEXTO ============
+async function navigateToProfile(contactId, context) {
+  // Buscar link directo al perfil
+  var link = document.querySelector('a[href*="/' + contactId + '"]');
+  if (link && link.offsetParent) {
+    link.click();
+    await sleep(2000);
+    return true;
+  }
+  // Si no hay link directo, intentar navegación contextual
+  if (context === 'messages' || context === 'mail') {
+    var list = document.querySelector('[class*="contact-list"], [class*="chat-list"], [class*="conversation"], [class*="dialog"], [class*="messages"], [class*="inbox"], [class*="mail-list"]');
+    if (list) {
+      var target = list.querySelector('a[href*="' + contactId + '"], [data-id="' + contactId + '"], [data-user-id="' + contactId + '"], [data-contact-id="' + contactId + '"]');
+      if (target && target.offsetParent) {
+        target.click();
+        await sleep(2000);
+        // Intentar click en header del perfil desde la vista de chat/carta
+        var profileInView = document.querySelector('a[href*="/profile/"], a[href*="/member/"], a[href*="/user/"]');
+        if (profileInView && profileInView.offsetParent && profileInView.href.includes(contactId)) {
+          profileInView.click();
+          await sleep(2000);
+          return true;
+        }
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// ============ EJECUTAR LIKE & FOLLOW (ABRE PERFILES INDIVIDUALMENTE, 1 ACCIÓN = 1 CLIENTE) ============
+async function executeLikeFollow() {
+  console.log('[LIKEFOLLOW] Iniciando barrido contextual...');
+  updateModUI('likeFollow', true);
+
+  var context = detectLFContext();
+  console.log('[LIKEFOLLOW] Contexto detectado:', context);
+
+  var page = 0, totalGiven = 0;
+
+  while (likeFollowActive && page < 50) {
+    page++;
+
+    var contactIds = collectLFContacts(context);
+    if (contactIds.length === 0) {
+      console.log('[LIKEFOLLOW] Sin contactos en pagina', page);
+      if (context === 'search') {
+        var nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
+        if (!nextBtn || nextBtn.disabled) break;
+        nextBtn.click();
+        await sleep(3000);
+        continue;
+      }
       break;
     }
-    var idsOnPage = profileIds.slice(0, 12);
 
-    for (var pi = 0; pi < idsOnPage.length; pi++) {
+    for (var ci = 0; ci < contactIds.length; ci++) {
       if (!likeFollowActive) break;
-      var contactId = idsOnPage[pi];
+      var contactId = contactIds[ci];
       if (isBlacklisted(contactId)) continue;
-
-      // Encontrar link de este perfil en el DOM actual
-      var linkEl = document.querySelector('a[href*="/' + contactId + '"]');
-      if (!linkEl || !linkEl.offsetParent) {
-        console.log('[LIKEFOLLOW] Link no encontrado para', contactId, '- recuperando busqueda');
-        var btn = findButton(['Buscar', 'Search', 'buscar', 'search']);
-        if (btn) { btn.click(); await sleep(3000); }
-        linkEl = document.querySelector('a[href*="/' + contactId + '"]');
-        if (!linkEl || !linkEl.offsetParent) continue;
-      }
 
       // Abrir perfil
       console.log('[LIKEFOLLOW] Abriendo perfil:', contactId);
-      linkEl.click();
-      await sleep(2500);
+      var navigated = await navigateToProfile(contactId, context);
+      if (!navigated) {
+        console.log('[LIKEFOLLOW] No se pudo navegar al perfil', contactId);
+        continue;
+      }
+      await sleep(3000);
 
       registerIdInStarTools(contactId, 'Like');
       registerIdInStarTools(contactId, 'Follow');
 
-      // Like a foto de perfil
+      // 1) LIKE (corazón del perfil)
       var likeBtn = document.querySelector(
         '[class*="like"]:not([disabled]), [class*="heart"]:not([disabled]), [class*="favorite"]:not([disabled]),' +
         '[title*="Like"]:not([disabled]), [aria-label*="Like"]:not([disabled])'
       );
       if (likeBtn && likeBtn.offsetParent) {
         likeBtn.click();
-        totalGiven++; pageActions++;
-        botStats.likesGiven++;
         await sleep(300);
       }
 
-      // Like a primeras 3 fotos del media dentro del perfil
-      var mediaBtns = document.querySelectorAll(
-        '[class*="media"] [class*="like"]:not([disabled]), [class*="gallery"] [class*="like"]:not([disabled]),' +
-        '[class*="photo"] [class*="like"]:not([disabled]), [class*="media"] [class*="heart"]:not([disabled]),' +
-        '[class*="gallery"] [class*="heart"]:not([disabled]), [class*="photo"] [class*="heart"]:not([disabled])'
-      );
-      var photoLikes = 0;
-      for (var mb = 0; mb < mediaBtns.length; mb++) {
-        if (photoLikes >= 3 || !likeFollowActive) break;
-        if (mediaBtns[mb].offsetParent) {
-          mediaBtns[mb].click();
-          totalGiven++; pageActions++; photoLikes++;
-          botStats.likesGiven++;
-          await sleep(200);
-        }
-      }
-
-      // Follow
+      // 2) FOLLOW
       var followBtn = document.querySelector(
         '[class*="follow"]:not([disabled]), [aria-label*="Follow"]:not([disabled]),' +
         '[title*="Follow"]:not([disabled]), [class*="subscribe"]:not([disabled])'
@@ -1142,37 +1192,111 @@ async function executeLikeFollow() {
         var ftxt = (followBtn.textContent || '').toLowerCase();
         if (ftxt.includes('follow') || ftxt.includes('seguir') || ftxt.includes('+')) {
           followBtn.click();
-          totalGiven++; pageActions++;
-          botStats.followsGiven++;
-          await sleep(400);
+          await sleep(300);
         }
       }
 
+      // 3) ABRIR AVATAR → LIKE A FOTO DE PERFIL
+      var avatarEl = document.querySelector(
+        '[class*="avatar"] a, [class*="photo"] a, [class*="profile-pic"] a,' +
+        'img[class*="avatar"], img[class*="profile-pic"], img[class*="main-photo"],' +
+        'a[href*="/photo"]:not([disabled])'
+      );
+      if (avatarEl && avatarEl.offsetParent) {
+        avatarEl.click();
+        await sleep(1500);
+        var avatarLike = document.querySelector(
+          '[class*="modal"] [class*="like"]:not([disabled]), [class*="overlay"] [class*="like"]:not([disabled]),' +
+          '[class*="lightbox"] [class*="like"]:not([disabled]), [class*="photo-view"] [class*="like"]:not([disabled])'
+        );
+        if (avatarLike && avatarLike.offsetParent) {
+          avatarLike.click();
+          await sleep(300);
+        }
+        var closeBtn = document.querySelector(
+          '[class*="modal"] [class*="close"], [class*="overlay"] [class*="close"],' +
+          '[class*="modal"] button[class*="x"], button[aria-label*="Close"],' +
+          '[class*="lightbox"] [class*="close"]'
+        );
+        if (closeBtn && closeBtn.offsetParent) { closeBtn.click(); await sleep(500); }
+        else {
+          var overlay = document.querySelector('[class*="modal"], [class*="overlay"], [class*="lightbox"], [class*="backdrop"]');
+          if (overlay) { overlay.click(); await sleep(500); }
+        }
+      }
+
+      // 4) ABRIR MEDIA → LIKE A 3 FOTOS
+      var mediaTab = findButton(['Media', 'Fotos', 'Photos', 'Galeria', 'Gallery', 'media', 'photo']);
+      if (!mediaTab) {
+        mediaTab = document.querySelector(
+          '[class*="media-tab"], [class*="gallery-tab"], [class*="photo-tab"],' +
+          'button[class*="media"], a[class*="media"], [class*="media"]'
+        );
+      }
+      if (mediaTab && mediaTab.offsetParent) {
+        mediaTab.click();
+        await sleep(1500);
+        var mediaLikes = document.querySelectorAll(
+          '[class*="media"] [class*="like"]:not([disabled]), [class*="gallery"] [class*="like"]:not([disabled]),' +
+          '[class*="photo"] [class*="like"]:not([disabled]), [class*="media"] [class*="heart"]:not([disabled]),' +
+          '[class*="gallery"] [class*="heart"]:not([disabled]), [class*="photo"] [class*="heart"]:not([disabled])'
+        );
+        var photoLikes = 0;
+        for (var mi = 0; mi < mediaLikes.length; mi++) {
+          if (photoLikes >= 3 || !likeFollowActive) break;
+          if (mediaLikes[mi].offsetParent) {
+            mediaLikes[mi].click();
+            photoLikes++;
+            await sleep(200);
+          }
+        }
+      }
+
+      // Contador: 1 acción por cliente completo
+      totalGiven++;
+      botStats.likesGiven++;
+      botStats.followsGiven++;
       updateStats();
       renderStarIds();
       saveAllStates();
 
-      // Volver a búsqueda
+      // 5) VOLVER A PÁGINA ANTERIOR
       window.history.back();
       await sleep(2500);
 
-      // Esperar a que las cards de búsqueda reaparezcan
+      // Esperar a que el DOM de la página anterior reaparezca
       var waitStart = Date.now();
       while (Date.now() - waitStart < 5000) {
         if (!likeFollowActive) break;
         if (document.querySelector('a[href*="/' + contactId + '"]')) break;
-        if (document.querySelectorAll('[class*="profile"], [class*="card"], [class*="user"]').length > 3) break;
+        if (context === 'search' && document.querySelectorAll('[class*="profile"], [class*="card"], [class*="user"]').length > 3) break;
+        if (context !== 'search' && document.querySelector('[class*="contact-list"], [class*="chat-list"], [class*="inbox"]')) break;
         await sleep(300);
+      }
+
+      // Si no reapareció, navegar manualmente a la página de origen
+      if (!document.querySelector('a[href*="/' + contactId + '"]')) {
+        if (context === 'search') {
+          var srchBtn = findButton(['Buscar', 'Search', 'buscar', 'search']);
+          if (srchBtn) { srchBtn.click(); await sleep(3000); }
+        } else {
+          var backBtn = findButton(['Atras', 'Back', 'Volver', 'atras', 'back']);
+          if (backBtn) { backBtn.click(); await sleep(2000); }
+        }
       }
     }
 
-    console.log('[LIKEFOLLOW] Pagina', page, '- Acciones:', pageActions, '| Total:', totalGiven);
+    console.log('[LIKEFOLLOW] Pagina', page, '- Completados:', totalGiven);
 
-    // Siguiente página
-    var nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
-    if (!nextBtn || nextBtn.disabled) break;
-    nextBtn.click();
-    await sleep(3000);
+    // Siguiente página (solo en búsqueda)
+    if (context === 'search') {
+      var nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
+      if (!nextBtn || nextBtn.disabled) break;
+      nextBtn.click();
+      await sleep(3000);
+    } else {
+      break;
+    }
   }
 
   await syncMetricsToStorage('LIKEFOLLOW', totalGiven);
@@ -1181,7 +1305,7 @@ async function executeLikeFollow() {
   followsActive = false;
   updateModUI('likeFollow', false);
   saveAllStates();
-  console.log('[LIKEFOLLOW] ✅ Completado. Total acciones:', totalGiven);
+  console.log('[LIKEFOLLOW] Completado. Total acciones:', totalGiven);
 }
 
 // ============ AYUDA: DETECTAR CONTACTOS CON INTERÉS RECIENTE ============
