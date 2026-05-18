@@ -1,0 +1,34 @@
+# Dependencias
+node_modules/
+
+# Archivos de entorno (CREDENCIALES)
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+server.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+
+# Test files
+test-*.js
+
+# Temp files
+*.tmp
+*.temp

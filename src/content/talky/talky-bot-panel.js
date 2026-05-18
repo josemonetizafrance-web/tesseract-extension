@@ -45,6 +45,9 @@ async function saveBlacklist() {
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + stored.tess_jwt },
         body: JSON.stringify({ blacklist })
       });
+      // Recargar blacklist en mailing y auto-answer
+      if (typeof reloadMLBlacklist === 'function') reloadMLBlacklist();
+      if (typeof loadAABlacklist === 'function') loadAABlacklist();
     }
   } catch (e) {
     console.log('[BLACKLIST] Error guardando:', e.message);
@@ -132,20 +135,15 @@ function initIcebreakers() {
     if (input) {
       input.value = text;
       input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('keyup', { bubbles: true }));
+      input.focus();
+      console.log('[ICEBREAKER] Texto colocado:', text);
       
-      const sendBtn = findSendButton();
-      if (sendBtn) {
-        sendBtn.click();
-        botStats.icebreakersSent++;
-        console.log('[ICEBREAKER] Enviado:', text, '| Total:', botStats.icebreakersSent);
-        
-        // Eliminar el icebreaker usado y agregar uno nuevo
-        icebreakersAvailable.splice(idx, 1);
-        const newItem = icebreakersPool[Math.floor(Math.random() * icebreakersPool.length)];
-        icebreakersAvailable.push(newItem);
-        
-        renderIcebreakers(container);
-      }
+      icebreakersAvailable.splice(idx, 1);
+      const newItem = icebreakersPool[Math.floor(Math.random() * icebreakersPool.length)];
+      icebreakersAvailable.push(newItem);
+      
+      renderIcebreakers(container);
     }
   });
 }
@@ -161,7 +159,7 @@ function renderIcebreakers(container) {
 
 // Variables de estado global
 let collectedIds = { Saludo: [], Like: [], Follow: [], Cartas: [] };
-let botStats = { likesGiven: 0, followsGiven: 0, messagesSent: 0, cartasSent: 0, contactsProcessed: 0, repliesReceived: 0, repliesResponded: 0, icebreakersSent: 0 };
+let botStats = { likesGiven: 0, followsGiven: 0, cartasSent: 0, contactsProcessed: 0, repliesReceived: 0, repliesResponded: 0, icebreakersSent: 0 };
 let currentTab = 'main';
 let currentStarFilter = 'all';
 let currentUser = null;
@@ -174,6 +172,12 @@ let saludosActive = false;
 let cartasActive = false;
 let lastGeneratedMessage = '';
 let isEnglishMode = false;
+let translateLangIndex = 0;
+const translateLanguages = [
+  { code: 'en', label: 'EN', name: 'English' },
+  { code: 'fr', label: 'FR', name: 'French' },
+  { code: 'pt', label: 'PT', name: 'Portuguese' }
+];
 
 let saludoMessages = [
   'Hola, ¿cómo estás? Espero que tengas un lindo día.',
@@ -206,7 +210,6 @@ let cartaMessages = [
 
 // ============ FUNCIÓN CENTRAL: Registrar ID en Star Tools ============
 function registerIdInStarTools(id, category) {
-  // FIX: TalkyTimes usa IDs de longitud variable (6-15 dígitos), no solo 12
   if (!id || !/^\d{6,15}$/.test(String(id).trim())) return false;
   id = String(id).trim();
   if (!collectedIds[category]) collectedIds[category] = [];
@@ -215,11 +218,10 @@ function registerIdInStarTools(id, category) {
   collectedIds[category].push(id);
   console.log('[STAR-TOOLS] ✅ ID registrado en ' + category + ':', id, '| Total ' + category + ':', collectedIds[category].length);
   
-  // Actualizar UI solo si estamos en la pestaña Star Tools
   if (currentTab === 'star') {
     renderStarIds();
   }
-  
+  updateStats();
   saveAllStates();
   return true;
 }
@@ -228,32 +230,54 @@ function registerIdInStarTools(id, category) {
 async function initTesseract() {
   try {
     console.log('[TESSERACT] 🚀 Inicializando sistema...');
-  createMainPanel();
-  createEaterBar();
-  initIcebreakers();
-  createSaludosModal();
-  createCartasModal();
-  setupAllEvents();
-  loadAllStates();
-  startChatWatcher();
-  startBackgroundIdCapture(); // Captura en segundo plano
-  startProfileWatcher(); // Detectar perfil activo
+  } catch (e) {
+    console.error('[TESSERACT] Error en log inicial:', e);
+  }
 
-  // Inicializar módulos v24
-  if (typeof initAutoAnswer === 'function') await initAutoAnswer();
-  if (typeof initSmartMailing === 'function') await initSmartMailing();
+  // Crear panel PRIMERO (fuera de try para garantizar que siempre se ejecute)
+  try {
+    createMainPanel();
+    createEaterBar();
+    initIcebreakers();
+    createSaludosModal();
+    createCartasModal();
+    setupAllEvents();
+    loadAllStates();
+    startChatWatcher();
+    startBackgroundIdCapture();
+    startProfileWatcher();
+  } catch (e) {
+    console.error('[TESSERACT] ❌ Error creando panel:', e);
+  }
+
+  // Inicializar módulos v24 (pueden fallar sin afectar el panel)
+  try {
+    if (typeof initAutoAnswer === 'function') await initAutoAnswer();
+  } catch (e) {
+    console.error('[TESSERACT] ⚠️ initAutoAnswer falló:', e.message);
+  }
+  try {
+    if (typeof initSmartMailing === 'function') await initSmartMailing();
+  } catch (e) {
+    console.error('[TESSERACT] ⚠️ initSmartMailing fallo:', e.message);
+  }
+
+  // Recargar blacklists despues de init
+  if (typeof reloadMLBlacklist === 'function') reloadMLBlacklist();
+  if (typeof loadAABlacklist === 'function') loadAABlacklist();
 
   // Verificar que storage funciona
-  chrome.storage.local.set({ tess_heartbeat: Date.now() }, () => {
-    if (chrome.runtime.lastError) {
-      console.error('[TESSERACT] ❌ Error de storage:', chrome.runtime.lastError);
-    } else {
-      console.log('[TESSERACT] ✅ Storage OK');
-    }
-  });
-  console.log('[TESSERACT] ✅ Sistema listo - JARVIS activo');
+  try {
+    chrome.storage.local.set({ tess_heartbeat: Date.now() }, () => {
+      if (chrome.runtime.lastError) {
+        console.error('[TESSERACT] ❌ Error de storage:', chrome.runtime.lastError);
+      } else {
+        console.log('[TESSERACT] ✅ Storage OK');
+      }
+    });
+    console.log('[TESSERACT] ✅ Sistema listo - JARVIS activo');
   } catch (e) {
-    console.error('[TESSERACT] ❌ ERROR:', e);
+    console.error('[TESSERACT] ❌ Error en storage check:', e);
   }
 }
 
@@ -302,8 +326,11 @@ function createMainPanel() {
   p.id = 'tesseract-main-panel';
   p.innerHTML = `
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
-#tesseract-main-panel{position:fixed;bottom:20px;right:20px;z-index:999999;font-family:'Orbitron','Segoe UI',sans-serif;}
+@font-face { font-family: 'Orbitron'; font-style: normal; font-weight: 400; font-display: swap; src: url('https://fonts.gstatic.com/s/orbitron/v32/yMJMMIlzdpvBhQQL_SC3X9yhF25-T1sz.woff2') format('woff2'); }
+@font-face { font-family: 'Orbitron'; font-style: normal; font-weight: 700; font-display: swap; src: url('https://fonts.gstatic.com/s/orbitron/v32/yMJMMIlzdpvBhQQL_SC3X9yhF25-T1s77g.woff2') format('woff2'); }
+@font-face { font-family: 'Orbitron'; font-style: normal; font-weight: 900; font-display: swap; src: url('https://fonts.gstatic.com/s/orbitron/v32/yMJMMIlzdpvBhQQL_SC3X9yhF25-T1s7_g.woff2') format('woff2'); }
+@font-face { font-family: 'Share Tech Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('https://fonts.gstatic.com/s/sharetechmono/v13/J7aHnp1uDWRyFFd98ABVA9PkkfN9J9aM.woff2') format('woff2'); }
+#tesseract-main-panel{position:fixed;bottom:20px;right:20px;z-index:2147483647 !important;font-family:'Orbitron','Segoe UI',sans-serif;display:block !important;visibility:visible !important;}
 .tess-box{width:420px;min-width:280px;background:linear-gradient(145deg,#0a0a0a,#1a1a2e);border-radius:16px;border:2px solid #8b5cf6;box-shadow:0 0 40px rgba(139,92,246,0.3),0 10px 40px rgba(0,0,0,0.9);color:#e0e0e0;max-height:720px;overflow-y:auto;position:relative;}
 .tess-resize{position:absolute;width:14px;height:14px;z-index:20;}.tess-resize.se{bottom:0;right:0;cursor:se-resize;}.tess-resize.sw{bottom:0;left:0;cursor:sw-resize;}.tess-resize.ne{top:0;right:0;cursor:ne-resize;}.tess-resize.nw{top:0;left:0;cursor:nw-resize;}
 .tess-header{background:linear-gradient(135deg,#1e1b4b,#8b5cf6,#7c3aed,#8b5cf6,#1e1b4b);padding:14px 18px;display:flex;justify-content:space-between;align-items:center;font-weight:900;font-size:18px;letter-spacing:2px;border-bottom:2px solid #8b5cf6;cursor:move;text-shadow:0 0 10px #8b5cf6;text-transform:uppercase;position:sticky;top:0;z-index:10;}
@@ -346,6 +373,16 @@ function createMainPanel() {
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
 .auth-foot{margin-top:12px;font-size:10px;color:#666;letter-spacing:2px;}
 .user-bar{margin-bottom:10px;padding:8px 12px;background:rgba(0,0,0,0.3);border:1px solid #8b5cf6;border-radius:6px;font-size:11px;text-align:center;color:#e0e0e0;}
+
+.bot-subnav{display:flex;gap:0;background:#0a0a0a;border:1px solid #8b5cf6;border-radius:8px;overflow:hidden;margin-bottom:10px;}
+.bot-subbtn{flex:1;padding:8px 4px;background:rgba(30,27,75,0.5);border:none;border-right:1px solid rgba(139,92,246,0.3);color:#e0e0e0;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:0.5px;text-transform:uppercase;transition:all 0.3s;}
+.bot-subbtn:last-child{border-right:none;}
+.bot-subbtn:hover{background:rgba(139,92,246,0.3);}
+.bot-subbtn.active{background:#8b5cf6;color:#fff;font-weight:bold;}
+.bot-subpanel{position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(180deg,#0a0a0a,#0a0a0f);border-radius:12px;z-index:1;display:none;flex-direction:column;overflow-y:auto;padding:14px;}
+.bot-subpanel.visible{display:flex;}
+.bot-subpanel .win-close{position:absolute;top:8px;right:10px;background:rgba(239,68,68,0.2);border:1px solid #ef4444;color:#ef4444;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all 0.3s;}
+.bot-subpanel .win-close:hover{background:#ef4444;color:#fff;}
 
 .mod-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
 .mod-card{padding:10px;background:rgba(30,27,75,0.5);border:1px solid #8b5cf6;border-radius:10px;text-align:center;}
@@ -434,15 +471,41 @@ function createMainPanel() {
 
 <div id="mainScreen" style="display:none;">
 <div class="user-bar">👤 <strong id="currentUserDisplay"></strong></div>
-<div class="mod-grid">
-<div class="mod-card"><h4>❤️ LIKES</h4><div class="st" id="likesStatus" style="color:#ffffff;">INACTIVO</div><button id="btnLikesToggle">▶ INICIAR</button></div>
-<div class="mod-card"><h4>➕ FOLLOWS</h4><div class="st" id="followsStatus" style="color:#ffffff;">INACTIVO</div><button id="btnFollowsToggle">▶ INICIAR</button></div>
+
+<!-- SUB-PESTAÑAS DEL BOT -->
+<div class="bot-subnav">
+  <button class="bot-subbtn" data-botsub="likes">❤️ LIKES</button>
+  <button class="bot-subbtn" data-botsub="follows">➕ FOLLOWS</button>
+  <button class="bot-subbtn" data-botsub="eater">🧠 EATER</button>
+  <button class="bot-subbtn" data-botsub="icebreakers">🎯 ICEBREAKERS</button>
 </div>
+
+<!-- CONTENEDOR DE VENTANAS -->
+<div class="bot-win-container" style="position:relative;min-height:200px;">
+
+<!-- SUB: LIKES -->
+<div class="bot-subpanel" id="botsubLikes" data-z="1">
+<button class="win-close" data-close="botsubLikes">×</button>
+<div class="mod-card" style="margin-bottom:8px;"><h4>❤️ BARRIDO DE LIKES</h4><div class="st" id="likesStatus" style="color:#ffffff;">INACTIVO</div><button id="btnLikesToggle">▶ INICIAR</button></div>
 <div class="stats-row">
 <div class="stat-mini"><span class="val" id="vLikes">0</span>LIKES</div>
 <div class="stat-mini"><span class="val" id="vFollows">0</span>FOLLOW</div>
-<div class="stat-mini"><span class="val" id="vMsgs">0</span>MSGS</div>
 </div>
+</div>
+
+<!-- SUB: FOLLOWS -->
+<div class="bot-subpanel" id="botsubFollows" data-z="1">
+<button class="win-close" data-close="botsubFollows">×</button>
+<div class="mod-card" style="margin-bottom:8px;"><h4>➕ BARRIDO DE FOLLOWS</h4><div class="st" id="followsStatus" style="color:#ffffff;">INACTIVO</div><button id="btnFollowsToggle">▶ INICIAR</button></div>
+<div class="stats-row">
+<div class="stat-mini"><span class="val" id="vLikes2">0</span>LIKES</div>
+<div class="stat-mini"><span class="val" id="vFollows2">0</span>FOLLOW</div>
+</div>
+</div>
+
+<!-- SUB: EATER -->
+<div class="bot-subpanel" id="botsubEater" data-z="1">
+<button class="win-close" data-close="botsubEater">×</button>
 <div class="eater-box">
 <h4>🧠 EATER (Click = Copiar al chat)</h4>
 <button class="eater-btn" id="btnEaterToggle">🧠 EATER: OFF</button>
@@ -451,14 +514,20 @@ function createMainPanel() {
 <div class="eater-sugs-list" id="eaterSugList"></div>
 </div>
 </div>
+</div>
 
-<!-- ICEBREAKERS -->
-<div class="eater-box" style="margin-top:8px;background:#000;border:1px solid #8b5cf6;border-radius:8px;">
-<h4 style="font-size:11px;letter-spacing:1px;margin:8px 0;text-align:center;color:#8b5cf6;">🎯 ICEBREAKERS (Click = Enviar)</h4>
-<div id="icebreakersList" style="display:flex;flex-wrap:wrap;gap:4px;padding:4px;justify-content:center;max-height:80px;overflow-y:auto;">
+<!-- SUB: ICEBREAKERS -->
+<div class="bot-subpanel" id="botsubIcebreakers" data-z="1">
+<button class="win-close" data-close="botsubIcebreakers">×</button>
+<div class="eater-box">
+<h4 style="font-size:11px;letter-spacing:1px;margin:8px 0;text-align:center;color:#8b5cf6;">🎯 ICEBREAKERS (Click = Colocar en chat)</h4>
+<div id="icebreakersList" style="display:flex;flex-wrap:wrap;gap:4px;padding:4px;justify-content:center;max-height:200px;overflow-y:auto;">
 </div>
 </div>
 </div>
+
+</div>
+
 <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">
 <div class="logout-link" id="btnLogout" style="flex:1;">CERRAR SESIÓN</div>
 <button class="logout-link" id="btnAdminPanel" style="flex:1;background:#8b5cf6;border:1px solid #8b5cf6;color:#fff;text-align:center;padding:8px 12px;border-radius:6px;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:1px;">⚙ ADMIN PANEL</button>
@@ -558,7 +627,8 @@ function createEaterBar() {
 <button id="eq1">💬 SUG 1</button>
 <button id="eq2">💬 SUG 2</button>
 <button class="emerg" id="eq5">🚨 EMERG</button>
-<button class="tr" id="btnTranslate">🌐 EN</button><button class="cfg" id="btnRefreshEater" style="background:rgba(30,27,75,0.7);border-color:#8b5cf6;">🔄 FRASES</button>
+<button class="tr" id="btnTranslate">🌐 EN</button>
+<button class="cfg" id="btnRefreshEater" style="background:rgba(30,27,75,0.7);border-color:#8b5cf6;">🔄 FRASES</button>
 </div>`;
   document.body.appendChild(b);
 }
@@ -619,15 +689,50 @@ function setupAllEvents() {
   // Pestañas
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', function() {
+      const clickedTab = this.dataset.tab;
+      // Toggle: si ya está activa, volver a BOT
+      if (clickedTab === currentTab && currentTab !== 'main') {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        currentTab = 'main';
+        document.querySelector('[data-tab="main"]').classList.add('active');
+        document.getElementById('tabMain').classList.add('active');
+        return;
+      }
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       this.classList.add('active');
-      currentTab = this.dataset.tab;
+      currentTab = clickedTab;
       const tabMap = { main: 'Main', star: 'Star', aa: 'AA', mailing: 'Mailing', blacklist: 'Blacklist' };
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       document.getElementById('tab' + (tabMap[currentTab] || 'Main')).classList.add('active');
       if (currentTab === 'star') renderStarIds();
       if (currentTab === 'aa') updateAATabUI();
       if (currentTab === 'mailing') updateMLTabUI();
       if (currentTab === 'blacklist') renderBlacklistTab();
+    });
+  });
+
+  // Sub-pestañas del BOT: estilo ventanas Windows
+  let topZ = 10;
+  document.querySelectorAll('.bot-subbtn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const panelId = 'botsub' + this.dataset.botsub.charAt(0).toUpperCase() + this.dataset.botsub.slice(1);
+      const panel = document.getElementById(panelId);
+      topZ++;
+      panel.style.zIndex = topZ;
+      panel.classList.add('visible');
+      this.classList.add('active');
+    });
+  });
+
+  // Botones de cerrar ventanas
+  document.querySelectorAll('.win-close').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const panelId = this.dataset.close;
+      document.getElementById(panelId).classList.remove('visible');
+      // Desactivar botón correspondiente
+      const subKey = panelId.replace('botsub', '').toLowerCase();
+      document.querySelector(`.bot-subbtn[data-botsub="${subKey}"]`).classList.remove('active');
     });
   });
   
@@ -732,7 +837,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (trBtn && row) {
       const text = trBtn.dataset.sugText || row.querySelector('.sug-text')?.textContent || '';
       if (text) {
-        translateText(text).then(t => copyToChatInput(t));
+        const tl = translateLanguages[translateLangIndex];
+        translateText(text, tl.code, tl.name).then(t => copyToChatInput(t));
       }
       return;
     }
@@ -828,6 +934,9 @@ async function doLogin() {
     
     // Cargar blacklist del servidor
     loadBlacklist();
+    // Recargar blacklist de mailing despues del login
+    if (typeof reloadMLBlacklist === 'function') reloadMLBlacklist();
+    if (typeof loadAABlacklist === 'function') loadAABlacklist();
     
     document.getElementById('currentUserDisplay').textContent = email;
     renderStarIds();
@@ -959,6 +1068,8 @@ async function executeLikes() {
         botStats.likesGiven++;
         console.log('[LIKES] Like dado! Total:', botStats.likesGiven);
         updateStats();
+        renderStarIds();
+        saveAllStates();
         await sleep(200);
         
         const profile = btn.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="item"], [class*="result"]');
@@ -999,6 +1110,16 @@ async function executeFollows() {
     
     scanPageForIds().forEach(id => registerIdInStarTools(id, 'Follow'));
     
+    // DEBUG: Log all buttons on page to find follow button patterns
+    const allBtnsDebug = document.querySelectorAll('button, a.btn, [role="button"], .btn, [class*="btn"], [class*="Btn"], [class*="button"]');
+    const btnTexts = new Set();
+    allBtnsDebug.forEach(b => {
+      const t = (b.textContent || '').trim().slice(0, 50);
+      const cls = (b.className || '').toString();
+      if (t) btnTexts.add(`"${t}" [${cls}]`);
+    });
+    console.log('[FOLLOWS] DEBUG - All buttons on page:', Array.from(btnTexts).join(' | '));
+
     const followBtns = document.querySelectorAll('[class*="follow"], [class*="subscribe"], [title*="Follow"], [aria-label*="Follow"]');
     const allBtns = document.querySelectorAll('button, a, [role="button"]');
     const followButtons = new Set();
@@ -1032,6 +1153,8 @@ async function executeFollows() {
       botStats.followsGiven++;
       console.log('[FOLLOWS] Follow dado! Total:', botStats.followsGiven);
       updateStats();
+      renderStarIds();
+      saveAllStates();
       await sleep(300);
       
       if (profile && !isPinnedOrSaved(profile)) {
@@ -1180,7 +1303,6 @@ async function doSaludosSweep(list) {
     scanPageForIds().forEach(newId => registerIdInStarTools(newId, 'Saludo'));
     
     sent++;
-    botStats.messagesSent++;
     botStats.contactsProcessed++;
     updateStats();
     await sleep(2000);
@@ -1415,8 +1537,12 @@ function isPinnedOrSaved(contactEl) {
 }
 
 // ============ CHAT WATCHER ============
+let chatWatcherObserver = null;
+
 function startChatWatcher() {
-  const observer = new MutationObserver((mutations) => {
+  if (chatWatcherObserver) chatWatcherObserver.disconnect();
+  
+  chatWatcherObserver = new MutationObserver((mutations) => {
     if (!eaterActive || !isAuthenticated) return;
     for (const mutation of mutations) {
       if (mutation.addedNodes.length > 0) {
@@ -1427,7 +1553,9 @@ function startChatWatcher() {
     }
   });
   
-  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  // Observar solo el contenedor de chat, no todo el body
+  const chatContainer = document.querySelector('[class*="chat"], [class*="message"], [class*="conversation"]') || document.body;
+  chatWatcherObserver.observe(chatContainer, { childList: true, subtree: true, characterData: true });
 }
 
 function checkForIncomingMessages(node) {
@@ -1664,7 +1792,7 @@ function displaySuggestions(name) {
         <span class="sn">${i+1}.</span>
         <span class="sug-text" style="font-size:11px;line-height:1.3;">${s.length > 60 ? s.substring(0,60)+'...' : s}</span>
       </div>
-      <button class="tr-btn" data-action="translate" data-sug-text="${s.replace(/"/g, '&quot;')}">🌐</button>
+      <button class="tr-btn" data-action="translate" data-sug-text="${s.replace(/"/g, '&quot;')}" title="Traducir a ${translateLanguages[translateLangIndex].name}">${translateLanguages[translateLangIndex].label}</button>
     </div>
   `).join('');
   
@@ -1684,29 +1812,30 @@ function selectEaterSuggestion(text) {
 }
 
 async function translateEaterText(text) {
+  const targetLang = translateLanguages[translateLangIndex];
   try {
     const stored = await chrome.storage.local.get(['tess_jwt']);
     const token = stored.tess_jwt;
     
-    const res = await fetch(`${TESSERACT_API}/api/deepl/translate`, {
+    const res = await fetch(`${TESSERACT_API}/api/openai/translate`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
         'Authorization': token ? `Bearer ${token}` : ''
       },
-      body: JSON.stringify({ text, target: 'es' })
+      body: JSON.stringify({ text, targetLang: targetLang.code, targetName: targetLang.name })
     });
     
     if (res.ok) {
       const data = await res.json();
-      if (data.translatedText) {
-        alert('Traducción:\n\n' + data.translatedText);
+      const translated = data.success?.data?.translations?.[0]?.text || data.translatedText;
+      if (translated) {
+        copyToChatInput(translated);
+        console.log('[TRANSLATE] ES → ' + targetLang.name + ':', translated.substring(0, 50));
       }
-    } else {
-      alert('Error al traducir');
     }
   } catch(e) {
-    alert('Error: ' + e.message);
+    console.warn('[TRANSLATE] Error:', e.message);
   }
 }
 
@@ -1759,18 +1888,36 @@ function refreshEaterSuggestions() {
   });
 }
 
-// ============ TRADUCCIÓN ============
+// ============ TRADUCCIÓN (ES → EN / FR / PT) ============
 function translateLastMessage() {
-  if (!lastGeneratedMessage) return;
-  translateText(lastGeneratedMessage).then(t => {
+  // Ciclar entre idiomas: EN → FR → PT → EN...
+  translateLangIndex = (translateLangIndex + 1) % translateLanguages.length;
+  const targetLang = translateLanguages[translateLangIndex];
+  
+  const btn = document.getElementById('btnTranslate');
+  btn.textContent = '🌐 ' + targetLang.label + '...';
+  
+  // Traducir la última sugerencia del Eater o el texto del input de chat
+  const textToTranslate = lastGeneratedMessage || (findChatInput()?.value || '');
+  if (!textToTranslate) {
+    btn.textContent = '🌐 ' + targetLang.label;
+    return;
+  }
+  
+  translateText(textToTranslate, targetLang.code, targetLang.name).then(t => {
     copyToChatInput(t);
     lastGeneratedMessage = t;
-    isEnglishMode = !isEnglishMode;
-    document.getElementById('btnTranslate').textContent = isEnglishMode ? '🌐 ES' : '🌐 EN';
+    btn.textContent = '🌐 ' + targetLang.label;
+    console.log('[TRANSLATE] ES → ' + targetLang.name + ':', t.substring(0, 50));
+  }).catch(() => {
+    btn.textContent = '🌐 ' + targetLang.label;
   });
 }
 
-async function translateText(text) {
+async function translateText(text, targetCode, targetName) {
+  const tl = translateLanguages[translateLangIndex];
+  const code = targetCode || tl.code;
+  const name = targetName || tl.name;
   try {
     const token = await new Promise(r => chrome.storage.local.get('tess_jwt', d => r(d.tess_jwt)));
     const headers = { 'Content-Type': 'application/json' };
@@ -1781,16 +1928,19 @@ async function translateText(text) {
       headers,
       body: JSON.stringify({
         text: text,
-        translateWith: 'deepseek',
-        forceSpanish: isEnglishMode
+        targetLang: code,
+        targetName: name
       })
     });
     const data = await resp.json();
     if (data.success && data.data?.translations?.[0]?.text) {
       return data.data.translations[0].text;
     }
+    if (data.translatedText) {
+      return data.translatedText;
+    }
   } catch (e) {
-    console.warn('[TESSERACT] Translate error, usando texto original:', e.message);
+    console.warn('[TESSERACT] Translate error:', e.message);
   }
   return text;
 }
@@ -2031,14 +2181,14 @@ function findChatInput() {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function updateStats() {
-  console.log('[STATS] Updating - Likes:', botStats.likesGiven, 'Follows:', botStats.followsGiven);
   const vLikes = document.getElementById('vLikes');
   const vFollows = document.getElementById('vFollows');
-  const vMsgs = document.getElementById('vMsgs');
-  console.log('[STATS] Elements - vLikes:', !!vLikes, 'vFollows:', !!vFollows, 'vMsgs:', !!vMsgs);
+  const vLikes2 = document.getElementById('vLikes2');
+  const vFollows2 = document.getElementById('vFollows2');
   if (vLikes) vLikes.textContent = botStats.likesGiven;
   if (vFollows) vFollows.textContent = botStats.followsGiven;
-  if (vMsgs) vMsgs.textContent = botStats.messagesSent;
+  if (vLikes2) vLikes2.textContent = botStats.likesGiven;
+  if (vFollows2) vFollows2.textContent = botStats.followsGiven;
 }
 
 function makeDraggable(panelId, headerSel) {
@@ -2192,7 +2342,6 @@ function startPeriodicSync() {
       bot_likesGiven: botStats.likesGiven,
       bot_followsGiven: botStats.followsGiven,
       bot_cartasSent: botStats.cartasSent,
-      bot_messagesSent: botStats.messagesSent,
       bot_sweepCount: totalSweeps,
       bot_repliesReceived: botStats.repliesReceived,
       bot_repliesResponded: botStats.repliesResponded,
@@ -2238,25 +2387,15 @@ function updateMLTabUI() {
 
   document.getElementById('mlSentTodayInline').textContent = cfg.sentToday || 0;
   document.getElementById('mlDailyLimitInline').textContent = cfg.maxDaily || 30;
-  document.getElementById('mlIntervalDisplay').textContent = (cfg.intervalMinutes || 60) + ' min';
+  document.getElementById('mlIntervalDisplay').textContent = (cfg.delay?.min ? Math.floor(cfg.delay.min / 1000) + '-' + Math.floor(cfg.delay.max / 1000) + 's' : '3-7s');
 
   const preview = (cfg.messageTemplate || '').slice(0, 40);
   document.getElementById('mlMsgPreview').textContent = preview + (preview.length >= 40 ? '...' : '');
 
-  // Queue count
-  if (typeof loadMailingConfig === 'function') {
-    chrome.storage.local.get(['tess_ids'], (data) => {
-      const ids = data.tess_ids || {};
-      let total = 0;
-      (cfg.sources?.targetCategories || []).forEach(cat => {
-        total += (ids[cat] || []).length;
-      });
-      if (cfg.sources?.useManualList && cfg.sources?.manualIds) {
-        total += cfg.sources.manualIds.length;
-      }
-      document.getElementById('mlQueueCountInline').textContent = total;
-    });
-  }
+  // No llamar scrapeActiveLimitsIds aqui para evitar interferencia con la pagina
+  // El conteo de contactos se actualiza solo cuando el usuario pulsa RASTREAR o INICIAR BARRIDO
+  const stats = typeof window._getMailingStats === 'function' ? window._getMailingStats() : null;
+  document.getElementById('mlQueueCountInline').textContent = stats?.lastScrapedCount ?? '--';
 }
 
 // ============ STORAGE ============
@@ -2268,7 +2407,6 @@ async function saveAllStates() {
     tess_stats: botStats, tess_ids: collectedIds,
     bot_likesGiven: botStats.likesGiven,
     bot_followsGiven: botStats.followsGiven,
-    bot_messagesSent: botStats.messagesSent,
     bot_sweepCount: (collectedIds.Like?.length || 0) + (collectedIds.Follow?.length || 0),
     bot_idsLikes: collectedIds.Like?.length || 0,
     bot_idsFollows: collectedIds.Follow?.length || 0
@@ -2371,7 +2509,6 @@ async function syncMetricsToStorage(action, count) {
       bot_likesGiven: botStats.likesGiven,
       bot_followsGiven: botStats.followsGiven,
       bot_cartasSent: botStats.cartasSent,
-      bot_messagesSent: botStats.messagesSent,
       bot_sweepCount: totalSweeps,
       tess_last_action: { action, count, timestamp: Date.now(), email: currentUser }
     });
@@ -2384,16 +2521,23 @@ async function syncMetricsToStorage(action, count) {
 
 // ============ INICIAR ============
 console.log('[TESSERACT] 🚀 Script cargado, iniciando en 1s...');
+
+function safeInit() {
+  if (document.body) {
+    console.log('[TESSERACT] 📄 Body disponible, ejecutando...');
+    setTimeout(initTesseract, 1000);
+  } else {
+    console.log('[TESSERACT] ⏳ Esperando body...');
+    setTimeout(safeInit, 500);
+  }
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    console.log('[TESSERACT] 📄 DOM Loaded, ejecutando...');
-    setTimeout(initTesseract, 1000);
+    safeInit();
   });
 } else {
-  setTimeout(() => {
-    console.log('[TESSERACT] 📄 Ya cargado, ejecutando...');
-    initTesseract();
-  }, 1000);
+  safeInit();
 }
 
 chrome.runtime.onMessage.addListener((req, sender, res) => {
@@ -2407,13 +2551,6 @@ chrome.runtime.onMessage.addListener((req, sender, res) => {
       if (registered) {
         console.log('[STAR-TOOLS] 🔗 ID del bot real registrado:', req.clientId, '→', cat);
       }
-    }
-    res && res({ success: true });
-  }
-  // ── SMART MAILING: ejecutar ronda ──
-  if (req.action === 'MAILING_EXECUTE_ROUND') {
-    if (typeof executeMailingRound === 'function') {
-      executeMailingRound();
     }
     res && res({ success: true });
   }

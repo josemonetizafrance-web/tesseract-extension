@@ -533,18 +533,20 @@ async function sendResponse(text) {
 
   if (!typeIntoInput(input, text)) return false;
 
-  const inputValueBefore = input.value;
+  const inputValueBefore = input.value || input.textContent || '';
   await sleep(getRandomDelay(aaConfig.delay.min, aaConfig.delay.max));
 
   sendBtn.click();
-  await sleep(1000);
+  await sleep(1500);
 
-  if (input.value === inputValueBefore && inputValueBefore !== '') {
+  const inputValueAfter = input.value || input.textContent || '';
+  if (inputValueAfter === inputValueBefore && inputValueBefore !== '') {
     console.warn('[AA] Mensaje no se envió - input sin cambios');
     const altBtn = document.querySelector('[class*="send"]:not(button), [class*="submit"]:not(button)');
     if (altBtn) altBtn.click();
-    await sleep(1000);
-    if (input.value === inputValueBefore) {
+    await sleep(1500);
+    const inputValueAfter2 = input.value || input.textContent || '';
+    if (inputValueAfter2 === inputValueBefore) {
       return false;
     }
   }
@@ -575,10 +577,12 @@ function sleep(ms) {
 }
 
 // ============ EVENT DETECTION (MutationObserver) ============
+// Detecta eventos REALES (like, wink, gift, comment, greeting) y responde SOLO al emisor
 function startAAObserver() {
   if (aaObserver) aaObserver.disconnect();
 
-  const targetNode = document.body || document.documentElement;
+  // Observar solo contenedores de notificaciones, no todo el body
+  const targetNode = document.querySelector('[class*="notification"], [class*="alert"], [class*="toast"], [class*="message-list"], [class*="inbox"]') || document.body;
   if (!targetNode) return;
 
   let debounceTimer = null;
@@ -599,54 +603,124 @@ function startAAObserver() {
 
       for (const mutation of mutations) {
         if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          const html = Array.from(mutation.addedNodes)
-            .filter(n => n.nodeType === 1)
-            .map(n => (n.outerHTML || n.textContent || '').toLowerCase())
-            .join(' ');
+          for (const node of mutation.addedNodes) {
+            if (node.nodeType !== 1) continue;
+            const html = (node.outerHTML || node.textContent || '').toLowerCase();
 
-          if (/like|heart|favorite/.test(html) && /received|new|notification/.test(html)) {
-            detections.push('like');
-          }
-          if (/wink|gui\u00f1o/.test(html)) {
-            detections.push('wink');
-          }
-          if (/comment|comentario|message/.test(html)) {
-            detections.push('comment');
-          }
-          if (/gift|regalo/.test(html)) {
-            detections.push('gift');
+            // Detectar tipo de evento Y extraer ID del emisor
+            let eventType = null;
+            let senderId = null;
+
+            // Extraer ID del emisor del elemento de notificación
+            senderId = extractSenderFromNode(node);
+
+            if (/like|heart|favorite/.test(html) && /received|new|notification|te/.test(html)) {
+              eventType = 'like';
+            } else if (/wink|guiño/.test(html)) {
+              eventType = 'wink';
+            } else if (/comment|comentario/.test(html) && /received|new|notification|te/.test(html)) {
+              eventType = 'comment';
+            } else if (/gift|regalo/.test(html) && /received|new|notification|te/.test(html)) {
+              eventType = 'gift';
+            } else if (/message|mensaje|nuevo mensaje|new message|te escribió|wrote to you/.test(html)) {
+              eventType = 'greeting';
+            }
+
+            if (eventType && senderId) {
+              detections.push({ eventType, senderId });
+            }
           }
         }
       }
 
-      const currentProfileId = getCurrentChatProfileId();
-      if (currentProfileId && aaProfileCooldowns[currentProfileId] && (Date.now() - aaProfileCooldowns[currentProfileId]) < 30000) {
-        console.log('[AA] Cooldown activo para perfil:', currentProfileId);
-        return;
-      }
+      // Procesar detecciones
+      for (const detection of detections) {
+        const { eventType, senderId } = detection;
 
-      for (const eventType of [...new Set(detections)]) {
-        if (aaConfig.events[eventType] && aaConfig.events[eventType].enabled) {
-          // Verificar blacklist
-          if (currentProfileId && isInAABlacklist(currentProfileId)) {
-            console.log('[AA] ⛔ Skip (blacklist):', currentProfileId);
-            return;
-          }
-          
-          if (currentProfileId) {
-            aaLastProfileId = currentProfileId;
-            aaProfileCooldowns[currentProfileId] = Date.now();
-            setTimeout(() => { delete aaProfileCooldowns[currentProfileId]; }, 30000);
-          }
-          const response = await getAAResponse(eventType, '');
-          if (response) await sendResponse(response);
+        // Verificar si el evento está habilitado
+        if (!aaConfig.events[eventType]?.enabled) continue;
+
+        // Verificar blacklist
+        if (isInAABlacklist(senderId)) {
+          console.log('[AA] ⛔ Skip (blacklist):', senderId);
+          continue;
+        }
+
+        // Verificar cooldown por perfil
+        if (aaProfileCooldowns[senderId] && (Date.now() - aaProfileCooldowns[senderId]) < 30000) {
+          console.log('[AA] Cooldown activo para:', senderId);
+          continue;
+        }
+
+        // Verificar historial (no responder al mismo usuario dos veces)
+        if (await isContactAlreadyContacted(senderId)) {
+          console.log('[AA] Ya respondido a:', senderId);
+          continue;
+        }
+
+        aaLastProfileId = senderId;
+        aaProfileCooldowns[senderId] = Date.now();
+        setTimeout(() => { delete aaProfileCooldowns[senderId]; }, 30000);
+
+        // Abrir chat del emisor
+        const opened = await openProfileChat(senderId);
+        if (!opened) {
+          console.log('[AA] No se pudo abrir chat para:', senderId);
+          continue;
+        }
+
+        // Obtener contexto y generar respuesta
+        const profileContext = getProfileContext(senderId);
+        const response = await getAAResponse(eventType, profileContext);
+        if (response) {
+          await sendResponse(response);
+          await markContactAsContacted(senderId);
+          console.log('[AA] ✅ Respuesta enviada a', senderId, 'por', eventType);
         }
       }
     }, 1500);
   });
 
   aaObserver.observe(targetNode, { childList: true, subtree: true });
-  console.log('[AA] Observer started');
+  console.log('[AA] Observer started - solo responde a eventos reales');
+}
+
+// Extraer ID del emisor desde un nodo de notificación
+function extractSenderFromNode(node) {
+  if (!node || node.nodeType !== 1) return null;
+
+  // Buscar en atributos data-*
+  const dataId = node.getAttribute('data-id') || node.getAttribute('data-user-id') || node.getAttribute('data-member-id');
+  if (dataId && /^\d{6,15}$/.test(dataId)) return dataId;
+
+  // Buscar en hijos
+  const childWithDataId = node.querySelector('[data-id], [data-user-id], [data-member-id]');
+  if (childWithDataId) {
+    const id = childWithDataId.getAttribute('data-id') || childWithDataId.getAttribute('data-user-id') || childWithDataId.getAttribute('data-member-id');
+    if (id && /^\d{6,15}$/.test(id)) return id;
+  }
+
+  // Buscar en hrefs
+  const links = node.querySelectorAll('a[href]');
+  for (const link of links) {
+    const href = link.href || link.getAttribute('href') || '';
+    const match = href.match(/\/(\d{6,15})(?:[/?#]|$)/);
+    if (match) return match[1];
+  }
+
+  // Buscar en el href del propio nodo si es un enlace
+  if (node.tagName === 'A') {
+    const href = node.href || node.getAttribute('href') || '';
+    const match = href.match(/\/(\d{6,15})(?:[/?#]|$)/);
+    if (match) return match[1];
+  }
+
+  // Buscar ID numérico en el texto
+  const text = node.textContent || '';
+  const textMatch = text.match(/\b(\d{6,15})\b/);
+  if (textMatch) return textMatch[1];
+
+  return null;
 }
 
 function stopAAObserver() {
@@ -749,13 +823,6 @@ window._saveAAConfigDirect = saveAAConfig;
 window._getAAConfigDirect = () => aaConfig;
 window._loadAAConfigDirect = loadAAConfig;
 window._updateAAConfigBulk = updateAAConfigBulk;
-window._updateAAEventConfig = updateAAEventConfig;
-window._updateAADelay = updateAADelay;
-window._updateAAUseAI = updateAAUseAI;
-window._updateAAMaxDaily = updateAAMaxDaily;
-window._updateAAScanSources = updateAAScanSources;
-window._setAAState = setAAState;
-window._loadAAConfigDirect = loadAAConfig;
 window._updateAAEventConfig = updateAAEventConfig;
 window._updateAADelay = updateAADelay;
 window._updateAAUseAI = updateAAUseAI;

@@ -22,7 +22,14 @@ async function apiFetch(path, options) {
     headers['Authorization'] = 'Bearer ' + token;
   }
 
-  var res = await fetch(TESSERACT_API + path, { ...options, headers: headers });
+  var controller = new AbortController();
+  var timeoutId = setTimeout(function () { controller.abort(); }, 15000);
+  var res;
+  try {
+    res = await fetch(TESSERACT_API + path, { ...options, headers: headers, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (res.status === 401) {
     try {
@@ -86,7 +93,7 @@ async function logout() {
   try {
     chrome.runtime.sendMessage({ action: 'LOGOUT' });
   } catch (e) {}
-  window.location.href = '/src/pages/login/login.html';
+  window.location.href = chrome.runtime.getURL('src/pages/login/login.html');
 }
 
 function formatTimeRemaining(ms) {

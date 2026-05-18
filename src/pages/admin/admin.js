@@ -14,7 +14,7 @@ function apiFetch(endpoint, options = {}) {
     'Authorization': `Bearer ${currentToken}`,
     'Content-Type': 'application/json'
   };
-  const fetchOptions = { method, headers };
+  const fetchOptions = { method, headers, signal: AbortSignal.timeout(15000) };
   if (options.body) {
     fetchOptions.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
   }
@@ -26,6 +26,9 @@ function apiFetch(endpoint, options = {}) {
     }
     return res.json();
   }).catch(e => {
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+      throw new Error('Timeout: el servidor no responde. Puede estar iniciándose.');
+    }
     console.error('[ADMIN] API Error:', e.message);
     throw e;
   });
@@ -65,45 +68,74 @@ async function initAdminPanel() {
     currentAdminEmail = data.email;
     userOffice = data.office;
     isOfficeAdmin = data.isOfficeAdmin;
-    // Master admin es Developer en el servidor
     const isMasterAdmin = data.isDeveloper === true || data.isAdmin === true;
     
-    document.getElementById('admin-email').textContent = data.email;
+    document.getElementById('admin-email').textContent = data.email + (userOffice ? ` — ${userOffice}` : '');
 
-    // Crear oficinas solo admin maestro
-    if (!isMasterAdmin) {
+    // --- Office admin: vista restringida a su oficina ---
+    if (isOfficeAdmin && !isMasterAdmin) {
+      // Ocultar secciones globales
       document.getElementById('create-office-section').style.display = 'none';
-      document.getElementById('create-user-section').style.display = 'none';
-    }
+      document.getElementById('dev-section').style.display = 'none';
+      document.getElementById('storage-debug-section').style.display = 'none';
+      document.getElementById('pending-users-section').style.display = 'none';
+      document.getElementById('offices-section').style.display = 'none';
 
-    // Storage Debug solo para admin maestro
-    if (isMasterAdmin) {
-      document.getElementById('storage-debug-section').style.display = 'block';
-    }
+      // Ocultar filtro de oficinas (solo ve la suya)
+      document.getElementById('office-filter').style.display = 'none';
 
-    // Mostrar usuarios para todos (no solo admin maestro)
-    document.getElementById('user-management-section').style.display = 'block';
-    document.getElementById('dev-section').style.display = isMasterAdmin ? 'block' : 'none';
+      // Crear usuario: prellenar oficina, ocultar campo oficina y tipo
+      const officeInput = document.getElementById('new-user-office');
+      if (officeInput) {
+        officeInput.value = userOffice;
+        officeInput.disabled = true;
+        officeInput.placeholder = userOffice;
+      }
+      const typeSelect = document.getElementById('new-user-type');
+      if (typeSelect) {
+        typeSelect.innerHTML = '<option value="operador">Operador</option>';
+        typeSelect.value = 'operador';
+      }
+      document.getElementById('create-user-section').style.display = 'block';
 
-    // Si es office admin, automáticamente filtra por su oficina
-    if (isOfficeAdmin && userOffice) {
-      document.getElementById('office-filter').value = userOffice;
-      document.getElementById('office-filter').disabled = true;
+      // Gestión de usuarios: mostrar con título de oficina
+      document.getElementById('user-management-section').style.display = 'block';
+      const userTitle = document.querySelector('#user-management-section .panel-title');
+      if (userTitle) userTitle.textContent = `GESTIÓN DE OPERADORES — ${userOffice}`;
+
+      // Calendario: ocultar filtro de oficina, usar la suya
+      const calFilter = document.getElementById('calendar-office-filter');
+      if (calFilter) {
+        calFilter.innerHTML = `<option value="${userOffice}">${userOffice}</option>`;
+        calFilter.disabled = true;
+      }
+    } else {
+      // Admin maestro / global: vista completa
+      document.getElementById('create-user-section').style.display = 'block';
+      document.getElementById('user-management-section').style.display = 'block';
+      document.getElementById('dev-section').style.display = isMasterAdmin ? 'block' : 'none';
+      document.getElementById('pending-users-section').style.display = isMasterAdmin ? 'block' : 'none';
+      if (isMasterAdmin) {
+        document.getElementById('storage-debug-section').style.display = 'block';
+      }
     }
 
     await loadOffices();
     await loadOfficesList();
     await populateCalendarOfficeFilter();
 
-    document.getElementById('office-filter').addEventListener('change', async () => {
-      const office = document.getElementById('office-filter').value;
-      await loadMetrics(office);
-      await loadUserList(office);
-      await loadActivityLog(office);
-    });
+    // Office admin: no puede cambiar de oficina
+    if (!isOfficeAdmin || isMasterAdmin) {
+      document.getElementById('office-filter').addEventListener('change', async () => {
+        const office = document.getElementById('office-filter').value;
+        await loadMetrics(office);
+        await loadUserList(office);
+        await loadActivityLog(office);
+      });
+    }
 
     document.getElementById('btn-refresh').addEventListener('click', () => { 
-      const office = document.getElementById('office-filter').value;
+      const office = isOfficeAdmin && !isMasterAdmin ? userOffice : document.getElementById('office-filter').value;
       loadMetrics(office); loadUserList(office); loadActivityLog(office); 
     });
     document.getElementById('btn-logout').addEventListener('click', async () => {
@@ -124,14 +156,20 @@ async function initAdminPanel() {
     document.getElementById('btn-create-office').addEventListener('click', createOffice);
     document.getElementById('btn-load-calendar').addEventListener('click', loadCalendar);
 
-    await loadMetrics();
-    await loadUserList();
-    await loadActivityLog();
+    const initialOffice = isOfficeAdmin && !isMasterAdmin ? userOffice : 'all';
+    await loadMetrics(initialOffice);
+    await loadUserList(initialOffice);
+    await loadActivityLog(initialOffice);
     if (refreshIntervalId) clearInterval(refreshIntervalId);
     refreshIntervalId = setInterval(() => { 
-      const office = document.getElementById('office-filter').value;
+      const office = isOfficeAdmin && !isMasterAdmin ? userOffice : document.getElementById('office-filter').value;
       loadMetrics(office); loadActivityLog(office); 
     }, 5000);
+
+    // Cargar pendientes solo para master admin
+    if (isMasterAdmin) {
+      await loadPendingUsers();
+    }
 
   } catch (e) {
     console.error('[ADMIN] initAdminPanel Error:', e);
@@ -149,6 +187,7 @@ async function initAdminPanel() {
 }
 
 async function loadOffices() {
+  if (isOfficeAdmin && !isMasterAdmin) return; // Office admin no necesita cargar oficinas
   try {
     const data = await apiFetch('/api/tess/admin/offices');
     const select = document.getElementById('office-filter');
@@ -164,11 +203,11 @@ async function loadOffices() {
     }
   } catch (e) { 
     console.error('[ADMIN] Error al cargar oficinas:', e.message);
-    alert('Error al cargar oficinas: ' + e.message);
   }
 }
 
 async function loadOfficesList() {
+  if (isOfficeAdmin && !isMasterAdmin) return; // Office admin no ve la lista de oficinas
   try {
     const data = await apiFetch('/api/tess/admin/offices');
     const container = document.getElementById('offices-list');
@@ -268,7 +307,8 @@ async function loadUserList(office = 'all') {
         <td>${u.last_login ? new Date(u.last_login).toLocaleString() : 'Nunca'}</td>
         <td>${!isMaster ? `<button class="action-btn premium btn-premium" data-email="${u.email}">PREMIUM</button>` : ''}</td>
         <td><input type="text" class="input-field plan-input" data-email="${u.email}" placeholder="plan..." style="width:80px;padding:4px 6px;font-size:10px;">
-            <button class="action-btn premium btn-set-plan" data-email="${u.email}" style="padding:4px 8px;">SET</button></td>`;
+            <button class="action-btn premium btn-set-plan" data-email="${u.email}" style="padding:4px 8px;">SET</button></td>
+        <td>${!isMaster ? `<button class="action-btn btn-danger btn-delete-user" data-email="${u.email}" style="padding:4px 8px;font-size:10px;">✕</button>` : ''}</td>`;
       tbody.appendChild(row);
     });
 
@@ -279,13 +319,20 @@ async function loadUserList(office = 'all') {
       if (!email) return;
       if (target.classList.contains('btn-premium')) {
         await apiFetch('/api/tess/admin/premium', { method: 'POST', body: { email } });
-        await loadMetrics(); await loadUserList();
+        await loadMetrics(isOfficeAdmin && !isMasterAdmin ? userOffice : 'all'); await loadUserList(isOfficeAdmin && !isMasterAdmin ? userOffice : 'all');
       }
       if (target.classList.contains('btn-set-plan')) {
         const plan = target.closest('tr').querySelector('.plan-input').value.trim().toLowerCase();
         if (!plan) return;
         await apiFetch('/api/tess/admin/set-plan', { method: 'POST', body: { email, plan } });
-        await loadUserList();
+        await loadUserList(isOfficeAdmin && !isMasterAdmin ? userOffice : 'all');
+      }
+      if (target.classList.contains('btn-delete-user')) {
+        if (!confirm(`¿Eliminar usuario ${email}?`)) return;
+        try {
+          await apiFetch(`/api/tess/admin/users/${encodeURIComponent(email)}`, { method: 'DELETE' });
+          await loadUserList(isOfficeAdmin && !isMasterAdmin ? userOffice : 'all');
+        } catch (e) { alert('Error: ' + e.message); }
       }
     });
   } catch (e) { console.error('[ADMIN] loadUserList:', e); }
@@ -336,7 +383,8 @@ async function activatePremium() {
   try {
     await apiFetch('/api/tess/admin/premium', { method: 'POST', body: { email } });
     document.getElementById('input-email').value = '';
-    await loadMetrics(); await loadUserList();
+    const office = isOfficeAdmin && !isMasterAdmin ? userOffice : 'all';
+    await loadMetrics(office); await loadUserList(office);
   } catch (e) { alert('Error: ' + e.message); }
 }
 
@@ -346,7 +394,7 @@ async function banUser() {
   try {
     await apiFetch('/api/tess/admin/ban', { method: 'POST', body: { email } });
     document.getElementById('input-email').value = '';
-    await loadUserList();
+    await loadUserList(isOfficeAdmin && !isMasterAdmin ? userOffice : 'all');
   } catch (e) { alert(e.message); }
 }
 
@@ -356,7 +404,7 @@ async function unbanUser() {
   try {
     await apiFetch('/api/tess/admin/unban', { method: 'POST', body: { email } });
     document.getElementById('input-email').value = '';
-    await loadUserList();
+    await loadUserList(isOfficeAdmin && !isMasterAdmin ? userOffice : 'all');
   } catch (e) { alert(e.message); }
 }
 
@@ -380,7 +428,7 @@ async function addDeveloper() {
   try {
     await apiFetch('/api/tess/admin/developer', { method: 'POST', body: { email, action: 'add' } });
     document.getElementById('input-dev-email').value = '';
-    await loadUserList();
+    await loadUserList(isOfficeAdmin && !isMasterAdmin ? userOffice : 'all');
   } catch (e) { alert(e.message); }
 }
 
@@ -416,7 +464,8 @@ async function dumpStorage() {
 async function createUser() {
   const email = document.getElementById('new-user-email')?.value?.trim().toLowerCase();
   const password = document.getElementById('new-user-password')?.value?.trim();
-  const office = document.getElementById('new-user-office')?.value?.trim();
+  const officeEl = document.getElementById('new-user-office');
+  const office = officeEl?.disabled ? userOffice : officeEl?.value?.trim();
   const userType = document.getElementById('new-user-type')?.value || 'operador';
   
   if (!email) return alert('Ingresa el email');
@@ -435,9 +484,9 @@ async function createUser() {
     alert(`Usuario ${userType === 'admin' ? 'ADMIN' : 'OPERADOR'} creado correctamente`);
     document.getElementById('new-user-email').value = '';
     document.getElementById('new-user-password').value = '';
-    document.getElementById('new-user-office').value = '';
+    if (!officeEl?.disabled) document.getElementById('new-user-office').value = '';
     document.getElementById('new-user-type').value = 'operador';
-    await loadUserList();
+    await loadUserList(isOfficeAdmin && !isMasterAdmin ? userOffice : 'all');
     await loadOffices();
   } catch (e) { 
     console.error('[ADMIN] Error al crear usuario:', e);
@@ -467,7 +516,7 @@ async function createOffice() {
 }
 
 async function loadCalendar() {
-  const office = document.getElementById('calendar-office-filter').value;
+  const office = isOfficeAdmin && !isMasterAdmin ? userOffice : document.getElementById('calendar-office-filter').value;
   const days = document.getElementById('calendar-days').value;
   const grid = document.getElementById('calendar-grid');
   
@@ -520,6 +569,7 @@ async function loadCalendar() {
 }
 
 async function populateCalendarOfficeFilter() {
+  if (isOfficeAdmin && !isMasterAdmin) return; // Office admin ya tiene su oficina fija
   try {
     const data = await apiFetch('/api/tess/admin/offices');
     const select = document.getElementById('calendar-office-filter');
@@ -531,4 +581,73 @@ async function populateCalendarOfficeFilter() {
       });
     }
   } catch (e) { console.warn('[ADMIN] populateCalendarOfficeFilter:', e); }
+}
+
+// ============ SOLICITUDES PENDIENTES ============
+async function loadPendingUsers() {
+  try {
+    const data = await apiFetch('/api/tess/auth/users');
+    console.log('[ADMIN] /api/tess/auth/users response:', JSON.stringify(data.users?.map(u => ({ email: u.email, is_approved: u.is_approved })), null, 2));
+
+    const tbody = document.getElementById('pending-user-table-body');
+    if (!tbody) return;
+
+    const pending = (data.users || []).filter(u => u.is_approved === 0 || u.is_approved === false);
+    console.log('[ADMIN] Pending users found:', pending.length, pending.map(u => u.email));
+
+    if (pending.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#555;padding:20px;">No hay solicitudes pendientes</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = pending.map(u => {
+      const email = u.email || '—';
+      const created = u.created_at ? new Date(u.created_at).toLocaleString('es-ES') : '—';
+      return `
+        <tr>
+          <td style="color:#e0e0e0;">${email}</td>
+          <td style="color:#888;font-size:11px;">${created}</td>
+          <td>
+            <button class="btn-approve" data-email="${email}" style="padding:4px 12px;background:#22c55e;border:1px solid #22c55e;color:#fff;border-radius:4px;cursor:pointer;font-size:11px;margin-right:4px;">APROBAR</button>
+            <button class="btn-reject" data-email="${email}" style="padding:4px 12px;background:#ef4444;border:1px solid #ef4444;color:#fff;border-radius:4px;cursor:pointer;font-size:11px;">RECHAZAR</button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('.btn-approve').forEach(btn => {
+      btn.addEventListener('click', () => approveUser(btn.dataset.email));
+    });
+    tbody.querySelectorAll('.btn-reject').forEach(btn => {
+      btn.addEventListener('click', () => rejectUser(btn.dataset.email));
+    });
+  } catch (e) {
+    console.error('[ADMIN] Error cargando pendientes:', e.message);
+  }
+}
+
+async function approveUser(email) {
+  try {
+    await apiFetch('/api/tess/admin/approve-user', {
+      method: 'POST',
+      body: { email, approved: true }
+    });
+    alert('✅ ' + email + ' aprobado');
+    await loadPendingUsers();
+    await loadUserList();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function rejectUser(email) {
+  try {
+    await apiFetch('/api/tess/admin/approve-user', {
+      method: 'POST',
+      body: { email, approved: false }
+    });
+    alert('❌ ' + email + ' rechazado');
+    await loadPendingUsers();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
 }
