@@ -1,8 +1,11 @@
 (function () {
   var CHAT_TIMER_MS = 120000;
   var CARTA_TIMER_MS = 180000;
+  var RESPONSE_RISK_TIMER_MS = 90000;
   var timers = {};
+  var riskTimers = {};
   var notificationEl = null;
+  var riskNotificationEl = null;
   var audioCtx = null;
 
   function getAudioCtx() {
@@ -63,10 +66,44 @@
     }, 8000);
   }
 
+  function createRiskNotification() {
+    if (riskNotificationEl) return;
+    riskNotificationEl = document.createElement('div');
+    riskNotificationEl.id = 'tess-risk';
+    riskNotificationEl.style.cssText = 'position:fixed;top:80px;right:30px;z-index:2147483647;background:linear-gradient(135deg,#1a1a2e,#0a0a0f);border:2px solid #f59e0b;border-radius:12px;padding:16px 24px;box-shadow:0 0 40px rgba(245,158,11,0.3),0 10px 40px rgba(0,0,0,0.5);font-family:"JetBrains Mono",monospace;color:#e0e0e0;font-size:12px;max-width:360px;transform:translateY(-120px);opacity:0;transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);pointer-events:none;';
+    riskNotificationEl.innerHTML = '<div style="display:flex;align-items:center;gap:12px;"><div style="width:10px;height:10px;border-radius:50%;background:#f59e0b;animation:tess-pulse 1s infinite;"></div><div><div style="font-weight:600;color:#f59e0b;letter-spacing:1px;font-size:11px;">⚠ TASA DE RESPUESTA EN RIESGO</div><div style="margin-top:4px;color:#ccc;font-size:11px;" id="tess-risk-msg">Cliente espera respuesta</div></div></div>';
+    document.body.appendChild(riskNotificationEl);
+  }
+
+  function showRiskNotification(clientName) {
+    createRiskNotification();
+    var msgEl = document.getElementById('tess-risk-msg');
+    if (msgEl) msgEl.textContent = (clientName || 'Un cliente') + ' espera tu respuesta';
+    if (riskNotificationEl) {
+      riskNotificationEl.style.transform = 'translateY(0)';
+      riskNotificationEl.style.opacity = '1';
+      riskNotificationEl.style.pointerEvents = 'auto';
+    }
+    setTimeout(function () {
+      if (riskNotificationEl) {
+        riskNotificationEl.style.transform = 'translateY(-120px)';
+        riskNotificationEl.style.opacity = '0';
+        riskNotificationEl.style.pointerEvents = 'none';
+      }
+    }, 8000);
+  }
+
   function clearReminderTimer(contactId) {
     if (timers[contactId]) {
       clearTimeout(timers[contactId]);
       delete timers[contactId];
+    }
+  }
+
+  function clearRiskTimer(contactId) {
+    if (riskTimers[contactId]) {
+      clearTimeout(riskTimers[contactId]);
+      delete riskTimers[contactId];
     }
   }
 
@@ -77,6 +114,14 @@
       showReminder(type, clientName);
       delete timers[contactId];
     }, delay);
+  }
+
+  function startRiskTimer(contactId, clientName) {
+    clearRiskTimer(contactId);
+    riskTimers[contactId] = setTimeout(function () {
+      showRiskNotification(clientName);
+      delete riskTimers[contactId];
+    }, RESPONSE_RISK_TIMER_MS);
   }
 
   function getCurrentContactName() {
@@ -109,12 +154,14 @@
   function onMessageSent() {
     var name = getCurrentContactName() || 'Contacto';
     var id = getCurrentContactId();
+    clearRiskTimer(id);
     startReminderTimer(id, 'chat', name);
   }
 
   function onCartaSent() {
     var name = getCurrentContactName() || 'Contacto';
     var id = getCurrentContactId();
+    clearRiskTimer(id);
     startReminderTimer(id, 'carta', name);
   }
 
@@ -144,6 +191,16 @@
     return false;
   }
 
+  function extractNameFromNode(node) {
+    var selectors = ['[class*="name"]', '[class*="sender"]', '[class*="author"]', '[class*="username"]', '[class*="contact-name"]', '[class*="title"]'];
+    for (var i = 0; i < selectors.length; i++) {
+      var found = node.querySelector(selectors[i]);
+      if (found && found.textContent.trim()) return found.textContent.trim();
+    }
+    if (node.textContent.trim()) return node.textContent.trim().substring(0, 30);
+    return null;
+  }
+
   function extractContactIdFromNode(node) {
     var id = node.getAttribute('data-user-id') || node.getAttribute('data-contact-id') || node.getAttribute('data-id');
     if (id) return String(id);
@@ -158,7 +215,7 @@
   function initReminder() {
     createNotification();
 
-    // MutationObserver: detecta mensajes entrantes del contacto → limpia timer
+    // MutationObserver: detecta mensajes entrantes del contacto
     var observer = new MutationObserver(function (mutations) {
       for (var i = 0; i < mutations.length; i++) {
         var m = mutations[i];
@@ -167,12 +224,14 @@
             var node = m.addedNodes[j];
             if (node.nodeType !== 1) continue;
             if (!isFromContact(node)) continue;
-            // Mensaje entrante del contacto → limpiar timer
+            // Limpiar timer de espera de respuesta del contacto
             for (var k in timers) {
-              if (timers.hasOwnProperty(k)) {
-                clearReminderTimer(k);
-              }
+              if (timers.hasOwnProperty(k)) clearReminderTimer(k);
             }
+            // Iniciar timer de riesgo: el operador debe responder pronto
+            var contactId = extractContactIdFromNode(node) || Date.now().toString();
+            var clientName = extractNameFromNode(node) || 'Cliente';
+            startRiskTimer(contactId, clientName);
           }
         }
       }
@@ -199,7 +258,7 @@
       }
     });
 
-    console.log('[TESSERACT REMINDER] Activo - Chat: 2min | Carta: 3min');
+    console.log('[TESSERACT REMINDER] Activo - Chat: 2min | Carta: 3min | Riesgo respuesta: 1.5min');
   }
 
   if (document.readyState === 'loading') {
