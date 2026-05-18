@@ -1,6 +1,3 @@
-// TESSERACT v24 - Smart Mailing Panel UI
-// Barrido de cartas en Active Limits (MAIL)
-
 function showMLSavedFeedback() {
   const btn = document.getElementById('mlSaveBtn');
   if (btn) {
@@ -25,19 +22,22 @@ function createMailingPanel() {
   m.id = 'mailingModal';
   m.innerHTML = `
 <style>
-#mailingModal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999999;display:none;width:520px;max-height:88vh;background:#0a0a0a;border:2px solid #8b5cf6;border-radius:12px;box-shadow:0 0 40px rgba(139,92,246,0.5);color:#e0e0e0;font-family:'Orbitron','Segoe UI',sans-serif;overflow:hidden;display:flex;flex-direction:column;}
+#mailingModal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999999;display:none;width:560px;max-height:90vh;background:#0a0a0a;border:2px solid #8b5cf6;border-radius:12px;box-shadow:0 0 40px rgba(139,92,246,0.5);color:#e0e0e0;font-family:'Orbitron','Segoe UI',sans-serif;overflow:hidden;display:flex;flex-direction:column;}
 .ml-hdr{background:linear-gradient(135deg,#1e1b4b,#8b5cf6,#1e1b4b);padding:12px 16px;font-weight:bold;letter-spacing:2px;display:flex;justify-content:space-between;border-bottom:2px solid #8b5cf6;color:#e0e0e0;font-size:13px;cursor:default;}
 .ml-hdr span{cursor:pointer;font-size:18px;}
 .ml-body{padding:16px;overflow-y:auto;flex:1;}
 .ml-body::-webkit-scrollbar{width:4px;}
 .ml-body::-webkit-scrollbar-track{background:#0a0a0a;}
 .ml-body::-webkit-scrollbar-thumb{background:#8b5cf6;border-radius:2px;}
-.ml-section{margin-bottom:14px;padding:10px;background:rgba(30,27,75,0.3);border:1px solid rgba(139,92,246,0.2);border-radius:8px;}
+.ml-section{margin-bottom:12px;padding:10px;background:rgba(30,27,75,0.3);border:1px solid rgba(139,92,246,0.2);border-radius:8px;}
 .ml-section h4{font-size:10px;letter-spacing:1px;margin:0 0 8px 0;color:#e0e0e0;text-transform:uppercase;}
 .ml-section label{display:flex;align-items:center;gap:8px;font-size:10px;color:#ccc;margin:4px 0;cursor:pointer;}
 .ml-section input[type="checkbox"]{accent-color:#8b5cf6;width:14px;height:14px;cursor:pointer;}
 .ml-section input[type="number"]{width:60px;padding:4px 6px;background:#000;border:1px solid #8b5cf6;border-radius:4px;color:#e0e0e0;font-family:'Share Tech Mono',monospace;font-size:10px;}
-.ml-section textarea{width:100%;padding:6px;background:#000;border:1px solid #8b5cf6;border-radius:4px;color:#e0e0e0;font-family:Arial;font-size:11px;box-sizing:border-box;height:60px;resize:vertical;}
+.ml-section input[type="text"]{width:100%;padding:6px;background:#000;border:1px solid #8b5cf6;border-radius:4px;color:#e0e0e0;font-family:'Share Tech Mono',monospace;font-size:10px;box-sizing:border-box;}
+.ml-section input[type="date"]{padding:5px;background:#000;border:1px solid #8b5cf6;border-radius:4px;color:#e0e0e0;font-family:'Share Tech Mono',monospace;font-size:10px;}
+.ml-section select{background:#000;border:1px solid #8b5cf6;border-radius:4px;color:#e0e0e0;font-family:'Share Tech Mono',monospace;font-size:10px;padding:4px;}
+.ml-section textarea{width:100%;padding:6px;background:#000;border:1px solid #8b5cf6;border-radius:4px;color:#e0e0e0;font-family:Arial;font-size:11px;box-sizing:border-box;height:50px;resize:vertical;}
 .ml-section textarea:focus{outline:none;border-color:#7c3aed;}
 .ml-hour-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
 .ml-hour-row label{font-size:9px;}
@@ -48,6 +48,7 @@ function createMailingPanel() {
 .ml-stat-card .lbl{font-size:7px;letter-spacing:1px;color:#888;text-transform:uppercase;}
 .ml-error{color:#dc2626;font-size:9px;margin:4px 0;padding:6px 10px;background:rgba(220,38,38,0.1);border:1px solid #dc2626;border-radius:4px;display:none;}
 .ml-info{color:#4CAF50;font-size:9px;margin:4px 0;padding:6px 10px;background:rgba(76,175,80,0.1);border:1px solid #4CAF50;border-radius:4px;display:none;}
+.ml-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .ml-foot{padding:12px;border-top:1px solid #8b5cf6;text-align:right;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.3);}
 .ml-foot .ml-status{font-size:9px;letter-spacing:1px;}
 .ml-foot .ml-status .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;}
@@ -62,36 +63,74 @@ function createMailingPanel() {
 .ml-blacklist-warn{font-size:8px;color:#ef4444;margin-top:4px;}
 </style>
 <div class="ml-box">
-<div class="ml-hdr"><span>BARRIDO DE CARTAS</span><span id="mlCloseBtn">&times;</span></div>
+<div class="ml-hdr"><span>MULTIMAILING</span><span id="mlCloseBtn">&times;</span></div>
 <div class="ml-body">
 
-  <div class="ml-section">
-    <h4>CONFIGURACION</h4>
-    <label><input type="checkbox" id="mlEnabledToggle"> Barrido Activado</label>
-    <label><input type="checkbox" id="mlUseAIToggle"> Usar AI para mensajes</label>
-    <div class="ml-hour-row" style="margin-top:6px;">
-      <label><input type="number" id="mlMaxDaily" value="30" min="0" style="width:50px;"> max/dia</label>
-      <label>Delay: <input type="number" id="mlDelayMin" value="3" min="0" style="width:40px;">s - <input type="number" id="mlDelayMax" value="7" min="0" style="width:40px;">s</label>
+  <div class="ml-grid-2">
+    <div class="ml-section">
+      <h4>CONFIGURACION GENERAL</h4>
+      <label><input type="checkbox" id="mlEnabledToggle"> Multimailing Activado</label>
+      <label><input type="checkbox" id="mlUseAIToggle"> Usar AI para mensajes</label>
+      <div class="ml-hour-row" style="margin-top:6px;">
+        <label><input type="number" id="mlMaxDaily" value="30" min="0" style="width:50px;"> max/dia</label>
+        <label>Delay: <input type="number" id="mlDelayMin" value="3" min="0" style="width:40px;">s - <input type="number" id="mlDelayMax" value="7" min="0" style="width:40px;">s</label>
+      </div>
     </div>
-    <label style="margin-top:6px;"><input type="checkbox" id="mlRespectHours" checked> Respetar horario laboral</label>
-    <div class="ml-hour-row">
-      <label>Desde <input type="number" id="mlHourStart" value="8" min="0" max="23">:00</label>
-      <label>Hasta <input type="number" id="mlHourEnd" value="22" min="0" max="23">:00</label>
+    <div class="ml-section">
+      <h4>HORARIO LABORAL</h4>
+      <label><input type="checkbox" id="mlRespectHours" checked> Respetar horario</label>
+      <div class="ml-hour-row">
+        <label>Desde <input type="number" id="mlHourStart" value="8" min="0" max="23">:00</label>
+        <label>Hasta <input type="number" id="mlHourEnd" value="22" min="0" max="23">:00</label>
+      </div>
+      <label style="margin-top:4px;"><input type="checkbox" id="mlSkipPinned" checked> Saltar contactos fijados</label>
     </div>
-    <label style="margin-top:6px;"><input type="checkbox" id="mlSkipPinned" checked> Saltar contactos fijados/guardados</label>
   </div>
 
   <div class="ml-section">
-    <h4>PLANTILLA DE MENSAJE</h4>
-    <textarea id="mlMessageTemplate" placeholder="Escribe la plantilla del mensaje...">Hola! Me encantaria conocerte mejor. Te gustaria conversar un rato?</textarea>
-    <p style="font-size:7px;color:#666;">Si AI activo, se generaran variaciones via Groq API.</p>
+    <h4>PROGRAMACION (CHATSPACE STYLE)</h4>
+    <div class="ml-hour-row">
+      <label><input type="checkbox" id="mlScheduleToggle"> Activar programacion</label>
+      <label>Inicio: <input type="date" id="mlScheduleStart"></label>
+      <label>Frecuencia:
+        <select id="mlScheduleFreq">
+          <option value="daily">Diario</option>
+          <option value="weekly">Semanal</option>
+          <option value="monthly">Mensual</option>
+        </select>
+      </label>
+      <label>Ciclos: <input type="number" id="mlScheduleCycles" value="30" min="1" style="width:50px;"></label>
+    </div>
+    <p style="font-size:8px;color:#666;margin-top:4px;">Programa el envio de cartas por dias, semanas o meses. Se ejecutara automaticamente segun la frecuencia.</p>
+  </div>
+
+  <div class="ml-grid-2">
+    <div class="ml-section">
+      <h4>PLANTILLA NUEVOS CONTACTOS</h4>
+      <textarea id="mlTemplateNew" placeholder="Mensaje para nuevos contactos...">Hola! Vi tu perfil y me pareciste interesante. ¿Te gustaría conversar?</textarea>
+    </div>
+    <div class="ml-section">
+      <h4>PLANTILLA CONTACTOS RECURRENTES</h4>
+      <textarea id="mlTemplateRecurring" placeholder="Mensaje para contactos que ya respondieron...">Hola! ¿Cómo estás? Hace tiempo que no hablamos, me encantaría retomar la conversación.</textarea>
+    </div>
+  </div>
+
+  <div class="ml-section">
+    <h4>BLOQUEO POR DIALOGO ACTIVO</h4>
+    <label><input type="checkbox" id="mlBlockDialogue" checked> Bloquear mailing si hay dialogo activo</label>
+    <div class="ml-hour-row">
+      <label>Silencio maximo: <input type="number" id="mlDialogueHours" value="48" min="1" style="width:50px;"> horas sin respuesta</label>
+    </div>
+    <p style="font-size:8px;color:#666;margin-top:4px;">Si el contacto ha respondido recientemente, no se enviaran mas cartas automaticas.</p>
   </div>
 
   <div class="ml-section">
     <h4>BLACKLIST</h4>
-    <div class="ml-stats">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0;">
       <div class="ml-stat-card"><span class="val" id="mlBlacklistCount">0</span>BLOQUEADOS</div>
       <div class="ml-stat-card"><span class="val" id="mlBlacklistStatus">--</span>ESTADO</div>
+      <div class="ml-stat-card"><span class="val" id="mlScheduleStatus">--</span>PROGRAMACION</div>
+      <div class="ml-stat-card"><span class="val" id="mlBlockStatus">--</span>BLOQUEO DIAL.</div>
     </div>
     <p class="ml-blacklist-warn">CONDICION PRINCIPAL: Ningun contacto en blacklist recibira mensajes.</p>
   </div>
@@ -112,7 +151,7 @@ function createMailingPanel() {
   <div class="ml-status"><span class="dot off" id="mlStatusDot"></span><span id="mlStatusText">INACTIVO</span></div>
   <div>
     <button id="mlScrapeBtn" style="background:rgba(139,92,246,0.2);">RASTREAR</button>
-    <button id="mlExecuteBtn" class="primary">INICIAR BARRIDO</button>
+    <button id="mlExecuteBtn" class="primary">INICIAR MULTIMAILING</button>
     <button id="mlAbortBtn" class="danger" style="display:none;">ABORTAR</button>
     <button id="mlSaveBtn" class="primary">GUARDAR</button>
     <button id="mlCloseBtn2">CERRAR</button>
@@ -156,10 +195,7 @@ async function _loadMLCfg() {
     }
     const r = await chrome.storage.local.get(['tess_mailing_config']);
     return r.tess_mailing_config || null;
-  } catch (e) {
-    console.error('[ML-PANEL] Load error:', e);
-    return null;
-  }
+  } catch (e) { return null; }
 }
 
 function populateMLPanel() {
@@ -174,14 +210,22 @@ function populateMLPanel() {
   document.getElementById('mlHourStart').value = cfg.workingHours?.start ?? 8;
   document.getElementById('mlHourEnd').value = cfg.workingHours?.end ?? 22;
   document.getElementById('mlSkipPinned').checked = cfg.skipPinned !== false;
-  document.getElementById('mlMessageTemplate').value = cfg.messageTemplate || '';
+  document.getElementById('mlScheduleToggle').checked = !!cfg.scheduleEnabled;
+  document.getElementById('mlScheduleStart').value = cfg.scheduleStartDate || '';
+  document.getElementById('mlScheduleFreq').value = cfg.scheduleFrequency || 'daily';
+  document.getElementById('mlScheduleCycles').value = cfg.scheduleCycles || 30;
+  document.getElementById('mlTemplateNew').value = cfg.templatesNew || '';
+  document.getElementById('mlTemplateRecurring').value = cfg.templatesRecurring || '';
+  document.getElementById('mlBlockDialogue').checked = cfg.blockActiveDialogue !== false;
+  document.getElementById('mlDialogueHours').value = cfg.activeDialogueHours || 48;
   document.getElementById('mlSentTodayVal').textContent = cfg.sentToday || 0;
   document.getElementById('mlDailyLimitVal').textContent = cfg.maxDaily || 30;
 
-  // Blacklist stats
   const stats = typeof window._getMailingStats === 'function' ? window._getMailingStats() : null;
   document.getElementById('mlBlacklistCount').textContent = stats?.blacklistSize || 0;
   document.getElementById('mlBlacklistStatus').textContent = stats?.blacklistLoaded ? 'OK' : '--';
+  document.getElementById('mlScheduleStatus').textContent = stats?.scheduleEnabled ? (stats.scheduleRemaining + '/' + stats.scheduleCycles) : '--';
+  document.getElementById('mlBlockStatus').textContent = stats?.blockActiveDialogue ? 'ACTIVO' : '--';
 
   updateMLStatusBar(cfg.enabled);
   updateExecuteButtonState();
@@ -195,17 +239,19 @@ async function saveMLPanelConfigWrapper() {
     cfg.enabled = !!document.getElementById('mlEnabledToggle').checked;
     cfg.useAI = !!document.getElementById('mlUseAIToggle').checked;
     cfg.maxDaily = parseInt(document.getElementById('mlMaxDaily').value) || 30;
-    cfg.delay = {
-      min: (parseInt(document.getElementById('mlDelayMin').value) || 3) * 1000,
-      max: (parseInt(document.getElementById('mlDelayMax').value) || 7) * 1000
-    };
+    cfg.delay = { min: (parseInt(document.getElementById('mlDelayMin').value) || 3) * 1000, max: (parseInt(document.getElementById('mlDelayMax').value) || 7) * 1000 };
     cfg.respectQuietHours = !!document.getElementById('mlRespectHours').checked;
-    cfg.workingHours = {
-      start: parseInt(document.getElementById('mlHourStart').value) || 8,
-      end: parseInt(document.getElementById('mlHourEnd').value) || 22
-    };
+    cfg.workingHours = { start: parseInt(document.getElementById('mlHourStart').value) || 8, end: parseInt(document.getElementById('mlHourEnd').value) || 22 };
     cfg.skipPinned = !!document.getElementById('mlSkipPinned').checked;
-    cfg.messageTemplate = document.getElementById('mlMessageTemplate').value;
+    cfg.scheduleEnabled = !!document.getElementById('mlScheduleToggle').checked;
+    cfg.scheduleStartDate = document.getElementById('mlScheduleStart').value || '';
+    cfg.scheduleFrequency = document.getElementById('mlScheduleFreq').value || 'daily';
+    cfg.scheduleCycles = parseInt(document.getElementById('mlScheduleCycles').value) || 30;
+    cfg.scheduleRemaining = parseInt(document.getElementById('mlScheduleCycles').value) || 30;
+    cfg.templatesNew = document.getElementById('mlTemplateNew').value;
+    cfg.templatesRecurring = document.getElementById('mlTemplateRecurring').value;
+    cfg.blockActiveDialogue = !!document.getElementById('mlBlockDialogue').checked;
+    cfg.activeDialogueHours = parseInt(document.getElementById('mlDialogueHours').value) || 48;
 
     if (typeof window._saveMailingConfigDirect === 'function') {
       mlCfgCache = cfg;
@@ -219,9 +265,7 @@ async function saveMLPanelConfigWrapper() {
 
     showMLSavedFeedback();
     updateMLStatusBar(cfg.enabled);
-    console.log('[ML-PANEL] Config saved');
   } catch (e) {
-    console.error('[ML-PANEL] Save error:', e);
     errEl.textContent = 'Error: ' + (e.message || 'desconocido');
     errEl.style.display = 'block';
   }
@@ -231,7 +275,9 @@ function getDefaultMailingConfig() {
   return {
     enabled: false, maxDaily: 30, sentToday: 0, messageTemplate: '',
     useAI: false, respectQuietHours: true, workingHours: { start: 8, end: 22 },
-    delay: { min: 3000, max: 7000 }, skipPinned: true
+    delay: { min: 3000, max: 7000 }, skipPinned: true,
+    scheduleEnabled: false, scheduleStartDate: '', scheduleFrequency: 'daily', scheduleCycles: 30, scheduleRemaining: 30,
+    templatesNew: '', templatesRecurring: '', blockActiveDialogue: true, activeDialogueHours: 48
   };
 }
 
@@ -240,8 +286,6 @@ function updateMLStatusBar(enabled) {
   const text = document.getElementById('mlStatusText');
   if (dot) dot.className = 'dot ' + (enabled ? 'on' : 'off');
   if (text) text.textContent = enabled ? 'ACTIVO' : 'INACTIVO';
-  const inline = document.getElementById('mlStatusInline');
-  if (inline) { inline.textContent = enabled ? 'ACTIVO' : 'INACTIVO'; inline.style.color = enabled ? '#4CAF50' : '#666'; }
 }
 
 function updateExecuteButtonState() {
@@ -283,7 +327,7 @@ async function executeMailingFromPanel() {
   infoEl.style.display = 'none';
 
   if (typeof window._executeMailingRound !== 'function') {
-    errEl.textContent = 'Funcion de barrido no disponible';
+    errEl.textContent = 'Funcion no disponible';
     errEl.style.display = 'block';
     return;
   }
@@ -294,16 +338,16 @@ async function executeMailingFromPanel() {
 
   try {
     const result = await window._executeMailingRound();
-    infoEl.textContent = 'Completado: ' + result.sent + ' enviados, ' + result.skipped + ' saltados, ' + result.blacklisted + ' en blacklist';
+    infoEl.textContent = 'Completado: ' + result.sent + ' enviados, ' + result.skipped + ' saltados, ' + result.blacklisted + ' blacklist' + (result.activeSkipped ? ', ' + result.activeSkipped + ' dialogo activo' : '');
     infoEl.style.display = 'block';
     document.getElementById('mlSentTodayVal').textContent = result.sent;
   } catch (e) {
-    errEl.textContent = 'Error en barrido: ' + e.message;
+    errEl.textContent = 'Error: ' + e.message;
     errEl.style.display = 'block';
   }
 
   document.getElementById('mlExecuteBtn').disabled = false;
-  document.getElementById('mlExecuteBtn').textContent = 'INICIAR BARRIDO';
+  document.getElementById('mlExecuteBtn').textContent = 'INICIAR MULTIMAILING';
   updateExecuteButtonState();
 }
 
