@@ -1200,27 +1200,6 @@ async function executeLikeFollow() {
       if (ft.indexOf('follow') !== -1 || ft.indexOf('seguir') !== -1 || ft === '+') { followBtn.click(); await sweepSleep(200); }
     }
 
-    var avatarEl = document.querySelector('.avatar-card, img[alt="Profile avatar"], [class*="avatar-card"], [class*="profile-photo"]:not([disabled])');
-    if (avatarEl && avatarEl.offsetParent) {
-      avatarEl.click(); await sweepSleep(1500);
-      var al = document.querySelector('[class*="like"]:not([disabled])');
-      if (al && al.offsetParent && al !== likeBtn) { al.click(); await sweepSleep(500); }
-      var cb = document.querySelector('button[class*="close"], [class*="modal"] [class*="close"]');
-      if (cb && cb.offsetParent) cb.click(); else { var ov = document.querySelector('[class*="modal"], [class*="overlay"]'); if (ov) ov.click(); }
-      await sweepSleep(400);
-    }
-
-    var pl = 0, photoCards = document.querySelectorAll('[data-test-id*="photo"] .media-card__item, [class*="media-card"]:not([disabled])');
-    for (var mi = 0; mi < photoCards.length && pl < 3; mi++) {
-      if (!photoCards[mi].offsetParent) continue;
-      photoCards[mi].click(); await sweepSleep(1500);
-      var ml = document.querySelector('[class*="like"]:not([disabled])');
-      if (ml && ml.offsetParent && ml !== likeBtn) { ml.click(); await sweepSleep(500); pl++; }
-      var cb2 = document.querySelector('button[class*="close"], [class*="modal"] [class*="close"]');
-      if (cb2 && cb2.offsetParent) cb2.click(); else { var ov2 = document.querySelector('[class*="modal"], [class*="overlay"]'); if (ov2) ov2.click(); }
-      await sweepSleep(400);
-    }
-
     var newTotal = (state.totalGiven || 0) + 1;
     var processed = (state.processedIds || []); processed.push(pid);
     botStats.likesGiven++; botStats.followsGiven++;
