@@ -1053,8 +1053,10 @@ function collectLFContacts(context) {
     var anchors = document.querySelectorAll('a[href*="/profile/"], a[href*="/member/"], a[href*="/user/"]');
     anchors.forEach(function (a) {
       if (!a.offsetParent) return;
+      var card = a.closest('[class*="profile"], [class*="card"], [class*="user-item"], [class*="member-item"], [class*="result"], [class*="search-result"], li, [class*="grid"]');
+      if (!card) return;
       var m = a.href && a.href.match(/\/(\d{6,15})(\/|$)/);
-      if (m && ids.indexOf(m[1]) === -1) ids.push(m[1]);
+      if (m && m[1] && m[1].length >= 6 && ids.indexOf(m[1]) === -1) ids.push(m[1]);
     });
     return ids.slice(0, 12);
   }
@@ -1089,10 +1091,11 @@ function collectLFContacts(context) {
 // ============ NAVEGAR AL PERFIL DESDE CUALQUIER CONTEXTO ============
 async function navigateToProfile(contactId, context) {
   if (!likeFollowActive) return false;
+  if (!contactId || contactId.length < 6) return false;
   var link = document.querySelector('a[href*="/' + contactId + '"]');
   if (link && link.offsetParent) {
     link.click();
-    await sweepSleep(800);
+    await sweepSleep(1200);
     return likeFollowActive;
   }
   if (context === 'messages' || context === 'mail') {
@@ -1101,12 +1104,12 @@ async function navigateToProfile(contactId, context) {
       var target = list.querySelector('a[href*="' + contactId + '"], [data-id="' + contactId + '"], [data-user-id="' + contactId + '"], [data-contact-id="' + contactId + '"]');
       if (target && target.offsetParent) {
         target.click();
-        await sweepSleep(1000);
+        await sweepSleep(1200);
         if (!likeFollowActive) return false;
         var profileInView = document.querySelector('a[href*="/profile/"], a[href*="/member/"], a[href*="/user/"]');
         if (profileInView && profileInView.offsetParent && profileInView.href.includes(contactId)) {
           profileInView.click();
-          await sweepSleep(1000);
+          await sweepSleep(1200);
           return likeFollowActive;
         }
         return true;
@@ -1151,7 +1154,7 @@ async function executeLikeFollow() {
         var nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
         if (!nextBtn || nextBtn.disabled) break;
         nextBtn.click();
-        await sweepSleep(1500);
+        await sweepSleep(2000);
         continue;
       }
       break;
@@ -1170,7 +1173,7 @@ async function executeLikeFollow() {
         console.log('[LIKEFOLLOW] No se pudo navegar al perfil', contactId);
         continue;
       }
-      await sweepSleep(1200);
+      await sweepSleep(1500);
       if (!likeFollowActive) break;
 
       registerIdInStarTools(contactId, 'Like');
@@ -1184,7 +1187,7 @@ async function executeLikeFollow() {
       );
       if (likeBtn && likeBtn.offsetParent) {
         likeBtn.click();
-        await sweepSleep(80);
+        await sweepSleep(200);
       }
 
       if (!likeFollowActive) break;
@@ -1197,59 +1200,72 @@ async function executeLikeFollow() {
         var ftxt = (followBtn.textContent || '').toLowerCase();
         if (ftxt.includes('follow') || ftxt.includes('seguir') || ftxt.includes('+')) {
           followBtn.click();
-          await sweepSleep(80);
+          await sweepSleep(200);
         }
       }
 
       if (!likeFollowActive) break;
       // 3) ABRIR AVATAR → LIKE A FOTO DE PERFIL (visible)
       var avatarEl = document.querySelector(
-        '[class*="avatar"] a, [class*="photo"] a, [class*="profile-pic"] a,' +
         'img[class*="avatar"], img[class*="profile-pic"], img[class*="main-photo"],' +
-        'a[href*="/photo"]:not([disabled])'
+        '[class*="avatar"]:not([disabled]), [class*="profile-photo"]:not([disabled]),' +
+        'a[href*="/photo"]:not([disabled]), [class*="photo"]:not([disabled])'
       );
       if (avatarEl && avatarEl.offsetParent) {
         avatarEl.click();
-        await sweepSleep(1000);
+        await sweepSleep(1500);
         if (!likeFollowActive) break;
         var avatarLike = document.querySelector(
-          '[class*="modal"] [class*="like"]:not([disabled]), [class*="overlay"] [class*="like"]:not([disabled]),' +
-          '[class*="lightbox"] [class*="like"]:not([disabled]), [class*="photo-view"] [class*="like"]:not([disabled])'
+          'button[class*="like"]:not([disabled]), [class*="modal"] [class*="like"]:not([disabled]),' +
+          '[class*="overlay"] [class*="like"]:not([disabled]), [class*="photo"] [class*="like"]:not([disabled]),' +
+          '[class*="like"]:not([disabled])'
         );
         if (avatarLike && avatarLike.offsetParent) {
           avatarLike.click();
-          await sweepSleep(400);
+          await sweepSleep(500);
           if (!likeFollowActive) break;
         }
         var closeBtn = document.querySelector(
-          '[class*="modal"] [class*="close"], [class*="overlay"] [class*="close"],' +
-          '[class*="modal"] button[class*="x"], button[aria-label*="Close"],' +
-          '[class*="lightbox"] [class*="close"]'
+          'button[class*="close"], button[aria-label*="Close"], [class*="modal"] [class*="close"],' +
+          '[class*="overlay"] [class*="close"], [class*="lightbox"] [class*="close"]'
         );
-        if (closeBtn && closeBtn.offsetParent) { closeBtn.click(); await sweepSleep(300); }
+        if (closeBtn && closeBtn.offsetParent) { closeBtn.click(); await sweepSleep(400); }
         else {
           var overlay = document.querySelector('[class*="modal"], [class*="overlay"], [class*="lightbox"], [class*="backdrop"]');
-          if (overlay) { overlay.click(); await sweepSleep(300); }
+          if (overlay) { overlay.click(); await sweepSleep(400); }
         }
       }
 
       if (!likeFollowActive) break;
       // 4) ABRIR MEDIA → LIKE A 3 FOTOS (visible)
-      var mediaTab = findButton(['Media', 'Fotos', 'Photos', 'Galeria', 'Gallery', 'media', 'photo']);
+      var mediaTab = findButton(['Media', 'Fotos', 'Photos', 'Galeria', 'Gallery', 'media', 'photo', 'foto']);
       if (!mediaTab) {
         mediaTab = document.querySelector(
-          '[class*="media-tab"], [class*="gallery-tab"], [class*="photo-tab"],' +
-          'button[class*="media"], a[class*="media"], [class*="media"]'
+          'button[class*="media"], a[class*="media"], [class*="media"]:not([disabled]),' +
+          '[class*="gallery"]:not([disabled]), [class*="photo"]:not([disabled]),' +
+          'button:not([disabled]):not([class*="like"])'
         );
+        // Buscar por texto exacto
+        if (!mediaTab || !mediaTab.offsetParent) {
+          var allBtns = document.querySelectorAll('button, a, [role="tab"], [role="button"]');
+          for (var bi = 0; bi < allBtns.length; bi++) {
+            var btxt = (allBtns[bi].textContent || '').trim().toLowerCase();
+            if (btxt === 'media' || btxt === 'fotos' || btxt === 'photos' || btxt === 'galeria' || btxt === 'gallery' || btxt === 'foto') {
+              mediaTab = allBtns[bi];
+              break;
+            }
+          }
+        }
       }
       if (mediaTab && mediaTab.offsetParent) {
         mediaTab.click();
-        await sweepSleep(1000);
+        await sweepSleep(1500);
         if (!likeFollowActive) break;
         var mediaLikes = document.querySelectorAll(
           '[class*="media"] [class*="like"]:not([disabled]), [class*="gallery"] [class*="like"]:not([disabled]),' +
           '[class*="photo"] [class*="like"]:not([disabled]), [class*="media"] [class*="heart"]:not([disabled]),' +
-          '[class*="gallery"] [class*="heart"]:not([disabled]), [class*="photo"] [class*="heart"]:not([disabled])'
+          '[class*="gallery"] [class*="heart"]:not([disabled]), [class*="photo"] [class*="heart"]:not([disabled]),' +
+          'button[class*="like"]:not([disabled])'
         );
         var photoLikes = 0;
         for (var mi = 0; mi < mediaLikes.length; mi++) {
@@ -1257,7 +1273,7 @@ async function executeLikeFollow() {
           if (mediaLikes[mi].offsetParent) {
             mediaLikes[mi].click();
             photoLikes++;
-            await sweepSleep(400);
+            await sweepSleep(500);
             if (!likeFollowActive) break;
           }
         }
@@ -1273,28 +1289,31 @@ async function executeLikeFollow() {
       saveAllStates();
 
       if (!likeFollowActive) break;
-      // 5) VOLVER A PÁGINA ANTERIOR
+      // 5) VOLVER A BÚSQUEDA (con recarga forzada si es necesario)
       window.history.back();
-      await sweepSleep(1000);
+      await sweepSleep(1500);
 
-      // Esperar a que el DOM de la página anterior reaparezca
+      // Esperar a que reaparezcan los resultados de búsqueda
       var waitStart = Date.now();
-      while (Date.now() - waitStart < 2000) {
+      var searchRestored = false;
+      while (Date.now() - waitStart < 3000) {
         if (!likeFollowActive) break;
-        if (document.querySelector('a[href*="/' + contactId + '"]')) break;
-        if (context === 'search' && document.querySelectorAll('[class*="profile"], [class*="card"], [class*="user"]').length > 3) break;
-        if (context !== 'search' && document.querySelector('[class*="contact-list"], [class*="chat-list"], [class*="inbox"]')) break;
-        await sweepSleep(100);
+        if (document.querySelector('a[href*="/' + contactId + '"]')
+            || document.querySelector('[class*="search-result"], [class*="profile-card"]')) {
+          searchRestored = true;
+          break;
+        }
+        await sweepSleep(200);
       }
 
-      // Si no reapareció, navegar manualmente a la página de origen
-      if (!document.querySelector('a[href*="/' + contactId + '"]')) {
-        if (context === 'search') {
-          var srchBtn = findButton(['Buscar', 'Search', 'buscar', 'search']);
-          if (srchBtn) { srchBtn.click(); await sweepSleep(1500); }
-        } else {
-          var backBtn = findButton(['Atras', 'Back', 'Volver', 'atras', 'back']);
-          if (backBtn) { backBtn.click(); await sweepSleep(1000); }
+      // Forzar navegación a búsqueda si no se restauró
+      if (!searchRestored) {
+        console.log('[LIKEFOLLOW] Forzando navegacion a busqueda');
+        var srchBtn = findButton(['Buscar', 'Search', 'buscar', 'search', 'Browse']);
+        if (srchBtn) { srchBtn.click(); await sweepSleep(2500); }
+        else {
+          var homeLink = document.querySelector('a[href*="/search"], a[href*="/browse"], a[href*="/home"], a[href*="/inicio"]');
+          if (homeLink && homeLink.offsetParent) { homeLink.click(); await sweepSleep(2500); }
         }
       }
     }
@@ -1306,7 +1325,7 @@ async function executeLikeFollow() {
       var nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
       if (!nextBtn || nextBtn.disabled) break;
       nextBtn.click();
-      await sweepSleep(1500);
+      await sweepSleep(2500);
     } else {
       break;
     }
