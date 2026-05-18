@@ -1081,6 +1081,25 @@ function collectLFContacts(context) {
       var m = a.href && a.href.match(/\/(\d{6,15})(\/|$)/);
       if (m && m[1] && m[1].length >= 6 && ids.indexOf(m[1]) === -1) ids.push(m[1]);
     });
+    // Fallback: buscar IDs directamente si no se encontraron por links
+    if (ids.length === 0) {
+      var els = container.querySelectorAll('[data-id], [data-user-id], [data-contact-id], [data-member-id], [data-profile-id]');
+      els.forEach(function (el) {
+        var id = el.getAttribute('data-id') || el.getAttribute('data-user-id') ||
+                 el.getAttribute('data-contact-id') || el.getAttribute('data-member-id') ||
+                 el.getAttribute('data-profile-id');
+        if (id && /^\d{6,15}$/.test(id) && ids.indexOf(id) === -1) ids.push(id);
+      });
+    }
+    if (ids.length === 0) {
+      // Buscar IDs en el texto del container
+      var txt = container.textContent || '';
+      var numMatches = txt.match(/\b\d{6,15}\b/g) || [];
+      var seen = {};
+      numMatches.forEach(function (n) {
+        if (!seen[n] && ids.indexOf(n) === -1) { seen[n] = true; ids.push(n); }
+      });
+    }
     return ids.slice(0, 12);
   }
   if (context === 'messages') {
