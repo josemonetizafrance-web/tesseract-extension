@@ -78,7 +78,6 @@ async function initAdminPanel() {
       document.getElementById('create-office-section').style.display = 'none';
       document.getElementById('dev-section').style.display = 'none';
       document.getElementById('storage-debug-section').style.display = 'none';
-      document.getElementById('pending-users-section').style.display = 'none';
       document.getElementById('offices-section').style.display = 'none';
 
       // Ocultar filtro de oficinas (solo ve la suya)
@@ -114,7 +113,6 @@ async function initAdminPanel() {
       document.getElementById('create-user-section').style.display = 'block';
       document.getElementById('user-management-section').style.display = 'block';
       document.getElementById('dev-section').style.display = isMasterAdmin ? 'block' : 'none';
-      document.getElementById('pending-users-section').style.display = isMasterAdmin ? 'block' : 'none';
       if (isMasterAdmin) {
         document.getElementById('storage-debug-section').style.display = 'block';
       }
@@ -165,11 +163,6 @@ async function initAdminPanel() {
       const office = isOfficeAdmin && !isMasterAdmin ? userOffice : document.getElementById('office-filter').value;
       loadMetrics(office); loadActivityLog(office); 
     }, 5000);
-
-    // Cargar pendientes solo para master admin
-    if (isMasterAdmin) {
-      await loadPendingUsers();
-    }
 
   } catch (e) {
     console.error('[ADMIN] initAdminPanel Error:', e);
@@ -584,70 +577,4 @@ async function populateCalendarOfficeFilter() {
 }
 
 // ============ SOLICITUDES PENDIENTES ============
-async function loadPendingUsers() {
-  try {
-    const data = await apiFetch('/api/tess/auth/users');
-    console.log('[ADMIN] /api/tess/auth/users response:', JSON.stringify(data.users?.map(u => ({ email: u.email, is_approved: u.is_approved })), null, 2));
 
-    const tbody = document.getElementById('pending-user-table-body');
-    if (!tbody) return;
-
-    const pending = (data.users || []).filter(u => u.is_approved === 0 || u.is_approved === false);
-    console.log('[ADMIN] Pending users found:', pending.length, pending.map(u => u.email));
-
-    if (pending.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#555;padding:20px;">No hay solicitudes pendientes</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = pending.map(u => {
-      const email = u.email || '—';
-      const created = u.created_at ? new Date(u.created_at).toLocaleString('es-ES') : '—';
-      return `
-        <tr>
-          <td style="color:#e0e0e0;">${email}</td>
-          <td style="color:#888;font-size:11px;">${created}</td>
-          <td>
-            <button class="btn-approve" data-email="${email}" style="padding:4px 12px;background:#22c55e;border:1px solid #22c55e;color:#fff;border-radius:4px;cursor:pointer;font-size:11px;margin-right:4px;">APROBAR</button>
-            <button class="btn-reject" data-email="${email}" style="padding:4px 12px;background:#ef4444;border:1px solid #ef4444;color:#fff;border-radius:4px;cursor:pointer;font-size:11px;">RECHAZAR</button>
-          </td>
-        </tr>`;
-    }).join('');
-
-    tbody.querySelectorAll('.btn-approve').forEach(btn => {
-      btn.addEventListener('click', () => approveUser(btn.dataset.email));
-    });
-    tbody.querySelectorAll('.btn-reject').forEach(btn => {
-      btn.addEventListener('click', () => rejectUser(btn.dataset.email));
-    });
-  } catch (e) {
-    console.error('[ADMIN] Error cargando pendientes:', e.message);
-  }
-}
-
-async function approveUser(email) {
-  try {
-    await apiFetch('/api/tess/admin/approve-user', {
-      method: 'POST',
-      body: { email, approved: true }
-    });
-    alert('✅ ' + email + ' aprobado');
-    await loadPendingUsers();
-    await loadUserList();
-  } catch (e) {
-    alert('Error: ' + e.message);
-  }
-}
-
-async function rejectUser(email) {
-  try {
-    await apiFetch('/api/tess/admin/approve-user', {
-      method: 'POST',
-      body: { email, approved: false }
-    });
-    alert('❌ ' + email + ' rechazado');
-    await loadPendingUsers();
-  } catch (e) {
-    alert('Error: ' + e.message);
-  }
-}
