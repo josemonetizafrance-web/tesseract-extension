@@ -1175,8 +1175,18 @@ async function executeLikeFollow() {
   if (state && state.active && state.onProfile && urlP) {
     var pid = urlP[1];
     console.log('[LIKEFOLLOW] Procesando perfil:', pid);
-    await sweepSleep(3000);
-    if (!likeFollowActive) { cleanupSweep(state); return; }
+    // Esperar a que cargue el perfil (hasta 8s)
+    var profileReady = false;
+    for (var pw = 0; pw < 8000; pw += 300) {
+      if (!likeFollowActive) { cleanupSweep(state); return; }
+      if (document.querySelector('[class*="like"]:not([disabled]), [class*="heart"]:not([disabled])')) { profileReady = true; break; }
+      await sweepSleep(300);
+    }
+    if (!profileReady) {
+      console.log('[LIKEFOLLOW] Perfil no cargo a tiempo');
+      location.href = state.searchUrl || '/search/all';
+      return;
+    }
 
     registerIdInStarTools(pid, 'Like');
     registerIdInStarTools(pid, 'Follow');
@@ -1190,7 +1200,7 @@ async function executeLikeFollow() {
       if (ft.indexOf('follow') !== -1 || ft.indexOf('seguir') !== -1 || ft === '+') { followBtn.click(); await sweepSleep(200); }
     }
 
-    var avatarEl = document.querySelector('.avatar-card, img[alt="Profile avatar"], [class*="avatar"]:not([disabled])');
+    var avatarEl = document.querySelector('.avatar-card, img[alt="Profile avatar"], [class*="avatar-card"], [class*="profile-photo"]:not([disabled])');
     if (avatarEl && avatarEl.offsetParent) {
       avatarEl.click(); await sweepSleep(1500);
       var al = document.querySelector('[class*="like"]:not([disabled])');
@@ -1200,9 +1210,15 @@ async function executeLikeFollow() {
       await sweepSleep(400);
     }
 
-    var pl = 0, mediaBtns = document.querySelectorAll('[data-test-id*="photo"] [class*="like"], [class*="media-card"] [class*="like"], [class*="gallery"] [class*="like"]:not([disabled])');
-    for (var mi = 0; mi < mediaBtns.length && pl < 3; mi++) {
-      if (mediaBtns[mi].offsetParent && mediaBtns[mi] !== likeBtn) { mediaBtns[mi].click(); pl++; await sweepSleep(500); }
+    var pl = 0, photoCards = document.querySelectorAll('[data-test-id*="photo"] .media-card__item, [class*="media-card"]:not([disabled])');
+    for (var mi = 0; mi < photoCards.length && pl < 3; mi++) {
+      if (!photoCards[mi].offsetParent) continue;
+      photoCards[mi].click(); await sweepSleep(1500);
+      var ml = document.querySelector('[class*="like"]:not([disabled])');
+      if (ml && ml.offsetParent && ml !== likeBtn) { ml.click(); await sweepSleep(500); pl++; }
+      var cb2 = document.querySelector('button[class*="close"], [class*="modal"] [class*="close"]');
+      if (cb2 && cb2.offsetParent) cb2.click(); else { var ov2 = document.querySelector('[class*="modal"], [class*="overlay"]'); if (ov2) ov2.click(); }
+      await sweepSleep(400);
     }
 
     var newTotal = (state.totalGiven || 0) + 1;
@@ -1222,14 +1238,29 @@ async function executeLikeFollow() {
   // ==================== CASO 2 – DE VUELTA EN BUSQUEDA ====================
   if (state && state.active && !state.onProfile) {
     console.log('[LIKEFOLLOW] Busqueda reanudada');
-    await sweepSleep(2000);
-    if (!likeFollowActive) { cleanupSweep(state); return; }
 
     if (state.advancePage) {
       console.log('[LIKEFOLLOW] Avanzando pagina');
       var nb = findButton(['Siguiente', 'Next', 'next', '\u00BB', '\u203A', '>', 'Next page']);
       if (nb && !nb.disabled) { nb.click(); await sweepSleep(2500); }
       else { cleanupSweep(state); return; }
+    }
+
+    // Esperar hasta que aparezcan enlaces de perfil en la busqueda
+    var linksFound = false;
+    for (var waitMs = 0; waitMs < 8000; waitMs += 300) {
+      if (!likeFollowActive) { cleanupSweep(state); return; }
+      if (document.querySelector('a[href*="/profile/"]')) { linksFound = true; break; }
+      await sweepSleep(300);
+    }
+    if (!linksFound) {
+      console.log('[LIKEFOLLOW] No aparecieron resultados tras esperar');
+      if (state.advancePage) { cleanupSweep(state); return; }
+      saveState({ contactIds: [], totalGiven: state.totalGiven, page: state.page,
+        processedIds: (state.processedIds || []), searchUrl: state.searchUrl,
+        advancePage: true, onProfile: false, active: true });
+      setTimeout(function () { executeLikeFollow(); }, 1000);
+      return;
     }
 
     var allIds = collectLFContacts('search');
