@@ -1101,26 +1101,23 @@ function collectLFContacts(context) {
 
 // ============ NAVEGAR AL PERFIL DESDE CUALQUIER CONTEXTO ============
 async function navigateToProfile(contactId, context) {
-  // Buscar link directo al perfil
   var link = document.querySelector('a[href*="/' + contactId + '"]');
   if (link && link.offsetParent) {
     link.click();
-    await sleep(2000);
+    await sleep(800);
     return true;
   }
-  // Si no hay link directo, intentar navegación contextual
   if (context === 'messages' || context === 'mail') {
     var list = document.querySelector('[class*="contact-list"], [class*="chat-list"], [class*="conversation"], [class*="dialog"], [class*="messages"], [class*="inbox"], [class*="mail-list"]');
     if (list) {
       var target = list.querySelector('a[href*="' + contactId + '"], [data-id="' + contactId + '"], [data-user-id="' + contactId + '"], [data-contact-id="' + contactId + '"]');
       if (target && target.offsetParent) {
         target.click();
-        await sleep(2000);
-        // Intentar click en header del perfil desde la vista de chat/carta
+        await sleep(1000);
         var profileInView = document.querySelector('a[href*="/profile/"], a[href*="/member/"], a[href*="/user/"]');
         if (profileInView && profileInView.offsetParent && profileInView.href.includes(contactId)) {
           profileInView.click();
-          await sleep(2000);
+          await sleep(1000);
           return true;
         }
         return true;
@@ -1150,7 +1147,7 @@ async function executeLikeFollow() {
         var nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
         if (!nextBtn || nextBtn.disabled) break;
         nextBtn.click();
-        await sleep(3000);
+        await sleep(1500);
         continue;
       }
       break;
@@ -1168,7 +1165,7 @@ async function executeLikeFollow() {
         console.log('[LIKEFOLLOW] No se pudo navegar al perfil', contactId);
         continue;
       }
-      await sleep(3000);
+      await sleep(1200);
 
       registerIdInStarTools(contactId, 'Like');
       registerIdInStarTools(contactId, 'Follow');
@@ -1180,7 +1177,7 @@ async function executeLikeFollow() {
       );
       if (likeBtn && likeBtn.offsetParent) {
         likeBtn.click();
-        await sleep(300);
+        await sleep(80);
       }
 
       // 2) FOLLOW
@@ -1192,7 +1189,7 @@ async function executeLikeFollow() {
         var ftxt = (followBtn.textContent || '').toLowerCase();
         if (ftxt.includes('follow') || ftxt.includes('seguir') || ftxt.includes('+')) {
           followBtn.click();
-          await sleep(300);
+          await sleep(80);
         }
       }
 
@@ -1204,24 +1201,24 @@ async function executeLikeFollow() {
       );
       if (avatarEl && avatarEl.offsetParent) {
         avatarEl.click();
-        await sleep(1500);
+        await sleep(600);
         var avatarLike = document.querySelector(
           '[class*="modal"] [class*="like"]:not([disabled]), [class*="overlay"] [class*="like"]:not([disabled]),' +
           '[class*="lightbox"] [class*="like"]:not([disabled]), [class*="photo-view"] [class*="like"]:not([disabled])'
         );
         if (avatarLike && avatarLike.offsetParent) {
           avatarLike.click();
-          await sleep(300);
+          await sleep(100);
         }
         var closeBtn = document.querySelector(
           '[class*="modal"] [class*="close"], [class*="overlay"] [class*="close"],' +
           '[class*="modal"] button[class*="x"], button[aria-label*="Close"],' +
           '[class*="lightbox"] [class*="close"]'
         );
-        if (closeBtn && closeBtn.offsetParent) { closeBtn.click(); await sleep(500); }
+        if (closeBtn && closeBtn.offsetParent) { closeBtn.click(); await sleep(200); }
         else {
           var overlay = document.querySelector('[class*="modal"], [class*="overlay"], [class*="lightbox"], [class*="backdrop"]');
-          if (overlay) { overlay.click(); await sleep(500); }
+          if (overlay) { overlay.click(); await sleep(200); }
         }
       }
 
@@ -1235,7 +1232,7 @@ async function executeLikeFollow() {
       }
       if (mediaTab && mediaTab.offsetParent) {
         mediaTab.click();
-        await sleep(1500);
+        await sleep(800);
         var mediaLikes = document.querySelectorAll(
           '[class*="media"] [class*="like"]:not([disabled]), [class*="gallery"] [class*="like"]:not([disabled]),' +
           '[class*="photo"] [class*="like"]:not([disabled]), [class*="media"] [class*="heart"]:not([disabled]),' +
@@ -1247,7 +1244,7 @@ async function executeLikeFollow() {
           if (mediaLikes[mi].offsetParent) {
             mediaLikes[mi].click();
             photoLikes++;
-            await sleep(200);
+            await sleep(80);
           }
         }
       }
@@ -1262,26 +1259,26 @@ async function executeLikeFollow() {
 
       // 5) VOLVER A PÁGINA ANTERIOR
       window.history.back();
-      await sleep(2500);
+      await sleep(1000);
 
       // Esperar a que el DOM de la página anterior reaparezca
       var waitStart = Date.now();
-      while (Date.now() - waitStart < 5000) {
+      while (Date.now() - waitStart < 2000) {
         if (!likeFollowActive) break;
         if (document.querySelector('a[href*="/' + contactId + '"]')) break;
         if (context === 'search' && document.querySelectorAll('[class*="profile"], [class*="card"], [class*="user"]').length > 3) break;
         if (context !== 'search' && document.querySelector('[class*="contact-list"], [class*="chat-list"], [class*="inbox"]')) break;
-        await sleep(300);
+        await sleep(100);
       }
 
       // Si no reapareció, navegar manualmente a la página de origen
       if (!document.querySelector('a[href*="/' + contactId + '"]')) {
         if (context === 'search') {
           var srchBtn = findButton(['Buscar', 'Search', 'buscar', 'search']);
-          if (srchBtn) { srchBtn.click(); await sleep(3000); }
+          if (srchBtn) { srchBtn.click(); await sleep(1500); }
         } else {
           var backBtn = findButton(['Atras', 'Back', 'Volver', 'atras', 'back']);
-          if (backBtn) { backBtn.click(); await sleep(2000); }
+          if (backBtn) { backBtn.click(); await sleep(1000); }
         }
       }
     }
@@ -1293,7 +1290,7 @@ async function executeLikeFollow() {
       var nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
       if (!nextBtn || nextBtn.disabled) break;
       nextBtn.click();
-      await sleep(3000);
+      await sleep(1500);
     } else {
       break;
     }
