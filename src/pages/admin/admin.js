@@ -153,6 +153,7 @@ async function initAdminPanel() {
     document.getElementById('btn-create-user').addEventListener('click', createUser);
     document.getElementById('btn-create-office').addEventListener('click', createOffice);
     document.getElementById('btn-load-calendar').addEventListener('click', loadCalendar);
+    document.getElementById('btnResetLog').addEventListener('click', resetActivityLog);
 
     const initialOffice = isOfficeAdmin && !isMasterAdmin ? userOffice : 'all';
     await loadMetrics(initialOffice);
@@ -367,6 +368,20 @@ async function loadActivityLog(office = 'all') {
   } catch (e) { 
     const container = document.getElementById('log-container');
     if (container) container.innerHTML = '<div style="padding:20px;color:#ef4444;">Error: ' + e.message + '</div>';
+  }
+}
+
+async function resetActivityLog() {
+  if (!confirm('¿Estás seguro de eliminar todo el registro de actividad?')) return;
+  try {
+    const office = isOfficeAdmin && !isMasterAdmin ? userOffice : document.getElementById('office-filter')?.value || 'all';
+    const query = office && office !== 'all' ? `?office=${encodeURIComponent(office)}` : '';
+    const data = await apiFetch(`/api/tess/admin/activity-log${query}`, { method: 'DELETE' });
+    if (data.success) {
+      await loadActivityLog(office);
+    }
+  } catch (e) {
+    alert('Error al resetear log: ' + e.message);
   }
 }
 

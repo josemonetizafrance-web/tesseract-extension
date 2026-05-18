@@ -37,6 +37,7 @@
     var navItem = document.querySelector('.nav-item[data-view="' + viewName + '"]');
     if (navItem) navItem.classList.add('active');
     if (viewName === 'notes') renderMyNotes();
+    if (viewName === 'cribs') renderCribs();
   }
 
   function renderMyNotes() {
@@ -147,6 +148,224 @@
         data.users.map(function (u) { return '<option value="' + escapeHtml(u.email) + '">' + escapeHtml(u.email) + (u.office ? ' (' + escapeHtml(u.office) + ')' : '') + '</option>'; }).join('');
     }).catch(function () {
       select.innerHTML = '<option value="">Error al cargar usuarios</option>';
+    });
+  }
+
+  // ====== CRIBS ======
+  var cribsData = [];
+  var cribSortField = 'updated_at';
+  var cribSortDir = -1;
+
+  function cribsApi(path, options) {
+    return fetch(TESSERACT_API + path, {
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentJwt },
+      ...options
+    });
+  }
+
+  function renderCribs() {
+    cribsApi('/api/tess/cribs').then(function (r) { return r.json(); }).then(function (data) {
+      cribsData = data.cribs || [];
+      applyCribFilters();
+    }).catch(function () {
+      document.getElementById('crib-table-placeholder').innerHTML = '<p style="color:#ef4444;">Error al cargar CRIBS</p>';
+    });
+  }
+
+  function applyCribFilters() {
+    var search = (document.getElementById('crib-search').value || '').toLowerCase();
+    var statusFilter = document.getElementById('crib-filter-status').value;
+    var priorityFilter = document.getElementById('crib-filter-priority').value;
+
+    var filtered = cribsData.filter(function (e) {
+      if (statusFilter && e.status !== statusFilter) return false;
+      if (priorityFilter && e.priority !== priorityFilter) return false;
+      if (search) {
+        var text = (e.profile_id + ' ' + e.profile_name + ' ' + e.country + ' ' + e.interests + ' ' + e.quick_notes).toLowerCase();
+        if (text.indexOf(search) === -1) return false;
+      }
+      return true;
+    });
+
+    // Sort
+    filtered.sort(function (a, b) {
+      var va = a[cribSortField], vb = b[cribSortField];
+      if (va == null) va = '';
+      if (vb == null) vb = '';
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * cribSortDir;
+      return String(va).localeCompare(String(vb)) * cribSortDir;
+    });
+
+    renderCribsTable(filtered);
+  }
+
+  function renderCribsTable(list) {
+    var container = document.getElementById('crib-table-container');
+    var countEl = document.getElementById('crib-count');
+    countEl.textContent = list.length + ' / ' + cribsData.length + ' registros';
+
+    if (!list.length) {
+      container.innerHTML = '<div style="text-align:center;padding:30px;color:#555570;font-size:11px;">' +
+        (cribsData.length ? 'Sin resultados' : 'No hay registros en CRIBS. Agrega un ID arriba.') + '</div>';
+      return;
+    }
+
+    var fields = [
+      { key: 'profile_id', label: 'ID Usuario', editable: false },
+      { key: 'profile_name', label: 'Nombre', editable: true },
+      { key: 'country', label: 'Pa\u00eds', editable: true, type: 'select', options: ['','USA','UK','Canada','Australia','Espa\u00f1a','M\u00e9xico','Colombia','Argentina','Chile','Per\u00fa','Brasil','Alemania','Francia','Italia','Otro'] },
+      { key: 'age', label: 'Edad', editable: true, type: 'number' },
+      { key: 'interests', label: 'Intereses', editable: true },
+      { key: 'status', label: 'Status', editable: true, type: 'select', options: ['Nuevo','Activo','VIP','Fr\u00edo','Inactivo'] },
+      { key: 'last_contact', label: '\u00daltimo Contacto', editable: false },
+      { key: 'preferred_template', label: 'Plantilla Preferida', editable: true, type: 'select', options: ['default','romantica','amistad','negocios','calida','divertida'] },
+      { key: 'quick_notes', label: 'Notas R\u00e1pidas', editable: true },
+      { key: 'priority', label: 'Prioridad', editable: true, type: 'select', options: ['Alta','Media','Baja'] }
+    ];
+
+    var html = '<table class="crib-table"><thead><tr>';
+    fields.forEach(function (f) {
+      var arrow = '';
+      if (cribSortField === f.key) arrow = cribSortDir === 1 ? ' ▲' : ' ▼';
+      html += '<th onclick="window._cribSort(\'' + f.key + '\')">' + f.label + '<span class="sort-arrow">' + arrow + '</span></th>';
+    });
+    html += '<th style="width:60px;">ACCI\u00d3N</th></tr></thead><tbody>';
+
+    list.forEach(function (entry) {
+      var prioClass = '';
+      if (entry.priority === 'Alta') prioClass = 'prio-alta';
+      else if (entry.priority === 'Media') prioClass = 'prio-media';
+      else if (entry.priority === 'Baja') prioClass = 'prio-baja';
+
+      var statusClass = '';
+      if (entry.status === 'VIP') statusClass = 'status-vip';
+      else if (entry.status === 'Activo') statusClass = 'status-activo';
+      else if (entry.status === 'Nuevo') statusClass = 'status-nuevo';
+      else if (entry.status === 'Fr\u00edo') statusClass = 'status-frio';
+      else if (entry.status === 'Inactivo') statusClass = 'status-inactivo';
+
+      html += '<tr>';
+      fields.forEach(function (f) {
+        var val = entry[f.key] || '';
+        html += '<td>';
+        if (!f.editable) {
+          if (f.key === 'profile_id') html += '<span style="font-weight:600;color:#c4b5fd;">' + escapeHtml(val) + '</span>';
+          else if (f.key === 'last_contact') html += val ? new Date(val).toLocaleDateString() : '<span style="color:#555;">—</span>';
+          else html += escapeHtml(val);
+        } else if (f.type === 'select') {
+          var cls = f.key === 'priority' ? prioClass : (f.key === 'status' ? statusClass : '');
+          html += '<select class="cell-select ' + cls + '" onchange="window._cribUpdate(\'' + entry._id + '\',\'' + f.key + '\',this.value)">';
+          f.options.forEach(function (o) {
+            html += '<option value="' + escapeHtml(o) + '"' + (val === o ? ' selected' : '') + '>' + escapeHtml(o || '—') + '</option>';
+          });
+          html += '</select>';
+        } else if (f.type === 'number') {
+          html += '<span class="cell-editable" contenteditable="true" data-id="' + entry._id + '" data-field="' + f.key + '" data-type="number" role="textbox">' + escapeHtml(val) + '</span>';
+        } else {
+          html += '<span class="cell-editable" contenteditable="true" data-id="' + entry._id + '" data-field="' + f.key + '" role="textbox">' + escapeHtml(val) + '</span>';
+        }
+        html += '</td>';
+      });
+      html += '<td style="white-space:nowrap;">' +
+        '<button class="btn-crib-chat" onclick="window._cribChat(\'' + escapeHtml(entry.profile_id) + '\')" title="Abrir chat">\uD83D\uDCAC</button>' +
+        '<button class="btn-crib-del" onclick="window._cribDelete(\'' + entry._id + '\')" title="Eliminar">✕</button>' +
+        '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+
+    // Attach contenteditable blur listeners
+    container.querySelectorAll('.cell-editable').forEach(function (el) {
+      el.addEventListener('blur', function () {
+        var val = this.textContent.trim();
+        var original = '';
+        var entry = cribsData.find(function (e) { return e._id === this.dataset.id; }.bind(this));
+        if (entry) original = String(entry[this.dataset.field] || '');
+        if (val === original) return;
+        if (this.dataset.type === 'number') val = val ? parseInt(val) || 0 : null;
+        window._cribUpdate(this.dataset.id, this.dataset.field, val);
+      });
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); this.blur(); }
+      });
+    });
+  }
+
+  window._cribSort = function (field) {
+    if (cribSortField === field) cribSortDir *= -1;
+    else { cribSortField = field; cribSortDir = 1; }
+    applyCribFilters();
+  };
+
+  window._cribUpdate = function (id, field, value) {
+    cribsApi('/api/tess/cribs/' + id, {
+      method: 'PUT',
+      body: JSON.stringify({ field: field, value: value })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.success) {
+        // Update local data
+        var entry = cribsData.find(function (e) { return e._id === id; });
+        if (entry) entry[field] = value;
+      }
+    }).catch(function () {});
+  };
+
+  window._cribChat = function (profileId) {
+    chrome.tabs.create({ url: 'https://talkytimes.com/profile/' + profileId, active: true });
+  };
+
+  window._cribDelete = function (id) {
+    if (!confirm('Eliminar este registro de CRIBS?')) return;
+    cribsApi('/api/tess/cribs/' + id, { method: 'DELETE' }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.success) {
+        cribsData = cribsData.filter(function (e) { return e._id !== id; });
+        applyCribFilters();
+      }
+    }).catch(function () {});
+  };
+
+  function initCribs() {
+    document.getElementById('btn-back-dash-cribs').addEventListener('click', function () {
+      switchView('dashboard');
+    });
+
+    document.getElementById('btn-crib-add').addEventListener('click', function () {
+      var id = document.getElementById('crib-add-id').value.trim();
+      if (!id) return;
+      cribsApi('/api/tess/cribs', {
+        method: 'POST',
+        body: JSON.stringify({ profile_id: id })
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d.success) {
+          document.getElementById('crib-add-id').value = '';
+          cribsData = d.cribs || [];
+          applyCribFilters();
+        } else {
+          alert(d.error || 'Error al agregar');
+        }
+      }).catch(function () { alert('Error de conexion'); });
+    });
+
+    document.getElementById('crib-add-id').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') document.getElementById('btn-crib-add').click();
+    });
+
+    document.getElementById('btn-crib-open-table').addEventListener('click', function () {
+      renderCribs();
+    });
+
+    document.getElementById('crib-search').addEventListener('input', function () {
+      applyCribFilters();
+    });
+
+    document.getElementById('crib-filter-status').addEventListener('change', function () {
+      applyCribFilters();
+    });
+
+    document.getElementById('crib-filter-priority').addEventListener('change', function () {
+      applyCribFilters();
     });
   }
 
@@ -303,5 +522,6 @@
     });
 
     initNotes();
+    initCribs();
   });
 })();

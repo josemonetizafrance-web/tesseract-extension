@@ -20,7 +20,7 @@ async function loadAABlacklist() {
         headers: { 'Authorization': 'Bearer ' + stored.tess_jwt }
       });
       const data = await res.json();
-      aaBlacklist = data.blacklist || [];
+      aaBlacklist = (data.blacklist || []).map(String);
     }
   } catch (e) {}
 }
@@ -28,7 +28,7 @@ async function loadAABlacklist() {
 // Verificar blacklist
 function isInAABlacklist(contactId) {
   if (!contactId) return false;
-  return aaBlacklist.includes(contactId);
+  return aaBlacklist.includes(String(contactId));
 }
 
 // Iniciar carga

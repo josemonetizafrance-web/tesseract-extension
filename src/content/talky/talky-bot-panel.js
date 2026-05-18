@@ -35,16 +35,18 @@ function isBlacklisted(contactId) {
   return blacklist.includes(contactId);
 }
 
-// Guardar blacklist en servidor
+// Guardar blacklist en servidor (sin cronizar IDs)
 async function saveBlacklist() {
   try {
     const stored = await chrome.storage.local.get(['tess_jwt']);
     if (stored.tess_jwt) {
-      await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
+      const res = await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + stored.tess_jwt },
         body: JSON.stringify({ blacklist })
       });
+      const data = await res.json();
+      if (data.blacklist) blacklist = data.blacklist;
       // Recargar blacklist en mailing y auto-answer
       if (typeof reloadMLBlacklist === 'function') reloadMLBlacklist();
       if (typeof loadAABlacklist === 'function') loadAABlacklist();
@@ -166,6 +168,7 @@ let currentUser = null;
 let currentClientName = 'Cliente';
 let likesActive = false;
 let followsActive = false;
+let likeFollowActive = false;
 // Variables para Saludos Masivos (deshabilitado UI, código disponible)
 let saludosActive = false;
 // Variables para Cartas (deshabilitado UI, código disponible)
@@ -288,13 +291,15 @@ function startBackgroundIdCapture() {
   // Escanear cada 3 segundos mientras haya barridos activos
   setInterval(() => {
     if (!isAuthenticated) return;
-    if (!likesActive && !followsActive) return;
+    if (!likeFollowActive) return;
     
     const ids = scanPageForIds();
     
     ids.forEach(id => {
-      if (likesActive) registerIdInStarTools(id, 'Like');
-      if (followsActive) registerIdInStarTools(id, 'Follow');
+      if (likeFollowActive) {
+        registerIdInStarTools(id, 'Like');
+        registerIdInStarTools(id, 'Follow');
+      }
     });
   }, 3000);
   
@@ -302,16 +307,18 @@ function startBackgroundIdCapture() {
   let lastUrl = location.href;
   setInterval(() => {
     if (!isAuthenticated) return;
-    if (!likesActive && !followsActive) return;
+    if (!likeFollowActive) return;
     if (location.href !== lastUrl) {
       lastUrl = location.href;
       setTimeout(() => {
         if (!isAuthenticated) return;
-        if (!likesActive && !followsActive) return;
+        if (!likeFollowActive) return;
         const ids = scanPageForIds();
         ids.forEach(id => {
-          if (likesActive) registerIdInStarTools(id, 'Like');
-          if (followsActive) registerIdInStarTools(id, 'Follow');
+          if (likeFollowActive) {
+            registerIdInStarTools(id, 'Like');
+            registerIdInStarTools(id, 'Follow');
+          }
         });
       }, 1500);
     }
@@ -474,8 +481,7 @@ function createMainPanel() {
 
 <!-- SUB-PESTAÑAS DEL BOT -->
 <div class="bot-subnav">
-  <button class="bot-subbtn" data-botsub="likes">❤️ LIKES</button>
-  <button class="bot-subbtn" data-botsub="follows">➕ FOLLOWS</button>
+  <button class="bot-subbtn" data-botsub="likefollow">❤️➕ LIKE & FOLLOW</button>
   <button class="bot-subbtn" data-botsub="eater">🧠 EATER</button>
   <button class="bot-subbtn" data-botsub="icebreakers">🎯 ICEBREAKERS</button>
 </div>
@@ -483,23 +489,14 @@ function createMainPanel() {
 <!-- CONTENEDOR DE VENTANAS -->
 <div class="bot-win-container" style="position:relative;min-height:200px;">
 
-<!-- SUB: LIKES -->
-<div class="bot-subpanel" id="botsubLikes" data-z="1">
-<button class="win-close" data-close="botsubLikes">×</button>
-<div class="mod-card" style="margin-bottom:8px;"><h4>❤️ BARRIDO DE LIKES</h4><div class="st" id="likesStatus" style="color:#ffffff;">INACTIVO</div><button id="btnLikesToggle">▶ INICIAR</button></div>
+<!-- SUB: LIKE & FOLLOW -->
+<div class="bot-subpanel" id="botsubLikefollow" data-z="1">
+<button class="win-close" data-close="botsubLikefollow">×</button>
+<div class="mod-card" style="margin-bottom:8px;"><h4>❤️➕ BARRIDO LIKE & FOLLOW</h4><div class="st" id="likeFollowStatus" style="color:#ffffff;">INACTIVO</div><button id="btnLikeFollowToggle">▶ INICIAR</button></div>
 <div class="stats-row">
 <div class="stat-mini"><span class="val" id="vLikes">0</span>LIKES</div>
 <div class="stat-mini"><span class="val" id="vFollows">0</span>FOLLOW</div>
-</div>
-</div>
-
-<!-- SUB: FOLLOWS -->
-<div class="bot-subpanel" id="botsubFollows" data-z="1">
-<button class="win-close" data-close="botsubFollows">×</button>
-<div class="mod-card" style="margin-bottom:8px;"><h4>➕ BARRIDO DE FOLLOWS</h4><div class="st" id="followsStatus" style="color:#ffffff;">INACTIVO</div><button id="btnFollowsToggle">▶ INICIAR</button></div>
-<div class="stats-row">
-<div class="stat-mini"><span class="val" id="vLikes2">0</span>LIKES</div>
-<div class="stat-mini"><span class="val" id="vFollows2">0</span>FOLLOW</div>
+<div class="stat-mini"><span class="val" id="vCombined">0</span>TOTAL</div>
 </div>
 </div>
 
@@ -737,8 +734,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
   
   // Botones de barrido
-  document.getElementById('btnLikesToggle').addEventListener('click', toggleLikes);
-  document.getElementById('btnFollowsToggle').addEventListener('click', toggleFollows);
+  document.getElementById('btnLikeFollowToggle').addEventListener('click', toggleLikeFollow);
   
   // Eater
   document.getElementById('btnEaterToggle').addEventListener('click', toggleEater);
@@ -963,15 +959,22 @@ function doLogout() {
 }
 
 // ============ MÓDULOS ============
-function toggleLikes() { likesActive = !likesActive; updateModUI('likes', likesActive); if(likesActive) executeLikes(); saveAllStates(); }
-function toggleFollows() { followsActive = !followsActive; updateModUI('follows', followsActive); if(followsActive) executeFollows(); saveAllStates(); }
+function toggleLikeFollow() {
+  likeFollowActive = !likeFollowActive;
+  likesActive = likeFollowActive;
+  followsActive = likeFollowActive;
+  updateModUI('likeFollow', likeFollowActive);
+  if (likeFollowActive) executeLikeFollow();
+  saveAllStates();
+}
 // Funciones de toggle deshabilitadas (mantener código para futuro)
 function toggleSaludos() { console.log('[TESSERACT] Saludos Masivos deshabilitado'); }
 function toggleCartas() { console.log('[TESSERACT] Cartas deshabilitado'); }
 
 function updateModUI(mod, active) {
-  const st = document.getElementById(mod + 'Status');
-  const btn = document.getElementById('btn' + mod.charAt(0).toUpperCase() + mod.slice(1) + 'Toggle');
+  var id = mod === 'likeFollow' ? 'likeFollow' : mod;
+  const st = document.getElementById(id + 'Status');
+  const btn = document.getElementById('btn' + id.charAt(0).toUpperCase() + id.slice(1) + 'Toggle');
   if(st) { st.textContent = active ? 'ACTIVO' : 'INACTIVO'; st.style.color = active ? '#4CAF50' : '#ffffff'; }
   if(btn) { btn.textContent = active ? '⏸ DETENER' : '▶ INICIAR'; btn.className = active ? 'on' : ''; }
 }
@@ -1032,102 +1035,57 @@ function scanPageForIds() {
   return Array.from(ids);
 }
 
-// ============ EJECUTAR LIKES (CAPTURA IDs) ============
-async function executeLikes() {
-  console.log('[LIKES] 🚀 Iniciando barrido...');
-  updateModUI('likes', true);
+// ============ EJECUTAR LIKE & FOLLOW (SIMULTÁNEO) ============
+async function executeLikeFollow() {
+  console.log('[LIKEFOLLOW] 🚀 Iniciando barrido combinado...');
+  updateModUI('likeFollow', true);
   
   const searchBtn = findButton(['Buscar', 'Search', 'buscar', 'search', 'Browse']);
   if (searchBtn) { searchBtn.click(); await sleep(2000); }
   
-  let page = 0, given = 0;
-  
-  while (likesActive && page < 50) {
+  let page = 0, likesGiven = 0, followsGiven = 0;
+
+  while (likeFollowActive && page < 50) {
     page++;
     
     // Capturar IDs de la página actual
-    scanPageForIds().forEach(id => registerIdInStarTools(id, 'Like'));
+    scanPageForIds().forEach(id => {
+      registerIdInStarTools(id, 'Like');
+      registerIdInStarTools(id, 'Follow');
+    });
     
+    // --- LIKES ---
     const likeBtns = document.querySelectorAll('[class*="like"], [class*="heart"], [class*="favorite"], [title*="Like"], [title*="like"], [aria-label*="Like"]');
     for (const btn of likeBtns) {
-      if (!likesActive) break;
-      
-      // Verificar blacklist
+      if (!likeFollowActive) break;
       const profile = btn.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="item"], [class*="result"]');
       if (profile) {
         const contactId = extractId(profile);
-        if (contactId && isBlacklisted(contactId)) {
-          console.log('[LIKES] ⛔ Skipped (blacklist):', contactId);
-          continue;
-        }
+        if (contactId && isBlacklisted(contactId)) continue;
       }
-      
       if (!btn.disabled && btn.offsetParent) {
         btn.click();
-        given++;
+        likesGiven++;
         botStats.likesGiven++;
-        console.log('[LIKES] Like dado! Total:', botStats.likesGiven);
         updateStats();
         renderStarIds();
         saveAllStates();
-        await sleep(200);
-        
-        const profile = btn.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="item"], [class*="result"]');
-        if (profile && !isPinnedOrSaved(profile)) {
-          const id = extractId(profile);
+        await sleep(150);
+        const p2 = btn.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="item"], [class*="result"]');
+        if (p2 && !isPinnedOrSaved(p2)) {
+          const id = extractId(p2);
           if (id) registerIdInStarTools(id, 'Like');
         }
       }
     }
-    
-    console.log('[LIKES] Página', page, '- Likes:', given, '- IDs totales:', collectedIds.Like.length);
-    
-    const nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
-    if (!nextBtn || nextBtn.disabled) break;
-    nextBtn.click();
-    await sleep(2500);
-  }
-  
-  await syncMetricsToStorage('LIKES', given);
-  likesActive = false;
-  updateModUI('likes', false);
-  saveAllStates();
-  console.log('[LIKES] ✅ Completado. Total IDs Likes:', collectedIds.Like.length);
-}
 
-// ============ EJECUTAR FOLLOWS (CAPTURA IDs) ============
-async function executeFollows() {
-  console.log('[FOLLOWS] 🚀 Iniciando barrido...');
-  updateModUI('follows', true);
-  
-  const searchBtn = findButton(['Buscar', 'Search', 'buscar', 'Browse']);
-  if (searchBtn) { searchBtn.click(); await sleep(2000); }
-  
-  let page = 0, given = 0;
-  
-  while (followsActive && page < 50) {
-    page++;
-    
-    scanPageForIds().forEach(id => registerIdInStarTools(id, 'Follow'));
-    
-    // DEBUG: Log all buttons on page to find follow button patterns
-    const allBtnsDebug = document.querySelectorAll('button, a.btn, [role="button"], .btn, [class*="btn"], [class*="Btn"], [class*="button"]');
-    const btnTexts = new Set();
-    allBtnsDebug.forEach(b => {
-      const t = (b.textContent || '').trim().slice(0, 50);
-      const cls = (b.className || '').toString();
-      if (t) btnTexts.add(`"${t}" [${cls}]`);
-    });
-    console.log('[FOLLOWS] DEBUG - All buttons on page:', Array.from(btnTexts).join(' | '));
-
+    // --- FOLLOWS ---
     const followBtns = document.querySelectorAll('[class*="follow"], [class*="subscribe"], [title*="Follow"], [aria-label*="Follow"]');
     const allBtns = document.querySelectorAll('button, a, [role="button"]');
     const followButtons = new Set();
-    
     for (const btn of followBtns) {
       if (!btn.disabled && btn.offsetParent) followButtons.add(btn);
     }
-    
     for (const btn of allBtns) {
       const text = (btn.textContent || '').toLowerCase().trim();
       const title = (btn.title || '').toLowerCase().trim();
@@ -1136,46 +1094,39 @@ async function executeFollows() {
         followButtons.add(btn);
       }
     }
-    
     for (const btn of followButtons) {
-      if (!followsActive) break;
-      
-      // Verificar blacklist
+      if (!likeFollowActive) break;
       const profile = btn.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="item"], [class*="result"], [class*="contact"]');
       const contactId = extractId(profile);
-      if (contactId && isBlacklisted(contactId)) {
-        console.log('[FOLLOWS] ⛔ Skipped (blacklist):', contactId);
-        continue;
-      }
-      
+      if (contactId && isBlacklisted(contactId)) continue;
       btn.click();
-      given++;
+      followsGiven++;
       botStats.followsGiven++;
-      console.log('[FOLLOWS] Follow dado! Total:', botStats.followsGiven);
       updateStats();
       renderStarIds();
       saveAllStates();
-      await sleep(300);
-      
+      await sleep(200);
       if (profile && !isPinnedOrSaved(profile)) {
         const id = extractId(profile);
         if (id) registerIdInStarTools(id, 'Follow');
       }
     }
     
-    console.log('[FOLLOWS] Página', page, '- Follows:', given, '- IDs totales:', collectedIds.Follow.length);
+    console.log('[LIKEFOLLOW] Pagina', page, '- Likes:', likesGiven, '- Follows:', followsGiven);
     
-    const nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>']);
+    const nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
     if (!nextBtn || nextBtn.disabled) break;
     nextBtn.click();
     await sleep(2500);
   }
   
-  await syncMetricsToStorage('FOLLOWS', given);
+  await syncMetricsToStorage('LIKEFOLLOW', likesGiven + followsGiven);
+  likeFollowActive = false;
+  likesActive = false;
   followsActive = false;
-  updateModUI('follows', false);
+  updateModUI('likeFollow', false);
   saveAllStates();
-  console.log('[FOLLOWS] ✅ Completado. Total IDs Follows:', collectedIds.Follow.length);
+  console.log('[LIKEFOLLOW] ✅ Completado. Likes:', likesGiven, '| Follows:', followsGiven);
 }
 
 // ============ AYUDA: DETECTAR CONTACTOS CON INTERÉS RECIENTE ============
@@ -1429,7 +1380,7 @@ function renderStarIds() {
   if (cntSaludo) cntSaludo.textContent = saludosCount;
   if (cntCartas) cntCartas.textContent = cartasCount;
   // Indicador LIVE con pulso cuando hay barrido activo
-  const anyActive = likesActive || followsActive || saludosActive || cartasActive;
+  const anyActive = likeFollowActive || saludosActive || cartasActive;
   if (totalLive) totalLive.innerHTML = anyActive
     ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#4CAF50;margin-right:5px;animation:blink 1s infinite;"></span>${totalAll} IDs capturados`
     : `${totalAll} IDs capturados`;
@@ -2183,12 +2134,10 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function updateStats() {
   const vLikes = document.getElementById('vLikes');
   const vFollows = document.getElementById('vFollows');
-  const vLikes2 = document.getElementById('vLikes2');
-  const vFollows2 = document.getElementById('vFollows2');
+  const vCombined = document.getElementById('vCombined');
   if (vLikes) vLikes.textContent = botStats.likesGiven;
   if (vFollows) vFollows.textContent = botStats.followsGiven;
-  if (vLikes2) vLikes2.textContent = botStats.likesGiven;
-  if (vFollows2) vFollows2.textContent = botStats.followsGiven;
+  if (vCombined) vCombined.textContent = botStats.likesGiven + botStats.followsGiven;
 }
 
 function makeDraggable(panelId, headerSel) {
@@ -2402,7 +2351,7 @@ function updateMLTabUI() {
 async function saveAllStates() {
   await chrome.storage.local.set({
     tess_auth: isAuthenticated, tess_user: currentUser,
-    tess_eater: eaterActive, tess_likes: likesActive, tess_follows: followsActive,
+    tess_eater: eaterActive, tess_likes: likesActive, tess_follows: followsActive, tess_likeFollow: likeFollowActive,
     tess_saludos: saludosActive, tess_cartas: cartasActive,
     tess_stats: botStats, tess_ids: collectedIds,
     bot_likesGiven: botStats.likesGiven,
