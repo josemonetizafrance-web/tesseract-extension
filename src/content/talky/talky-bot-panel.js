@@ -535,8 +535,7 @@ function createMainPanel() {
 <div class="user-bar">⭐ STAR TOOLS — <span id="starTotalLive">0 IDs capturados</span></div>
 <div class="st-tbar">
 <button class="st-fb sel" data-f="all">TODOS <span class="cnt" id="cntAll">0</span></button>
-<button class="st-fb" data-f="Like">❤️ <span class="cnt" id="cntLike">0</span></button>
-<button class="st-fb" data-f="Follow">➕ <span class="cnt" id="cntFollow">0</span></button>
+<button class="st-fb" data-f="L+F">❤️➕ L+F <span class="cnt" id="cntLF">0</span></button>
 <button class="st-fb" data-f="Saludo">👋 <span class="cnt" id="cntSaludo">0</span></button>
 <button class="st-fb" data-f="Cartas">📨 <span class="cnt" id="cntCartas">0</span></button>
 </div>
@@ -1378,19 +1377,18 @@ function renderStarIds() {
   
   const likesCount = (collectedIds.Like || []).length;
   const followsCount = (collectedIds.Follow || []).length;
+  const lfCount = likesCount + followsCount;
   const saludosCount = (collectedIds.Saludo || []).length;
   const cartasCount = (collectedIds.Cartas || []).length;
-  const totalAll = likesCount + followsCount + saludosCount + cartasCount;
+  const totalAll = lfCount + saludosCount + cartasCount;
   
   const cntAll = document.getElementById('cntAll');
-  const cntLike = document.getElementById('cntLike');
-  const cntFollow = document.getElementById('cntFollow');
+  const cntLF = document.getElementById('cntLF');
   const cntSaludo = document.getElementById('cntSaludo');
   const cntCartas = document.getElementById('cntCartas');
   
   if (cntAll) cntAll.textContent = totalAll;
-  if (cntLike) cntLike.textContent = likesCount;
-  if (cntFollow) cntFollow.textContent = followsCount;
+  if (cntLF) cntLF.textContent = lfCount;
   if (cntSaludo) cntSaludo.textContent = saludosCount;
   if (cntCartas) cntCartas.textContent = cartasCount;
   // Indicador LIVE con pulso cuando hay barrido activo
@@ -1402,6 +1400,10 @@ function renderStarIds() {
   let ids = [];
   if (currentStarFilter === 'all') {
     ['Like', 'Follow', 'Saludo', 'Cartas'].forEach(t => {
+      (collectedIds[t] || []).forEach(id => ids.push({ id: id, type: t }));
+    });
+  } else if (currentStarFilter === 'L+F') {
+    ['Like', 'Follow'].forEach(t => {
       (collectedIds[t] || []).forEach(id => ids.push({ id: id, type: t }));
     });
   } else {
@@ -2219,6 +2221,8 @@ function exportIDs() {
   let ids = [];
   if (currentStarFilter === 'all') {
     ['Like', 'Follow', 'Saludo', 'Cartas'].forEach(t => (collectedIds[t] || []).forEach(id => ids.push({ id, type: t })));
+  } else if (currentStarFilter === 'L+F') {
+    ['Like', 'Follow'].forEach(t => (collectedIds[t] || []).forEach(id => ids.push({ id, type: t })));
   } else {
     (collectedIds[currentStarFilter] || []).forEach(id => ids.push({ id, type: currentStarFilter }));
   }
@@ -2249,6 +2253,8 @@ function copyIDs() {
   let ids = [];
   if (currentStarFilter === 'all') {
     ['Like', 'Follow', 'Saludo', 'Cartas'].forEach(t => ids.push(...(collectedIds[t] || [])));
+  } else if (currentStarFilter === 'L+F') {
+    ['Like', 'Follow'].forEach(t => ids.push(...(collectedIds[t] || [])));
   } else {
     ids = collectedIds[currentStarFilter] || [];
   }
