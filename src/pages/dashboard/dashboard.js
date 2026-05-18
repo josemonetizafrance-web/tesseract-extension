@@ -135,8 +135,19 @@
   var sharingNoteId = null;
   function openShareModal(noteId) {
     sharingNoteId = noteId;
-    document.getElementById('share-user-email').value = '';
+    var select = document.getElementById('share-user-select');
+    select.innerHTML = '<option value="">Cargando usuarios...</option>';
     document.getElementById('share-modal').style.display = 'flex';
+    notesApi('/api/tess/notes/users').then(function (r) { return r.json(); }).then(function (data) {
+      if (!data.users || !data.users.length) {
+        select.innerHTML = '<option value="">No hay otros usuarios disponibles</option>';
+        return;
+      }
+      select.innerHTML = '<option value="">Selecciona un usuario...</option>' +
+        data.users.map(function (u) { return '<option value="' + escapeHtml(u.email) + '">' + escapeHtml(u.email) + (u.office ? ' (' + escapeHtml(u.office) + ')' : '') + '</option>'; }).join('');
+    }).catch(function () {
+      select.innerHTML = '<option value="">Error al cargar usuarios</option>';
+    });
   }
 
   function initNotes() {
@@ -186,8 +197,8 @@
       document.getElementById('share-modal').style.display = 'none';
     });
     document.getElementById('btn-confirm-share').addEventListener('click', function () {
-      var email = document.getElementById('share-user-email').value.trim();
-      if (!email) { showNotification('Ingresa el email del usuario', 'error'); return; }
+      var email = document.getElementById('share-user-select').value;
+      if (!email) { showNotification('Selecciona un usuario', 'error'); return; }
       notesApi('/api/tess/notes/' + sharingNoteId + '/share', {
         method: 'POST',
         body: JSON.stringify({ target_email: email })
