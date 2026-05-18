@@ -2,7 +2,6 @@
   var CHAT_TIMER_MS = 120000;
   var CARTA_TIMER_MS = 180000;
   var timers = {};
-  var lastIncoming = {};
   var notificationEl = null;
   var audioCtx = null;
 
@@ -48,7 +47,7 @@
     var typeEl = document.getElementById('tess-reminder-type');
     var msgEl = document.getElementById('tess-reminder-msg');
     if (typeEl) typeEl.textContent = type === 'carta' ? 'CARTA SIN RESPONDER' : 'CHAT SIN RESPONDER';
-    if (msgEl) msgEl.textContent = (clientName || 'Un contacto') + ' espera tu respuesta';
+    if (msgEl) msgEl.textContent = (clientName || 'Un contacto') + ' no responde';
     if (notificationEl) {
       notificationEl.style.transform = 'translateY(0)';
       notificationEl.style.opacity = '1';
@@ -80,78 +79,75 @@
     }, delay);
   }
 
-  function detectOutgoingMessage() {
-    var chatInputs = document.querySelectorAll(
-      'textarea[class*="chat"], textarea[class*="message"], textarea[placeholder*="mensaje"], textarea[placeholder*="message"],' +
-      'input[class*="chat"], input[class*="message"], #chatInput, #messageInput, #msgInput, textarea.chat-input,' +
-      'div[contenteditable="true"]'
-    );
-    var sendButtons = document.querySelectorAll(
-      'button[class*="send"], button[class*="enviar"], button[class*="submit"],' +
-      '[type="submit"], [class*="btn-send"], [class*="btn-enviar"],' +
-      'a[class*="send"], img[class*="send"]'
-    );
-    var hasContent = false;
-    chatInputs.forEach(function (el) {
-      if (el.value && el.value.trim()) hasContent = true;
-      if (el.textContent && el.textContent.trim()) hasContent = true;
-    });
-    if (hasContent || sendButtons.length > 0) {
-      for (var key in timers) {
-        if (timers.hasOwnProperty(key)) clearReminderTimer(key);
-      }
+  function getCurrentContactName() {
+    var selectors = [
+      '[class*="chat-header"] [class*="name"]', '[class*="dialog-header"] [class*="name"]',
+      '[class*="conversation-header"] [class*="name"]', '[class*="profile-name"]',
+      '[class*="contact-name"]', '[class*="user-name"]', '[class*="active"] [class*="name"]',
+      '[class*="chat"] [class*="title"]', '[class*="conversation"] [class*="title"]'
+    ];
+    for (var i = 0; i < selectors.length; i++) {
+      var el = document.querySelector(selectors[i]);
+      if (el && el.textContent.trim()) return el.textContent.trim();
     }
+    return null;
   }
 
-  function handleIncomingNode(node) {
-    var chatSelectors = [
+  function getCurrentContactId() {
+    var sel = '[class*="chat-header"] a[href*="/member/"], [class*="chat-header"] a[href*="/user/"], [class*="chat-header"] a[href*="/profile/"],' +
+      '[class*="dialog-header"] a[href*="/member/"], [class*="dialog-header"] a[href*="/user/"],' +
+      'a[href*="/member/"].active, a[href*="/profile/"].active, [class*="active"] a[href*="/member/"],' +
+      '[class*="active"] a[href*="/user/"]';
+    var links = document.querySelectorAll(sel);
+    for (var i = 0; i < links.length; i++) {
+      var parts = links[i].href.match(/\/(\d{6,15})/);
+      if (parts) return parts[1];
+    }
+    return Date.now().toString();
+  }
+
+  function onMessageSent() {
+    var name = getCurrentContactName() || 'Contacto';
+    var id = getCurrentContactId();
+    startReminderTimer(id, 'chat', name);
+  }
+
+  function onCartaSent() {
+    var name = getCurrentContactName() || 'Contacto';
+    var id = getCurrentContactId();
+    startReminderTimer(id, 'carta', name);
+  }
+
+  function isFromContact(node) {
+    var incomingSels = [
       '[class*="message-in"]', '[class*="message-received"]', '[class*="incoming"]',
       '[class*="other-message"]', '[class*="contact-message"]', '[class*="msg-other"]',
       '[class*="bubble-other"]', '[class*="dialog-item"]:not([class*="own"])',
       '[class*="chat-message"]:not([class*="sent"])', 'div[class*="message"]:not([class*="my"])'
     ];
-    var cartaSelectors = [
+    for (var i = 0; i < incomingSels.length; i++) {
+      var match = null;
+      if (node.matches && node.matches(incomingSels[i])) match = node;
+      else match = node.querySelector(incomingSels[i]);
+      if (match) return true;
+    }
+    var cartaSels = [
       '[class*="letter-in"]', '[class*="mail-in"]', '[class*="inbox-item"]',
       '[class*="mail-received"]', '[class*="email-received"]'
     ];
-    for (var sel in chatSelectors) {
-      var match = null;
-      if (node.matches && node.matches(chatSelectors[sel])) { match = node; }
-      else { match = node.querySelector(chatSelectors[sel]); }
-      if (match) {
-        var clientName = extractName(match) || 'Cliente';
-        var contactId = extractContactId(match) || 'chat_' + Date.now();
-        startReminderTimer(contactId, 'chat', clientName);
-        return;
-      }
-    }
-    for (var sel2 in cartaSelectors) {
+    for (var j = 0; j < cartaSels.length; j++) {
       var match2 = null;
-      if (node.matches && node.matches(cartaSelectors[sel2])) { match2 = node; }
-      else { match2 = node.querySelector(cartaSelectors[sel2]); }
-      if (match2) {
-        var clientName2 = extractName(match2) || 'Cliente';
-        var contactId2 = extractContactId(match2) || 'carta_' + Date.now();
-        startReminderTimer(contactId2, 'carta', clientName2);
-        return;
-      }
+      if (node.matches && node.matches(cartaSels[j])) match2 = node;
+      else match2 = node.querySelector(cartaSels[j]);
+      if (match2) return true;
     }
+    return false;
   }
 
-  function extractName(el) {
-    var selectors = ['[class*="name"]', '[class*="sender"]', '[class*="author"]', '[class*="username"]', '[class*="contact-name"]', '[class*="title"]'];
-    for (var i = 0; i < selectors.length; i++) {
-      var found = el.querySelector(selectors[i]);
-      if (found && found.textContent.trim()) return found.textContent.trim();
-    }
-    if (el.textContent.trim()) return el.textContent.trim().substring(0, 30);
-    return null;
-  }
-
-  function extractContactId(el) {
-    var id = el.getAttribute('data-user-id') || el.getAttribute('data-contact-id') || el.getAttribute('data-id');
+  function extractContactIdFromNode(node) {
+    var id = node.getAttribute('data-user-id') || node.getAttribute('data-contact-id') || node.getAttribute('data-id');
     if (id) return String(id);
-    var link = el.querySelector('a[href*="/member/"], a[href*="/user/"], a[href*="/profile/"]');
+    var link = node.querySelector('a[href*="/member/"], a[href*="/user/"], a[href*="/profile/"]');
     if (link) {
       var parts = link.href.match(/\/(\d{6,15})/);
       if (parts) return parts[1];
@@ -161,37 +157,49 @@
 
   function initReminder() {
     createNotification();
+
+    // MutationObserver: detecta mensajes entrantes del contacto → limpia timer
     var observer = new MutationObserver(function (mutations) {
       for (var i = 0; i < mutations.length; i++) {
-        var mutation = mutations[i];
-        if (mutation.addedNodes.length > 0) {
-          for (var j = 0; j < mutation.addedNodes.length; j++) {
-            var node = mutation.addedNodes[j];
-            if (node.nodeType === 1) handleIncomingNode(node);
+        var m = mutations[i];
+        if (m.addedNodes.length > 0) {
+          for (var j = 0; j < m.addedNodes.length; j++) {
+            var node = m.addedNodes[j];
+            if (node.nodeType !== 1) continue;
+            if (!isFromContact(node)) continue;
+            // Mensaje entrante del contacto → limpiar timer
+            for (var k in timers) {
+              if (timers.hasOwnProperty(k)) {
+                clearReminderTimer(k);
+              }
+            }
           }
         }
       }
     });
     var chatContainer = document.querySelector('[class*="chat"], [class*="message"], [class*="conversation"], [class*="inbox"], [class*="mail"], [class*="letter"]') || document.body;
     observer.observe(chatContainer, { childList: true, subtree: true });
+
+    // Click en botón de enviar → detectar mensaje saliente
     document.addEventListener('click', function (e) {
       var target = e.target;
-      if (target.matches && (
-        target.matches('button[class*="send"], button[class*="enviar"], [type="submit"], [class*="btn-send"]') ||
-        target.closest('button[class*="send"], button[class*="enviar"], [type="submit"], [class*="btn-send"]')
-      )) {
-        setTimeout(detectOutgoingMessage, 500);
+      var sendBtn = target.closest('button[class*="send"], button[class*="enviar"], [type="submit"], [class*="btn-send"], [class*="btn-enviar"], a[class*="send"]');
+      if (sendBtn) {
+        setTimeout(onMessageSent, 300);
       }
     });
+
+    // Enter en input de chat → detectar mensaje saliente
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) {
         var active = document.activeElement;
         if (active && (active.matches('textarea, input[type="text"], [contenteditable="true"]'))) {
-          setTimeout(detectOutgoingMessage, 500);
+          setTimeout(onMessageSent, 300);
         }
       }
     });
-    console.log('[TESSERACT REMINDER] Activo - Chat: 2min, Cartas: 3min');
+
+    console.log('[TESSERACT REMINDER] Activo - Chat: 2min | Carta: 3min');
   }
 
   if (document.readyState === 'loading') {
