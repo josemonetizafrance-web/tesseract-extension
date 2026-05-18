@@ -1032,9 +1032,9 @@ function scanPageForIds() {
   return Array.from(ids);
 }
 
-// ============ EJECUTAR LIKE & FOLLOW (POR PERFIL CON FOTO) ============
+// ============ EJECUTAR LIKE & FOLLOW (FOTO + MEDIA) ============
 async function executeLikeFollow() {
-  console.log('[LIKEFOLLOW] 🚀 Iniciando barrido por perfiles...');
+  console.log('[LIKEFOLLOW] 🚀 Iniciando barrido...');
   updateModUI('likeFollow', true);
   
   const searchBtn = findButton(['Buscar', 'Search', 'buscar', 'search', 'Browse']);
@@ -1049,81 +1049,123 @@ async function executeLikeFollow() {
     const profileCards = document.querySelectorAll(profileSelector);
     let pageActions = 0;
     
-    for (const card of profileCards) {
+    // LIKE: recolectar todos los botones like de la página
+    const allLikeEls = document.querySelectorAll(
+      '[class*="like"]:not([disabled]), [class*="heart"]:not([disabled]), [class*="favorite"]:not([disabled]),' +
+      '[title*="Like"]:not([disabled]), [title*="like"]:not([disabled]), [aria-label*="Like"]:not([disabled])'
+    );
+    const likeMap = new Map();
+    allLikeEls.forEach(function (el) {
+      var card = el.closest(profileSelector);
+      if (card) {
+        var id = extractId(card);
+        if (id) likeMap.set(id, { el: el, card: card });
+      }
+    });
+
+    // FOLLOW: recolectar todos los botones follow de la página
+    const allFollowEls = document.querySelectorAll(
+      '[class*="follow"]:not([disabled]), [class*="subscribe"]:not([disabled]),' +
+      '[title*="Follow"]:not([disabled]), [aria-label*="Follow"]:not([disabled])'
+    );
+    var allBtns = document.querySelectorAll('button:not([disabled]), a:not([disabled]), [role="button"]:not([disabled])');
+    allBtns.forEach(function (btn) {
+      var txt = (btn.textContent || '').toLowerCase().trim();
+      if (txt === 'follow' || txt === 'seguir' || txt === '+ follow' || txt === '+ seguir') {
+        var card = btn.closest(profileSelector);
+        if (card) {
+          var id = extractId(card);
+          if (id && !likeMap.has(id)) likeMap.set(id, { followEl: btn, card: card });
+          else if (id && likeMap.has(id)) likeMap.get(id).followEl = btn;
+        }
+      }
+    });
+
+    // Procesar cada perfil
+    for (var entry of likeMap.values()) {
       if (!likeFollowActive) break;
-      const contactId = extractId(card);
+      var card = entry.card;
+      var contactId = extractId(card);
       if (!contactId || isBlacklisted(contactId)) continue;
-      
-      // Verificar si tiene foto de perfil
-      const hasPhoto = card.querySelector('img') ||
-                       card.querySelector('[class*="avatar"], [class*="photo"], [class*="profile-pic"], [style*="background-image"]');
-      if (!hasPhoto) continue;
-      
-      // Registrar IDs
+
+      // Verificar si tiene foto (img, background-image, o avatar class)
+      var hasPhoto = card.querySelector('img') ||
+                     card.querySelector('[style*="background-image"]') ||
+                     card.querySelector('[class*="avatar"], [class*="photo"], [class*="profile-pic"], [class*="thumb"]');
+      if (!hasPhoto) {
+        // Check if card itself has background-image
+        var bg = getComputedStyle(card).backgroundImage;
+        if (!bg || bg === 'none') continue;
+      }
+
       registerIdInStarTools(contactId, 'Like');
       registerIdInStarTools(contactId, 'Follow');
-      
-      // 1) Like a la foto de perfil
-      const likeBtn = card.querySelector('button:not([disabled])[class*="like"], button:not([disabled])[class*="heart"], button:not([disabled])[class*="favorite"], button:not([disabled])[title*="Like"], button:not([disabled])[title*="like"], button:not([disabled])[aria-label*="Like"]');
-      if (likeBtn && likeBtn.offsetParent) {
-        likeBtn.click();
+
+      // 1) Like a foto de perfil
+      var likeEl = entry.el;
+      if (likeEl && likeEl.offsetParent) {
+        likeEl.click();
         totalGiven++; pageActions++;
         botStats.likesGiven++;
-        await sleep(150);
+        await sleep(120);
       }
-      
-      // 2) Like a las primeras 3 fotos del media
-      const mediaImgs = card.querySelectorAll('[class*="media"] img, [class*="gallery"] img, [class*="photo"] img, [class*="picture"] img');
-      let photoLikes = 0;
-      for (const img of mediaImgs) {
-        if (photoLikes >= 3) break;
-        const mediaContainer = img.closest('a, button, [class*="media"], [class*="gallery"], [class*="photo"]');
-        const mediaLike = mediaContainer ? mediaContainer.querySelector('[class*="like"], [class*="heart"]') : null;
-        if (mediaLike && !mediaLike.disabled && mediaLike.offsetParent) {
-          mediaLike.click();
+
+      // 2) Like a primeras 3 fotos del media (hearts en thumbnails)
+      var mediaHearts = card.querySelectorAll(
+        '[class*="media"] [class*="like"], [class*="media"] [class*="heart"],' +
+        '[class*="gallery"] [class*="like"], [class*="gallery"] [class*="heart"],' +
+        '[class*="photo"] [class*="like"], [class*="photo"] [class*="heart"]'
+      );
+      var photoLikes = 0;
+      for (var mh of mediaHearts) {
+        if (photoLikes >= 3 || !likeFollowActive) break;
+        if (!mh.disabled && mh.offsetParent) {
+          mh.click();
           totalGiven++; pageActions++; photoLikes++;
           botStats.likesGiven++;
           await sleep(100);
         }
       }
-      
+
       // 3) Follow
-      const followBtn = card.querySelector('button:not([disabled])[class*="follow"], button:not([disabled])[class*="subscribe"], button:not([disabled])[title*="Follow"], button:not([disabled])[aria-label*="Follow"]');
-      if (followBtn && followBtn.offsetParent) {
-        followBtn.click();
+      var followEl = entry.followEl;
+      if (followEl && followEl.offsetParent) {
+        followEl.click();
         totalGiven++; pageActions++;
         botStats.followsGiven++;
         await sleep(200);
       }
-      
-      updateStats();
-      renderStarIds();
-      saveAllStates();
     }
-    
-    // Fallback: si no se encontraron cards con foto, intentar método anterior por botones
+
+    // Si no se encontró nada via cards, método directo global
     if (pageActions === 0) {
-      const allLikeBtns = document.querySelectorAll('button:not([disabled])[class*="like"], button:not([disabled])[class*="heart"]');
-      for (const btn of allLikeBtns) {
-        if (!likeFollowActive) break;
-        if (!btn.offsetParent) continue;
-        btn.click();
+      var globalLikes = document.querySelectorAll(
+        '[class*="like"]:not([disabled]), [class*="heart"]:not([disabled]), [title*="Like"]:not([disabled])'
+      );
+      for (var gl of globalLikes) {
+        if (!likeFollowActive || !gl.offsetParent) break;
+        gl.click();
         totalGiven++; pageActions++;
         botStats.likesGiven++;
         await sleep(100);
       }
-      const allFollowBtns = document.querySelectorAll('button:not([disabled])[class*="follow"], button:not([disabled])[title*="Follow"]');
-      for (const btn of allFollowBtns) {
+      var globalFollows = document.querySelectorAll(
+        '[class*="follow"]:not([disabled]), [title*="Follow"]:not([disabled])'
+      );
+      for (var gf of globalFollows) {
         if (!likeFollowActive) break;
-        const txt = (btn.textContent || '').toLowerCase().trim();
-        if (!txt.match(/follow|seguir|suscrib/) || !btn.offsetParent) continue;
-        btn.click();
+        var t = (gf.textContent || '').toLowerCase().trim();
+        if (!t.match(/follow|seguir|suscrib/) || !gf.offsetParent) continue;
+        gf.click();
         totalGiven++; pageActions++;
         botStats.followsGiven++;
         await sleep(200);
       }
-      if (pageActions > 0) { updateStats(); renderStarIds(); saveAllStates(); }
     }
+
+    updateStats();
+    renderStarIds();
+    saveAllStates();
     
     console.log('[LIKEFOLLOW] Pagina', page, '- Acciones:', pageActions, '| Total:', totalGiven);
     
