@@ -1054,20 +1054,7 @@ function collectLFContacts(context) {
     anchors.forEach(function (a) {
       if (!a.offsetParent) return;
       var m = a.href && a.href.match(/\/(\d{6,15})(\/|$)/);
-      if (m && ids.indexOf(m[1]) === -1) {
-        var card = a.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="result"]');
-        var hasPhoto = false;
-        if (card) {
-          hasPhoto = card.querySelector('img') ||
-                     card.querySelector('[class*="avatar"], [class*="photo"], [class*="profile-pic"], [class*="thumb"]') ||
-                     card.querySelector('[style*="background-image"]');
-          if (!hasPhoto) {
-            var bg = getComputedStyle(card).backgroundImage;
-            hasPhoto = !(!bg || bg === 'none');
-          }
-        }
-        if (hasPhoto) ids.push(m[1]);
-      }
+      if (m && ids.indexOf(m[1]) === -1) ids.push(m[1]);
     });
     return ids.slice(0, 12);
   }
@@ -1193,7 +1180,7 @@ async function executeLikeFollow() {
         }
       }
 
-      // 3) ABRIR AVATAR → LIKE A FOTO DE PERFIL
+      // 3) ABRIR AVATAR → LIKE A FOTO DE PERFIL (visible)
       var avatarEl = document.querySelector(
         '[class*="avatar"] a, [class*="photo"] a, [class*="profile-pic"] a,' +
         'img[class*="avatar"], img[class*="profile-pic"], img[class*="main-photo"],' +
@@ -1201,28 +1188,28 @@ async function executeLikeFollow() {
       );
       if (avatarEl && avatarEl.offsetParent) {
         avatarEl.click();
-        await sleep(600);
+        await sleep(1000);
         var avatarLike = document.querySelector(
           '[class*="modal"] [class*="like"]:not([disabled]), [class*="overlay"] [class*="like"]:not([disabled]),' +
           '[class*="lightbox"] [class*="like"]:not([disabled]), [class*="photo-view"] [class*="like"]:not([disabled])'
         );
         if (avatarLike && avatarLike.offsetParent) {
           avatarLike.click();
-          await sleep(100);
+          await sleep(400);
         }
         var closeBtn = document.querySelector(
           '[class*="modal"] [class*="close"], [class*="overlay"] [class*="close"],' +
           '[class*="modal"] button[class*="x"], button[aria-label*="Close"],' +
           '[class*="lightbox"] [class*="close"]'
         );
-        if (closeBtn && closeBtn.offsetParent) { closeBtn.click(); await sleep(200); }
+        if (closeBtn && closeBtn.offsetParent) { closeBtn.click(); await sleep(300); }
         else {
           var overlay = document.querySelector('[class*="modal"], [class*="overlay"], [class*="lightbox"], [class*="backdrop"]');
-          if (overlay) { overlay.click(); await sleep(200); }
+          if (overlay) { overlay.click(); await sleep(300); }
         }
       }
 
-      // 4) ABRIR MEDIA → LIKE A 3 FOTOS
+      // 4) ABRIR MEDIA → LIKE A 3 FOTOS (visible)
       var mediaTab = findButton(['Media', 'Fotos', 'Photos', 'Galeria', 'Gallery', 'media', 'photo']);
       if (!mediaTab) {
         mediaTab = document.querySelector(
@@ -1232,7 +1219,7 @@ async function executeLikeFollow() {
       }
       if (mediaTab && mediaTab.offsetParent) {
         mediaTab.click();
-        await sleep(800);
+        await sleep(1000);
         var mediaLikes = document.querySelectorAll(
           '[class*="media"] [class*="like"]:not([disabled]), [class*="gallery"] [class*="like"]:not([disabled]),' +
           '[class*="photo"] [class*="like"]:not([disabled]), [class*="media"] [class*="heart"]:not([disabled]),' +
@@ -1244,7 +1231,7 @@ async function executeLikeFollow() {
           if (mediaLikes[mi].offsetParent) {
             mediaLikes[mi].click();
             photoLikes++;
-            await sleep(80);
+            await sleep(400);
           }
         }
       }
