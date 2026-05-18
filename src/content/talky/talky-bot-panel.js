@@ -1032,149 +1032,149 @@ function scanPageForIds() {
   return Array.from(ids);
 }
 
-// ============ EJECUTAR LIKE & FOLLOW (FOTO + MEDIA) ============
+// ============ EJECUTAR LIKE & FOLLOW (ABRE PERFILES INDIVIDUALMENTE) ============
 async function executeLikeFollow() {
-  console.log('[LIKEFOLLOW] 🚀 Iniciando barrido...');
+  console.log('[LIKEFOLLOW] 🚀 Iniciando barrido abriendo perfiles...');
   updateModUI('likeFollow', true);
-  
-  const searchBtn = findButton(['Buscar', 'Search', 'buscar', 'search', 'Browse']);
-  if (searchBtn) { searchBtn.click(); await sleep(2000); }
-  
+
+  // Ir a búsqueda si no estamos ahí
+  if (!location.href.includes('/search') && !location.href.includes('/browse')) {
+    const searchBtn = findButton(['Buscar', 'Search', 'buscar', 'search', 'Browse']);
+    if (searchBtn) { searchBtn.click(); await sleep(2000); }
+  }
+
   let page = 0, totalGiven = 0;
-  const profileSelector = '[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="item"], [class*="result"]';
 
   while (likeFollowActive && page < 50) {
     page++;
-    
-    const profileCards = document.querySelectorAll(profileSelector);
     let pageActions = 0;
-    
-    // LIKE: recolectar todos los botones like de la página
-    const allLikeEls = document.querySelectorAll(
-      '[class*="like"]:not([disabled]), [class*="heart"]:not([disabled]), [class*="favorite"]:not([disabled]),' +
-      '[title*="Like"]:not([disabled]), [title*="like"]:not([disabled]), [aria-label*="Like"]:not([disabled])'
-    );
-    const likeMap = new Map();
-    allLikeEls.forEach(function (el) {
-      var card = el.closest(profileSelector);
-      if (card) {
-        var id = extractId(card);
-        if (id) likeMap.set(id, { el: el, card: card });
-      }
-    });
 
-    // FOLLOW: recolectar todos los botones follow de la página
-    const allFollowEls = document.querySelectorAll(
-      '[class*="follow"]:not([disabled]), [class*="subscribe"]:not([disabled]),' +
-      '[title*="Follow"]:not([disabled]), [aria-label*="Follow"]:not([disabled])'
+    // Recolectar IDs de perfiles en la página de búsqueda
+    var profileIds = [];
+    var profileAnchors = document.querySelectorAll(
+      'a[href*="/profile/"], a[href*="/member/"], a[href*="/user/"]'
     );
-    var allBtns = document.querySelectorAll('button:not([disabled]), a:not([disabled]), [role="button"]:not([disabled])');
-    allBtns.forEach(function (btn) {
-      var txt = (btn.textContent || '').toLowerCase().trim();
-      if (txt === 'follow' || txt === 'seguir' || txt === '+ follow' || txt === '+ seguir') {
-        var card = btn.closest(profileSelector);
+    profileAnchors.forEach(function (a) {
+      if (!a.offsetParent) return;
+      var m = a.href && a.href.match(/\/(\d{6,15})(\/|$)/);
+      if (m && profileIds.indexOf(m[1]) === -1) {
+        // Verificar si tiene foto en la card
+        var card = a.closest('[class*="profile"], [class*="card"], [class*="user"], [class*="member"], [class*="result"]');
+        var hasPhoto = false;
         if (card) {
-          var id = extractId(card);
-          if (id && !likeMap.has(id)) likeMap.set(id, { followEl: btn, card: card });
-          else if (id && likeMap.has(id)) likeMap.get(id).followEl = btn;
+          hasPhoto = card.querySelector('img') ||
+                     card.querySelector('[class*="avatar"], [class*="photo"], [class*="profile-pic"], [class*="thumb"]') ||
+                     card.querySelector('[style*="background-image"]');
+          if (!hasPhoto) {
+            var bg = getComputedStyle(card).backgroundImage;
+            hasPhoto = !(!bg || bg === 'none');
+          }
         }
+        if (hasPhoto) profileIds.push(m[1]);
       }
     });
 
-    // Procesar cada perfil
-    for (var entry of likeMap.values()) {
-      if (!likeFollowActive) break;
-      var card = entry.card;
-      var contactId = extractId(card);
-      if (!contactId || isBlacklisted(contactId)) continue;
+    // Limitar a 12 por página
+    if (profileIds.length === 0) {
+      console.log('[LIKEFOLLOW] Sin perfiles con foto en pagina', page);
+      break;
+    }
+    var idsOnPage = profileIds.slice(0, 12);
 
-      // Verificar si tiene foto (img, background-image, o avatar class)
-      var hasPhoto = card.querySelector('img') ||
-                     card.querySelector('[style*="background-image"]') ||
-                     card.querySelector('[class*="avatar"], [class*="photo"], [class*="profile-pic"], [class*="thumb"]');
-      if (!hasPhoto) {
-        // Check if card itself has background-image
-        var bg = getComputedStyle(card).backgroundImage;
-        if (!bg || bg === 'none') continue;
+    for (var pi = 0; pi < idsOnPage.length; pi++) {
+      if (!likeFollowActive) break;
+      var contactId = idsOnPage[pi];
+      if (isBlacklisted(contactId)) continue;
+
+      // Encontrar link de este perfil en el DOM actual
+      var linkEl = document.querySelector('a[href*="/' + contactId + '"]');
+      if (!linkEl || !linkEl.offsetParent) {
+        console.log('[LIKEFOLLOW] Link no encontrado para', contactId, '- recuperando busqueda');
+        var btn = findButton(['Buscar', 'Search', 'buscar', 'search']);
+        if (btn) { btn.click(); await sleep(3000); }
+        linkEl = document.querySelector('a[href*="/' + contactId + '"]');
+        if (!linkEl || !linkEl.offsetParent) continue;
       }
+
+      // Abrir perfil
+      console.log('[LIKEFOLLOW] Abriendo perfil:', contactId);
+      linkEl.click();
+      await sleep(2500);
 
       registerIdInStarTools(contactId, 'Like');
       registerIdInStarTools(contactId, 'Follow');
 
-      // 1) Like a foto de perfil
-      var likeEl = entry.el;
-      if (likeEl && likeEl.offsetParent) {
-        likeEl.click();
+      // Like a foto de perfil
+      var likeBtn = document.querySelector(
+        '[class*="like"]:not([disabled]), [class*="heart"]:not([disabled]), [class*="favorite"]:not([disabled]),' +
+        '[title*="Like"]:not([disabled]), [aria-label*="Like"]:not([disabled])'
+      );
+      if (likeBtn && likeBtn.offsetParent) {
+        likeBtn.click();
         totalGiven++; pageActions++;
         botStats.likesGiven++;
-        await sleep(120);
+        await sleep(300);
       }
 
-      // 2) Like a primeras 3 fotos del media (hearts en thumbnails)
-      var mediaHearts = card.querySelectorAll(
-        '[class*="media"] [class*="like"], [class*="media"] [class*="heart"],' +
-        '[class*="gallery"] [class*="like"], [class*="gallery"] [class*="heart"],' +
-        '[class*="photo"] [class*="like"], [class*="photo"] [class*="heart"]'
+      // Like a primeras 3 fotos del media dentro del perfil
+      var mediaBtns = document.querySelectorAll(
+        '[class*="media"] [class*="like"]:not([disabled]), [class*="gallery"] [class*="like"]:not([disabled]),' +
+        '[class*="photo"] [class*="like"]:not([disabled]), [class*="media"] [class*="heart"]:not([disabled]),' +
+        '[class*="gallery"] [class*="heart"]:not([disabled]), [class*="photo"] [class*="heart"]:not([disabled])'
       );
       var photoLikes = 0;
-      for (var mh of mediaHearts) {
+      for (var mb = 0; mb < mediaBtns.length; mb++) {
         if (photoLikes >= 3 || !likeFollowActive) break;
-        if (!mh.disabled && mh.offsetParent) {
-          mh.click();
+        if (mediaBtns[mb].offsetParent) {
+          mediaBtns[mb].click();
           totalGiven++; pageActions++; photoLikes++;
           botStats.likesGiven++;
-          await sleep(100);
+          await sleep(200);
         }
       }
 
-      // 3) Follow
-      var followEl = entry.followEl;
-      if (followEl && followEl.offsetParent) {
-        followEl.click();
-        totalGiven++; pageActions++;
-        botStats.followsGiven++;
-        await sleep(200);
+      // Follow
+      var followBtn = document.querySelector(
+        '[class*="follow"]:not([disabled]), [aria-label*="Follow"]:not([disabled]),' +
+        '[title*="Follow"]:not([disabled]), [class*="subscribe"]:not([disabled])'
+      );
+      if (followBtn && followBtn.offsetParent) {
+        var ftxt = (followBtn.textContent || '').toLowerCase();
+        if (ftxt.includes('follow') || ftxt.includes('seguir') || ftxt.includes('+')) {
+          followBtn.click();
+          totalGiven++; pageActions++;
+          botStats.followsGiven++;
+          await sleep(400);
+        }
       }
-    }
 
-    // Si no se encontró nada via cards, método directo global
-    if (pageActions === 0) {
-      var globalLikes = document.querySelectorAll(
-        '[class*="like"]:not([disabled]), [class*="heart"]:not([disabled]), [title*="Like"]:not([disabled])'
-      );
-      for (var gl of globalLikes) {
-        if (!likeFollowActive || !gl.offsetParent) break;
-        gl.click();
-        totalGiven++; pageActions++;
-        botStats.likesGiven++;
-        await sleep(100);
-      }
-      var globalFollows = document.querySelectorAll(
-        '[class*="follow"]:not([disabled]), [title*="Follow"]:not([disabled])'
-      );
-      for (var gf of globalFollows) {
+      updateStats();
+      renderStarIds();
+      saveAllStates();
+
+      // Volver a búsqueda
+      window.history.back();
+      await sleep(2500);
+
+      // Esperar a que las cards de búsqueda reaparezcan
+      var waitStart = Date.now();
+      while (Date.now() - waitStart < 5000) {
         if (!likeFollowActive) break;
-        var t = (gf.textContent || '').toLowerCase().trim();
-        if (!t.match(/follow|seguir|suscrib/) || !gf.offsetParent) continue;
-        gf.click();
-        totalGiven++; pageActions++;
-        botStats.followsGiven++;
-        await sleep(200);
+        if (document.querySelector('a[href*="/' + contactId + '"]')) break;
+        if (document.querySelectorAll('[class*="profile"], [class*="card"], [class*="user"]').length > 3) break;
+        await sleep(300);
       }
     }
 
-    updateStats();
-    renderStarIds();
-    saveAllStates();
-    
     console.log('[LIKEFOLLOW] Pagina', page, '- Acciones:', pageActions, '| Total:', totalGiven);
-    
-    const nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
+
+    // Siguiente página
+    var nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
     if (!nextBtn || nextBtn.disabled) break;
     nextBtn.click();
-    await sleep(2500);
+    await sleep(3000);
   }
-  
+
   await syncMetricsToStorage('LIKEFOLLOW', totalGiven);
   likeFollowActive = false;
   likesActive = false;
