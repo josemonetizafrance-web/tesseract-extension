@@ -1050,11 +1050,15 @@ function detectLFContext() {
 function collectLFContacts(context) {
   var ids = [];
   if (context === 'search') {
-    var anchors = document.querySelectorAll('a[href*="/profile/"], a[href*="/member/"], a[href*="/user/"]');
+    var container = document.querySelector(
+      '[class*="search-result"], [class*="browse-result"], [class*="results"],' +
+      '[class*="profile-list"], [class*="user-list"], [class*="member-list"],' +
+      'main, [class*="content"]'
+    ) || document.body;
+    var anchors = container.querySelectorAll('a[href*="/profile/"], a[href*="/member/"], a[href*="/user/"]');
     anchors.forEach(function (a) {
       if (!a.offsetParent) return;
-      var card = a.closest('[class*="profile"], [class*="card"], [class*="user-item"], [class*="member-item"], [class*="result"], [class*="search-result"], li, [class*="grid"]');
-      if (!card) return;
+      if (a.closest('nav, header, [class*="nav"], [class*="header"], [class*="menu"], [class*="sidebar"], [class*="toolbar"], [class*="top-bar"]')) return;
       var m = a.href && a.href.match(/\/(\d{6,15})(\/|$)/);
       if (m && m[1] && m[1].length >= 6 && ids.indexOf(m[1]) === -1) ids.push(m[1]);
     });
