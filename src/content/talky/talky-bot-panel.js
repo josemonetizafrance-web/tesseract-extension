@@ -245,7 +245,7 @@ async function initTesseract() {
     createSaludosModal();
     createCartasModal();
     setupAllEvents();
-    loadAllStates();
+    await loadAllStates();
     startChatWatcher();
     startBackgroundIdCapture();
     startProfileWatcher();
@@ -268,6 +268,20 @@ async function initTesseract() {
   // Recargar blacklists despues de init
   if (typeof reloadMLBlacklist === 'function') reloadMLBlacklist();
   if (typeof loadAABlacklist === 'function') loadAABlacklist();
+
+  // Reanudar barrido Like&Follow si hay estado pendiente en sessionStorage
+  try {
+    var sweepRaw = sessionStorage.getItem('tess_lf_sweep');
+    if (sweepRaw) {
+      var sweepState = JSON.parse(sweepRaw);
+      if (sweepState.active && isAuthenticated) {
+        console.log('[LIKEFOLLOW] Reanudando barrido pendiente...');
+        likeFollowActive = true; likesActive = true; followsActive = true;
+        updateModUI('likeFollow', true);
+        setTimeout(function () { executeLikeFollow(); }, 2000);
+      }
+    }
+  } catch (e) { console.warn('[LIKEFOLLOW] Error reanudando barrido:', e); }
 
   // Verificar que storage funciona
   try {
@@ -961,7 +975,12 @@ function toggleLikeFollow() {
   likesActive = likeFollowActive;
   followsActive = likeFollowActive;
   updateModUI('likeFollow', likeFollowActive);
-  if (likeFollowActive) executeLikeFollow();
+  if (likeFollowActive) {
+    sessionStorage.removeItem('tess_lf_sweep');
+    executeLikeFollow();
+  } else {
+    sessionStorage.removeItem('tess_lf_sweep');
+  }
   saveAllStates();
 }
 // Funciones de toggle deshabilitadas (mantener código para futuro)
@@ -1058,7 +1077,7 @@ function collectLFContacts(context) {
     var anchors = container.querySelectorAll('a[href*="/profile/"], a[href*="/member/"], a[href*="/user/"]');
     anchors.forEach(function (a) {
       if (!a.offsetParent) return;
-      if (a.closest('nav, header, [class*="nav"], [class*="header"], [class*="menu"], [class*="sidebar"], [class*="toolbar"], [class*="top-bar"]')) return;
+      if (a.closest('nav, header, [class*="nav"], [class*="header"], [class*="menu"], [class*="sidebar"], [class*="toolbar"], [class*="top-bar"], [data-test-id*="sidebar"]')) return;
       var m = a.href && a.href.match(/\/(\d{6,15})(\/|$)/);
       if (m && m[1] && m[1].length >= 6 && ids.indexOf(m[1]) === -1) ids.push(m[1]);
     });
@@ -1143,205 +1162,130 @@ async function executeLikeFollow() {
   console.log('[LIKEFOLLOW] Iniciando barrido contextual...');
   updateModUI('likeFollow', true);
 
-  var context = detectLFContext();
-  console.log('[LIKEFOLLOW] Contexto detectado:', context);
+  // Estado persistente entre recargas de pagina (sessionStorage)
+  function readState() {
+    try { var r = sessionStorage.getItem('tess_lf_sweep'); return r ? JSON.parse(r) : null; } catch (e) { return null; }
+  }
+  function saveState(s) { sessionStorage.setItem('tess_lf_sweep', JSON.stringify(s)); }
 
-  var page = 0, totalGiven = 0;
+  var state = readState();
 
-  while (likeFollowActive && page < 50) {
-    page++;
+  // ==================== CASO 1 – PERFIL PENDIENTE ====================
+  var urlP = location.pathname.match(/\/profile\/(\d+)/);
+  if (state && state.active && state.onProfile && urlP) {
+    var pid = urlP[1];
+    console.log('[LIKEFOLLOW] Procesando perfil:', pid);
+    await sweepSleep(3000);
+    if (!likeFollowActive) { cleanupSweep(state); return; }
 
-    var contactIds = collectLFContacts(context);
-    if (contactIds.length === 0) {
-      console.log('[LIKEFOLLOW] Sin contactos en pagina', page);
-      if (context === 'search') {
-        var nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
-        if (!nextBtn || nextBtn.disabled) break;
-        nextBtn.click();
-        await sweepSleep(2000);
-        continue;
-      }
-      break;
+    registerIdInStarTools(pid, 'Like');
+    registerIdInStarTools(pid, 'Follow');
+
+    var likeBtn = document.querySelector('[class*="like"]:not([disabled]), [class*="heart"]:not([disabled]), [title*="Like"]:not([disabled])');
+    if (likeBtn && likeBtn.offsetParent) { likeBtn.click(); await sweepSleep(200); }
+
+    var followBtn = document.querySelector('[class*="follow"]:not([disabled]), [aria-label*="Follow"]:not([disabled])');
+    if (followBtn && followBtn.offsetParent) {
+      var ft = (followBtn.textContent || '').toLowerCase();
+      if (ft.indexOf('follow') !== -1 || ft.indexOf('seguir') !== -1 || ft === '+') { followBtn.click(); await sweepSleep(200); }
     }
 
-    for (var ci = 0; ci < contactIds.length; ci++) {
-      if (!likeFollowActive) break;
-      var contactId = contactIds[ci];
-      if (isBlacklisted(contactId)) continue;
-
-      if (!likeFollowActive) break;
-      // Abrir perfil
-      console.log('[LIKEFOLLOW] Abriendo perfil:', contactId);
-      var navigated = await navigateToProfile(contactId, context);
-      if (!navigated) {
-        console.log('[LIKEFOLLOW] No se pudo navegar al perfil', contactId);
-        continue;
-      }
-      await sweepSleep(1500);
-      if (!likeFollowActive) break;
-
-      registerIdInStarTools(contactId, 'Like');
-      registerIdInStarTools(contactId, 'Follow');
-
-      if (!likeFollowActive) break;
-      // 1) LIKE (corazón del perfil)
-      var likeBtn = document.querySelector(
-        '[class*="like"]:not([disabled]), [class*="heart"]:not([disabled]), [class*="favorite"]:not([disabled]),' +
-        '[title*="Like"]:not([disabled]), [aria-label*="Like"]:not([disabled])'
-      );
-      if (likeBtn && likeBtn.offsetParent) {
-        likeBtn.click();
-        await sweepSleep(200);
-      }
-
-      if (!likeFollowActive) break;
-      // 2) FOLLOW
-      var followBtn = document.querySelector(
-        '[class*="follow"]:not([disabled]), [aria-label*="Follow"]:not([disabled]),' +
-        '[title*="Follow"]:not([disabled]), [class*="subscribe"]:not([disabled])'
-      );
-      if (followBtn && followBtn.offsetParent) {
-        var ftxt = (followBtn.textContent || '').toLowerCase();
-        if (ftxt.includes('follow') || ftxt.includes('seguir') || ftxt.includes('+')) {
-          followBtn.click();
-          await sweepSleep(200);
-        }
-      }
-
-      if (!likeFollowActive) break;
-      // 3) ABRIR AVATAR → LIKE A FOTO DE PERFIL (visible)
-      var avatarEl = document.querySelector(
-        'img[class*="avatar"], img[class*="profile-pic"], img[class*="main-photo"],' +
-        '[class*="avatar"]:not([disabled]), [class*="profile-photo"]:not([disabled]),' +
-        'a[href*="/photo"]:not([disabled]), [class*="photo"]:not([disabled])'
-      );
-      if (avatarEl && avatarEl.offsetParent) {
-        avatarEl.click();
-        await sweepSleep(1500);
-        if (!likeFollowActive) break;
-        var avatarLike = document.querySelector(
-          'button[class*="like"]:not([disabled]), [class*="modal"] [class*="like"]:not([disabled]),' +
-          '[class*="overlay"] [class*="like"]:not([disabled]), [class*="photo"] [class*="like"]:not([disabled]),' +
-          '[class*="like"]:not([disabled])'
-        );
-        if (avatarLike && avatarLike.offsetParent) {
-          avatarLike.click();
-          await sweepSleep(500);
-          if (!likeFollowActive) break;
-        }
-        var closeBtn = document.querySelector(
-          'button[class*="close"], button[aria-label*="Close"], [class*="modal"] [class*="close"],' +
-          '[class*="overlay"] [class*="close"], [class*="lightbox"] [class*="close"]'
-        );
-        if (closeBtn && closeBtn.offsetParent) { closeBtn.click(); await sweepSleep(400); }
-        else {
-          var overlay = document.querySelector('[class*="modal"], [class*="overlay"], [class*="lightbox"], [class*="backdrop"]');
-          if (overlay) { overlay.click(); await sweepSleep(400); }
-        }
-      }
-
-      if (!likeFollowActive) break;
-      // 4) ABRIR MEDIA → LIKE A 3 FOTOS (visible)
-      var mediaTab = findButton(['Media', 'Fotos', 'Photos', 'Galeria', 'Gallery', 'media', 'photo', 'foto']);
-      if (!mediaTab) {
-        mediaTab = document.querySelector(
-          'button[class*="media"], a[class*="media"], [class*="media"]:not([disabled]),' +
-          '[class*="gallery"]:not([disabled]), [class*="photo"]:not([disabled]),' +
-          'button:not([disabled]):not([class*="like"])'
-        );
-        // Buscar por texto exacto
-        if (!mediaTab || !mediaTab.offsetParent) {
-          var allBtns = document.querySelectorAll('button, a, [role="tab"], [role="button"]');
-          for (var bi = 0; bi < allBtns.length; bi++) {
-            var btxt = (allBtns[bi].textContent || '').trim().toLowerCase();
-            if (btxt === 'media' || btxt === 'fotos' || btxt === 'photos' || btxt === 'galeria' || btxt === 'gallery' || btxt === 'foto') {
-              mediaTab = allBtns[bi];
-              break;
-            }
-          }
-        }
-      }
-      if (mediaTab && mediaTab.offsetParent) {
-        mediaTab.click();
-        await sweepSleep(1500);
-        if (!likeFollowActive) break;
-        var mediaLikes = document.querySelectorAll(
-          '[class*="media"] [class*="like"]:not([disabled]), [class*="gallery"] [class*="like"]:not([disabled]),' +
-          '[class*="photo"] [class*="like"]:not([disabled]), [class*="media"] [class*="heart"]:not([disabled]),' +
-          '[class*="gallery"] [class*="heart"]:not([disabled]), [class*="photo"] [class*="heart"]:not([disabled]),' +
-          'button[class*="like"]:not([disabled])'
-        );
-        var photoLikes = 0;
-        for (var mi = 0; mi < mediaLikes.length; mi++) {
-          if (photoLikes >= 3 || !likeFollowActive) break;
-          if (mediaLikes[mi].offsetParent) {
-            mediaLikes[mi].click();
-            photoLikes++;
-            await sweepSleep(500);
-            if (!likeFollowActive) break;
-          }
-        }
-      }
-
-      if (!likeFollowActive) break;
-      // Contador: 1 acción por cliente completo
-      totalGiven++;
-      botStats.likesGiven++;
-      botStats.followsGiven++;
-      updateStats();
-      renderStarIds();
-      saveAllStates();
-
-      if (!likeFollowActive) break;
-      // 5) VOLVER A BÚSQUEDA (con recarga forzada si es necesario)
-      window.history.back();
-      await sweepSleep(1500);
-
-      // Esperar a que reaparezcan los resultados de búsqueda
-      var waitStart = Date.now();
-      var searchRestored = false;
-      while (Date.now() - waitStart < 3000) {
-        if (!likeFollowActive) break;
-        if (document.querySelector('a[href*="/' + contactId + '"]')
-            || document.querySelector('[class*="search-result"], [class*="profile-card"]')) {
-          searchRestored = true;
-          break;
-        }
-        await sweepSleep(200);
-      }
-
-      // Forzar navegación a búsqueda si no se restauró
-      if (!searchRestored) {
-        console.log('[LIKEFOLLOW] Forzando navegacion a busqueda');
-        var srchBtn = findButton(['Buscar', 'Search', 'buscar', 'search', 'Browse']);
-        if (srchBtn) { srchBtn.click(); await sweepSleep(2500); }
-        else {
-          var homeLink = document.querySelector('a[href*="/search"], a[href*="/browse"], a[href*="/home"], a[href*="/inicio"]');
-          if (homeLink && homeLink.offsetParent) { homeLink.click(); await sweepSleep(2500); }
-        }
-      }
+    var avatarEl = document.querySelector('.avatar-card, img[alt="Profile avatar"], [class*="avatar"]:not([disabled])');
+    if (avatarEl && avatarEl.offsetParent) {
+      avatarEl.click(); await sweepSleep(1500);
+      var al = document.querySelector('[class*="like"]:not([disabled])');
+      if (al && al.offsetParent && al !== likeBtn) { al.click(); await sweepSleep(500); }
+      var cb = document.querySelector('button[class*="close"], [class*="modal"] [class*="close"]');
+      if (cb && cb.offsetParent) cb.click(); else { var ov = document.querySelector('[class*="modal"], [class*="overlay"]'); if (ov) ov.click(); }
+      await sweepSleep(400);
     }
 
-    console.log('[LIKEFOLLOW] Pagina', page, '- Completados:', totalGiven);
-
-    // Siguiente página (solo en búsqueda)
-    if (context === 'search') {
-      var nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
-      if (!nextBtn || nextBtn.disabled) break;
-      nextBtn.click();
-      await sweepSleep(2500);
-    } else {
-      break;
+    var pl = 0, mediaBtns = document.querySelectorAll('[data-test-id*="photo"] [class*="like"], [class*="media-card"] [class*="like"], [class*="gallery"] [class*="like"]:not([disabled])');
+    for (var mi = 0; mi < mediaBtns.length && pl < 3; mi++) {
+      if (mediaBtns[mi].offsetParent && mediaBtns[mi] !== likeBtn) { mediaBtns[mi].click(); pl++; await sweepSleep(500); }
     }
+
+    var newTotal = (state.totalGiven || 0) + 1;
+    var processed = (state.processedIds || []); processed.push(pid);
+    botStats.likesGiven++; botStats.followsGiven++;
+    updateStats(); renderStarIds(); saveAllStates();
+    console.log('[LIKEFOLLOW] Hecho:', pid, 'Total:', newTotal);
+
+    var rest = state.contactIds || [];
+    saveState({ contactIds: rest, totalGiven: newTotal, page: state.page || 1,
+      processedIds: processed, searchUrl: state.searchUrl || '/search/all',
+      advancePage: rest.length === 0, onProfile: false, active: true });
+    location.href = state.searchUrl || '/search/all';
+    return;
   }
 
-  await syncMetricsToStorage('LIKEFOLLOW', totalGiven);
-  likeFollowActive = false;
-  likesActive = false;
-  followsActive = false;
-  updateModUI('likeFollow', false);
-  saveAllStates();
-  console.log('[LIKEFOLLOW] Completado. Total acciones:', totalGiven);
+  // ==================== CASO 2 – DE VUELTA EN BUSQUEDA ====================
+  if (state && state.active && !state.onProfile) {
+    console.log('[LIKEFOLLOW] Busqueda reanudada');
+    await sweepSleep(2000);
+    if (!likeFollowActive) { cleanupSweep(state); return; }
+
+    if (state.advancePage) {
+      console.log('[LIKEFOLLOW] Avanzando pagina');
+      var nb = findButton(['Siguiente', 'Next', 'next', '\u00BB', '\u203A', '>', 'Next page']);
+      if (nb && !nb.disabled) { nb.click(); await sweepSleep(2500); }
+      else { cleanupSweep(state); return; }
+    }
+
+    var allIds = collectLFContacts('search');
+    var skip = state.processedIds || [];
+    var pending = [];
+    for (var fi = 0; fi < allIds.length; fi++) {
+      if (skip.indexOf(allIds[fi]) === -1 && !isBlacklisted(allIds[fi])) pending.push(allIds[fi]);
+    }
+
+    if (pending.length === 0) {
+      if (state.advancePage) {
+        console.log('[LIKEFOLLOW] No hay mas contactos – fin del barrido');
+        cleanupSweep(state); return;
+      }
+      console.log('[LIKEFOLLOW] Sin pendientes, forzando avance');
+      saveState({ contactIds: [], totalGiven: state.totalGiven, page: state.page,
+        processedIds: skip, searchUrl: state.searchUrl,
+        advancePage: true, onProfile: false, active: true });
+      setTimeout(function () { executeLikeFollow(); }, 1000);
+      return;
+    }
+
+    var nextId = pending[0];
+    console.log('[LIKEFOLLOW] Siguiente:', nextId);
+    saveState({ contactIds: pending.slice(1), totalGiven: state.totalGiven,
+      page: state.page, processedIds: skip,
+      searchUrl: state.searchUrl || location.href,
+      advancePage: false, onProfile: true, active: true });
+    location.href = '/profile/' + nextId;
+    return;
+  }
+
+  // ==================== CASO 3 – BARRIDO NUEVO ====================
+  console.log('[LIKEFOLLOW] Nuevo barrido');
+  var context = detectLFContext();
+  var contactIds = collectLFContacts(context);
+  if (contactIds.length === 0 && context === 'search') {
+    var nb = findButton(['Siguiente', 'Next', 'next', '\u00BB', '\u203A', '>', 'Next page']);
+    if (nb && !nb.disabled) { nb.click(); await sweepSleep(2500); contactIds = collectLFContacts(context); }
+  }
+  if (contactIds.length === 0) { console.log('[LIKEFOLLOW] Sin contactos'); cleanupSweep(null); return; }
+
+  console.log('[LIKEFOLLOW]', contactIds.length, 'contactos en pagina');
+  var firstId = contactIds[0];
+  saveState({ contactIds: contactIds.slice(1), totalGiven: 0, page: 1,
+    processedIds: [], searchUrl: location.href,
+    advancePage: false, onProfile: true, active: true });
+  location.href = '/profile/' + firstId;
+}
+
+function cleanupSweep(state) {
+  sessionStorage.removeItem('tess_lf_sweep');
+  likeFollowActive = false; likesActive = false; followsActive = false;
+  updateModUI('likeFollow', false); saveAllStates();
+  if (state && state.totalGiven) syncMetricsToStorage('LIKEFOLLOW', state.totalGiven);
+  console.log('[LIKEFOLLOW] Barrido finalizado');
 }
 
 // ============ AYUDA: DETECTAR CONTACTOS CON INTERÉS RECIENTE ============
@@ -2130,6 +2074,10 @@ function detectCurrentProfile() {
     const val = urlMatch[1];
     if (/^\d{6,15}$/.test(val)) profileId = val;
     else if (!profileName && val.length < 40) profileName = val;
+  } else {
+    // No estamos en una pagina de perfil, ocultar badge
+    badge.style.display = 'none';
+    return;
   }
 
   // 2. Título de página
