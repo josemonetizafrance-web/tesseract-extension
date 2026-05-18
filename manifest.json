@@ -40,7 +40,8 @@
                 "src/content/talky/auto-answer-panel.js",
                 "src/content/talky/smart-mailing.js",
                 "src/content/talky/smart-mailing-panel.js",
-                "src/content/talky/talky-bot-panel.js"
+                "src/content/talky/talky-bot-panel.js",
+                "src/content/talky/reminder.js"
             ],
             "run_at": "document_end"
         }
