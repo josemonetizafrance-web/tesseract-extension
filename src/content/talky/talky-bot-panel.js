@@ -2253,38 +2253,36 @@ function clearIDs() {
 function collectFilteredIds() {
   var ids = [];
   if (currentStarFilter === 'all') {
-    ['Like', 'Follow', 'Saludo', 'Cartas'].forEach(function (t) { (collectedIds[t] || []).forEach(function (id) { ids.push(id); }); });
+    ['Like', 'Follow', 'LFP', 'Saludo', 'Cartas'].forEach(function (t) { (collectedIds[t] || []).forEach(function (id) { ids.push({id:id,t:t}); }); });
   } else if (currentStarFilter === 'L+F') {
-    ['Like', 'Follow'].forEach(function (t) { (collectedIds[t] || []).forEach(function (id) { ids.push(id); }); });
+    ['Like', 'Follow', 'LFP'].forEach(function (t) { (collectedIds[t] || []).forEach(function (id) { ids.push({id:id,t:t}); }); });
   } else {
-    ids = (collectedIds[currentStarFilter] || []).slice();
+    (collectedIds[currentStarFilter] || []).forEach(function (id) { ids.push({id:id,t:currentStarFilter}); });
   }
   return ids;
 }
 
 function exportIDs() {
-  var ids = collectFilteredIds();
-  if (!ids.length) { alert('⭐ No hay IDs para exportar.'); return; }
-  var clean = ids.map(function (id) { return String(id).replace(/^0+/, ''); });
-
+  var items = collectFilteredIds();
+  if (!items.length) { alert('No hay IDs para exportar.'); return; }
+  var lines = items.map(function (item) { return String(item.id).replace(/^0+/, ''); });
   var now = new Date();
   var ts = now.toISOString().slice(0,19).replace('T','_').replace(/:/g,'-');
-
   var BOM = '\uFEFF';
-  var csv = BOM + clean.join('\r\n');
+  var csv = BOM + lines.join('\r\n');
   var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'tesseract_ids_' + ts + '.csv';
   a.click();
-  console.log('[STAR-TOOLS] Exportados', ids.length, 'IDs');
+  console.log('[STAR-TOOLS] Exportados', items.length, 'IDs');
 }
 
 function copyIDs() {
-  var ids = collectFilteredIds();
-  if (!ids.length) return;
-  var clean = ids.map(function (id) { return String(id).replace(/^0+/, ''); });
-  navigator.clipboard.writeText(clean.join('\n'));
+  var items = collectFilteredIds();
+  if (!items.length) return;
+  var lines = items.map(function (item) { return String(item.id).replace(/^0+/, ''); });
+  navigator.clipboard.writeText(lines.join('\n'));
 }
 
 // ============ SINCRONIZACIÓN PERIÓDICA CON SERVIDOR ============
