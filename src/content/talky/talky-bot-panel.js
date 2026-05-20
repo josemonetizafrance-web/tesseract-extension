@@ -336,7 +336,7 @@ function createMainPanel() {
 @font-face { font-family: 'Orbitron'; font-style: normal; font-weight: 700; font-display: swap; src: url('https://fonts.gstatic.com/s/orbitron/v32/yMJMMIlzdpvBhQQL_SC3X9yhF25-T1s77g.woff2') format('woff2'); }
 @font-face { font-family: 'Orbitron'; font-style: normal; font-weight: 900; font-display: swap; src: url('https://fonts.gstatic.com/s/orbitron/v32/yMJMMIlzdpvBhQQL_SC3X9yhF25-T1s7_g.woff2') format('woff2'); }
 @font-face { font-family: 'Share Tech Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('https://fonts.gstatic.com/s/sharetechmono/v13/J7aHnp1uDWRyFFd98ABVA9PkkfN9J9aM.woff2') format('woff2'); }
-#tesseract-main-panel{position:fixed;bottom:20px;right:20px;z-index:2147483647 !important;font-family:'Orbitron','Segoe UI',sans-serif;display:block !important;visibility:visible !important;}
+#tesseract-main-panel{position:fixed;bottom:20px;right:20px;z-index:2147483647 !important;font-family:'Orbitron','Segoe UI',sans-serif;display:block !important;visibility:visible !important;font-size:13px;}
 .tess-box{width:420px;min-width:280px;background:linear-gradient(145deg,#0a0a0a,#1a1a2e);border-radius:16px;border:2px solid #8b5cf6;box-shadow:0 0 40px rgba(139,92,246,0.3),0 10px 40px rgba(0,0,0,0.9);color:#e0e0e0;max-height:720px;overflow-y:auto;position:relative;}
 .tess-resize{position:absolute;width:14px;height:14px;z-index:20;}.tess-resize.se{bottom:0;right:0;cursor:se-resize;}.tess-resize.sw{bottom:0;left:0;cursor:sw-resize;}.tess-resize.ne{top:0;right:0;cursor:ne-resize;}.tess-resize.nw{top:0;left:0;cursor:nw-resize;}
 .tess-header{background:linear-gradient(135deg,#1e1b4b,#8b5cf6,#7c3aed,#8b5cf6,#1e1b4b);padding:14px 18px;display:flex;justify-content:space-between;align-items:center;font-weight:900;font-size:18px;letter-spacing:2px;border-bottom:2px solid #8b5cf6;cursor:move;text-shadow:0 0 10px #8b5cf6;text-transform:uppercase;position:sticky;top:0;z-index:10;}
@@ -2618,21 +2618,22 @@ function createCribsOverlay() {
   if (document.getElementById('tess-cribs-overlay')) return;
   var css = document.createElement('style');
   css.textContent = `
-    #tess-cribs-toggle { position:fixed; right:10px; bottom:50px; z-index:999999; background:#6d28d9; color:#fff; border:none; border-radius:50%; width:44px; height:44px; font-size:20px; cursor:pointer; box-shadow:0 2px 12px rgba(109,40,217,0.5); display:flex; align-items:center; justify-content:center; opacity:0.8; transition:opacity 0.2s; }
+    #tess-cribs-toggle { position:fixed; left:10px; bottom:50px; z-index:999999; background:#6d28d9; color:#fff; border:none; border-radius:50%; width:44px; height:44px; font-size:20px; cursor:grab; box-shadow:0 2px 12px rgba(109,40,217,0.5); display:flex; align-items:center; justify-content:center; opacity:0.8; user-select:none; }
+    #tess-cribs-toggle:active { cursor:grabbing; }
     #tess-cribs-toggle:hover { opacity:1; }
-    #tess-cribs-overlay { position:fixed; right:10px; bottom:95px; width:280px; max-height:400px; background:#13131a; border:1px solid #2d2d3f; border-radius:8px; box-shadow:0 4px 24px rgba(0,0,0,0.6); z-index:999998; font:10px/1.4 -apple-system,BlinkMacSystemFont,sans-serif; color:#ccc; overflow:hidden; display:none; flex-direction:column; }
+    #tess-cribs-overlay { position:fixed; left:10px; bottom:95px; width:280px; max-height:400px; background:#13131a; border:1px solid #2d2d3f; border-radius:8px; box-shadow:0 4px 24px rgba(0,0,0,0.6); z-index:999998; font:12px/1.5 -apple-system,BlinkMacSystemFont,sans-serif; color:#ddd; overflow:hidden; display:none; flex-direction:column; }
     #tess-cribs-overlay.visible { display:flex; }
-    #tess-cribs-header { display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:#1a1a24; cursor:grab; border-bottom:1px solid #2d2d3f; user-select:none; }
+    #tess-cribs-header { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:#1a1a24; cursor:grab; border-bottom:1px solid #2d2d3f; user-select:none; }
+    #tess-cribs-title { font-weight:600; font-size:13px; color:#c4b5fd; }
     #tess-cribs-header:active { cursor:grabbing; }
-    #tess-cribs-title { font-weight:600; font-size:11px; color:#c4b5fd; }
     #tess-cribs-close { background:none; border:none; color:#666; font-size:14px; cursor:pointer; padding:0 2px; }
     #tess-cribs-close:hover { color:#fff; }
     #tess-cribs-body { padding:8px 10px; overflow-y:auto; flex:1; }
     #tess-cribs-body .cr-row { display:flex; padding:2px 0; border-bottom:1px solid #1f1f2a; }
-    #tess-cribs-body .cr-label { width:70px; flex-shrink:0; color:#888; }
-    #tess-cribs-body .cr-value { flex:1; color:#e0e0e0; word-break:break-word; }
+    #tess-cribs-body .cr-label { width:75px; flex-shrink:0; color:#888; font-size:11px; }
+    #tess-cribs-body .cr-value { flex:1; color:#e0e0e0; word-break:break-word; font-size:11px; }
     #tess-cribs-body .cr-empty { color:#555; font-style:italic; }
-    .tess-cribs-msg { text-align:center; padding:20px; color:#666; font-size:10px; }
+    .tess-cribs-msg { text-align:center; padding:20px; color:#666; font-size:11px; }
   `;
   document.head.appendChild(css);
 
@@ -2650,18 +2651,30 @@ function createCribsOverlay() {
 
   document.getElementById('tess-cribs-close').addEventListener('click', function () { cribsOverlayState.visible = false; overlay.classList.remove('visible'); });
 
-  // Make header draggable
-  var header = document.getElementById('tess-cribs-header');
-  var offsetX, offsetY;
-  header.addEventListener('mousedown', function (e) {
-    if (e.target.tagName === 'BUTTON') return;
-    offsetX = e.clientX - overlay.getBoundingClientRect().left;
-    offsetY = e.clientY - overlay.getBoundingClientRect().top;
-    function onMove(ev) { overlay.style.left = (ev.clientX - offsetX) + 'px'; overlay.style.right = 'auto'; overlay.style.top = (ev.clientY - offsetY) + 'px'; overlay.style.bottom = 'auto'; }
-    function onUp() { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
+  // Draggable: both toggle and overlay move together
+  function makeCribsDraggable(el, fromOverlay) {
+    var startX, startY, stL, stT, soL, soT;
+    el.addEventListener('mousedown', function (e) {
+      if (e.target.tagName === 'BUTTON') return;
+      startX = e.clientX; startY = e.clientY;
+      stL = parseInt(toggle.style.left) || toggle.getBoundingClientRect().left;
+      stT = parseInt(toggle.style.top) || toggle.getBoundingClientRect().top;
+      soL = parseInt(overlay.style.left) || overlay.getBoundingClientRect().left;
+      soT = parseInt(overlay.style.top) || overlay.getBoundingClientRect().top;
+      toggle.style.right = 'auto'; toggle.style.bottom = 'auto';
+      overlay.style.right = 'auto'; overlay.style.bottom = 'auto';
+      function onMove(ev) {
+        var dx = ev.clientX - startX, dy = ev.clientY - startY;
+        toggle.style.left = (stL + dx) + 'px'; toggle.style.top = (stT + dy) + 'px';
+        overlay.style.left = (soL + dx) + 'px'; overlay.style.top = (soT + dy) + 'px';
+      }
+      function onUp() { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+  makeCribsDraggable(toggle, false);
+  makeCribsDraggable(document.getElementById('tess-cribs-header'), true);
 }
 
 function renderCribsOverlay(data) {
