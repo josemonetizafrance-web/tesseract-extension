@@ -337,7 +337,8 @@ function createMainPanel() {
 @font-face { font-family: 'Orbitron'; font-style: normal; font-weight: 900; font-display: swap; src: url('https://fonts.gstatic.com/s/orbitron/v32/yMJMMIlzdpvBhQQL_SC3X9yhF25-T1s7_g.woff2') format('woff2'); }
 @font-face { font-family: 'Share Tech Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('https://fonts.gstatic.com/s/sharetechmono/v13/J7aHnp1uDWRyFFd98ABVA9PkkfN9J9aM.woff2') format('woff2'); }
 #tesseract-main-panel{position:fixed;bottom:20px;right:20px;z-index:2147483647 !important;font-family:'Orbitron','Segoe UI',sans-serif;display:block !important;visibility:visible !important;font-size:13px;}
-#tess-mini-icon{display:none;width:56px;height:56px;background:linear-gradient(135deg,#1e1b4b,#8b5cf6);border-radius:50%;align-items:center;justify-content:center;font-size:28px;color:#fff;position:absolute;top:0;left:0;cursor:pointer;}
+#tess-mini-icon{display:none;width:56px;height:56px;background:linear-gradient(135deg,#1e1b4b,#8b5cf6);border-radius:50%;align-items:center;justify-content:center;font-size:28px;color:#fff;position:fixed;bottom:20px;right:20px;cursor:pointer;z-index:2147483647 !important;box-shadow:0 0 20px rgba(139,92,246,0.4);}
+#tess-mini-icon:hover{box-shadow:0 0 30px rgba(139,92,246,0.7);}
 .tess-box{width:420px;min-width:280px;background:linear-gradient(145deg,#0a0a0a,#1a1a2e);border-radius:16px;border:2px solid #8b5cf6;box-shadow:0 0 40px rgba(139,92,246,0.3),0 10px 40px rgba(0,0,0,0.9);color:#e0e0e0;max-height:720px;overflow-y:auto;position:relative;}
 .tess-resize{position:absolute;width:16px;height:16px;z-index:20;}.tess-resize.se{bottom:0;right:0;cursor:se-resize;border-right:3px solid #8b5cf6;border-bottom:3px solid #8b5cf6;border-radius:0 0 6px 0;}.tess-resize.sw{bottom:0;left:0;cursor:sw-resize;border-left:3px solid #8b5cf6;border-bottom:3px solid #8b5cf6;border-radius:0 0 0 6px;}.tess-resize.ne{top:0;right:0;cursor:ne-resize;border-right:3px solid #8b5cf6;border-top:3px solid #8b5cf6;border-radius:0 6px 0 0;}.tess-resize.nw{top:0;left:0;cursor:nw-resize;border-left:3px solid #8b5cf6;border-top:3px solid #8b5cf6;border-radius:6px 0 0 0;}
 .tess-header{background:linear-gradient(135deg,#1e1b4b,#8b5cf6,#7c3aed,#8b5cf6,#1e1b4b);padding:14px 18px;display:flex;justify-content:space-between;align-items:center;font-weight:900;font-size:18px;letter-spacing:2px;border-bottom:2px solid #8b5cf6;cursor:move;text-shadow:0 0 10px #8b5cf6;text-transform:uppercase;position:sticky;top:0;z-index:10;}
@@ -446,8 +447,8 @@ function createMainPanel() {
 .st-bar button{background:rgba(30,27,75,0.7);border:1px solid #8b5cf6;color:#e0e0e0;padding:4px 8px;border-radius:4px;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:7px;}
 .st-bar button:hover{background:#7c3aed;color:#fff;}
 </style>
-<div class="tess-box">
 <div id="tess-mini-icon">🤖</div>
+<div class="tess-box">
 <div class="tess-resize se"></div><div class="tess-resize sw"></div><div class="tess-resize ne"></div><div class="tess-resize nw"></div>
 <div class="tess-header"><span>🤖 TESSERACT</span><div><button id="btnMin" title="Minimizar">_</button><button id="btnClose" title="Cerrar">×</button></div></div>
 
@@ -752,39 +753,22 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   document.getElementById('btnRefreshEater').addEventListener('click', refreshEaterSuggestions);
   
   // Panel
-  console.log('[TESSERACT] btnMin exists:', !!document.getElementById('btnMin'));
   function toggleMin(e) {
-    console.log('[TESSERACT] toggleMin called, minimized:', document.querySelector('.tess-box').getAttribute('data-min'));
-    
     var panel = document.getElementById('tesseract-main-panel');
     var box = panel.querySelector('.tess-box');
-    var isMin = box.getAttribute('data-min') === '1';
+    var mini = document.getElementById('tess-mini-icon');
+    var isMin = box.style.display === 'none';
     if (isMin) {
-      box.removeAttribute('data-min');
-      box.style.width = ''; box.style.height = ''; box.style.minWidth = ''; box.style.maxHeight = ''; box.style.borderRadius = ''; box.style.overflow = '';
-      box.style.boxShadow = '';
-      var hd = box.querySelector('.tess-header'); if (hd) hd.style.display = '';
-      var ri = box.querySelectorAll('.tess-resize'); ri.forEach(function (r) { r.style.display = ''; });
-      var mi = box.querySelector('#tess-mini-icon'); if (mi) mi.style.display = 'none';
-      var nav = box.querySelector('.tab-nav'); if (nav) nav.style.display = '';
-      box.querySelectorAll('.tab-content').forEach(function (c) { c.style.display = ''; });
+      box.style.display = '';
+      if (mini) mini.style.display = 'none';
     } else {
-      box.setAttribute('data-min', '1');
-      box.style.width = '56px'; box.style.height = '56px'; box.style.minWidth = '56px'; box.style.maxHeight = '56px'; box.style.borderRadius = '50%'; box.style.overflow = 'hidden';
-      box.style.boxShadow = '0 0 20px rgba(139,92,246,0.4)';
-      var hd = box.querySelector('.tess-header'); if (hd) hd.style.display = 'none';
-      var ri = box.querySelectorAll('.tess-resize'); ri.forEach(function (r) { r.style.display = 'none'; });
-      var mi = box.querySelector('#tess-mini-icon'); if (mi) mi.style.display = 'flex';
-      var nav = box.querySelector('.tab-nav'); if (nav) nav.style.display = 'none';
-      box.querySelectorAll('.tab-content').forEach(function (c) { c.style.display = 'none'; });
-      console.log('[TESSERACT] Minimized - box rect:', box.getBoundingClientRect().width+'x'+box.getBoundingClientRect().height, 'min-icon display:', mi ? mi.style.display : 'N/A');
+      box.style.display = 'none';
+      if (mini) mini.style.display = 'flex';
     }
   }
   document.getElementById('btnMin').addEventListener('click', toggleMin);
-  document.querySelector('.tess-box').addEventListener('click', function (e) {
-    if (e.target.id === 'tess-mini-icon' || e.currentTarget.getAttribute('data-min') === '1') {
-      toggleMin(e);
-    }
+  document.getElementById('tess-mini-icon').addEventListener('click', function (e) {
+    toggleMin(e);
   });
   document.getElementById('btnClose').addEventListener('click', () => document.getElementById('tesseract-main-panel').style.display = 'none');
   document.getElementById('btnLogout').addEventListener('click', doLogout);
