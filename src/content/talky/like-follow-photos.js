@@ -13,18 +13,25 @@ var lfpBlacklistLoadPromise = null;
 async function lfpLoadBlacklist() {
   if (lfpBlacklistLoadPromise) return lfpBlacklistLoadPromise;
   lfpBlacklistLoadPromise = (async () => {
-    try {
-      var stored = await chrome.storage.local.get(['tess_jwt']);
-      if (!stored.tess_jwt) { lfpBlacklistLoadPromise = null; return; }
-      var res = await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
-        headers: { 'Authorization': 'Bearer ' + stored.tess_jwt }
-      });
-      if (res.ok) {
-        var data = await res.json();
-        lfpBlacklist = (data.blacklist || []).map(String);
-        lfpBlacklistLoaded = true;
+    for (var attempt = 0; attempt <= 2; attempt++) {
+      try {
+        var stored = await chrome.storage.local.get(['tess_jwt']);
+        if (!stored.tess_jwt) { lfpBlacklistLoadPromise = null; return; }
+        var res = await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
+          headers: { 'Authorization': 'Bearer ' + stored.tess_jwt }
+        });
+        if (!res.ok && attempt < 2) { await lfpSleep(1000); continue; }
+        if (res.ok) {
+          var data = await res.json();
+          lfpBlacklist = (data.blacklist || []).map(String);
+          lfpBlacklistLoaded = true;
+        }
+        break;
+      } catch (e) {
+        if (attempt >= 2) break;
+        await lfpSleep(1000);
       }
-    } catch (e) {}
+    }
     lfpBlacklistLoadPromise = null;
   })();
   return lfpBlacklistLoadPromise;

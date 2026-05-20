@@ -6,21 +6,29 @@ let mlBlacklist = [];
 let mlBlacklistLoaded = false;
 let mlBlacklistLoadPromise = null;
 
-async function loadMLBlacklist() {
+async function loadMLBlacklist(retries) {
+  if (retries === undefined) retries = 2;
   if (mlBlacklistLoadPromise) return mlBlacklistLoadPromise;
   mlBlacklistLoadPromise = (async () => {
-    try {
-      const stored = await chrome.storage.local.get(['tess_jwt']);
-      if (!stored.tess_jwt) { mlBlacklistLoadPromise = null; return; }
-      const res = await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
-        headers: { 'Authorization': 'Bearer ' + stored.tess_jwt }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        mlBlacklist = (data.blacklist || []).map(String);
-        mlBlacklistLoaded = true;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const stored = await chrome.storage.local.get(['tess_jwt']);
+        if (!stored.tess_jwt) { mlBlacklistLoadPromise = null; return; }
+        const res = await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
+          headers: { 'Authorization': 'Bearer ' + stored.tess_jwt }
+        });
+        if (!res.ok && attempt < retries) { await sleep(1000); continue; }
+        if (res.ok) {
+          const data = await res.json();
+          mlBlacklist = (data.blacklist || []).map(String);
+          mlBlacklistLoaded = true;
+        }
+        break;
+      } catch (e) {
+        if (attempt >= retries) break;
+        await sleep(1000);
       }
-    } catch (e) {}
+    }
     mlBlacklistLoadPromise = null;
   })();
   return mlBlacklistLoadPromise;

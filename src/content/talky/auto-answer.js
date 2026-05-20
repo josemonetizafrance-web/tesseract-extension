@@ -11,18 +11,25 @@ var TESSERACT_API = 'https://tesseract-jblo.onrender.com';
 // Variables blacklist
 let aaBlacklist = [];
 
-// Cargar blacklist
-async function loadAABlacklist() {
-  try {
-    const stored = await chrome.storage.local.get(['tess_jwt']);
-    if (stored.tess_jwt) {
+// Cargar blacklist (con reintentos)
+async function loadAABlacklist(retries) {
+  if (retries === undefined) retries = 2;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const stored = await chrome.storage.local.get(['tess_jwt']);
+      if (!stored.tess_jwt) return;
       const res = await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
         headers: { 'Authorization': 'Bearer ' + stored.tess_jwt }
       });
+      if (!res.ok && attempt < retries) { await new Promise(r => setTimeout(r, 1000)); continue; }
       const data = await res.json();
       aaBlacklist = (data.blacklist || []).map(String);
+      return;
+    } catch (e) {
+      if (attempt >= retries) return;
+      await new Promise(r => setTimeout(r, 1000));
     }
-  } catch (e) {}
+  }
 }
 
 // Verificar blacklist

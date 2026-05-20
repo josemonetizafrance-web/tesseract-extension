@@ -52,10 +52,10 @@ async function saveBlacklist() {
       });
       const data = await res.json();
       if (data.blacklist) blacklist = data.blacklist;
-      // Recargar blacklist en mailing, auto-answer y L+F+P
-      if (typeof reloadMLBlacklist === 'function') reloadMLBlacklist();
-      if (typeof loadAABlacklist === 'function') loadAABlacklist();
-      if (typeof reloadLFPBlacklist === 'function') reloadLFPBlacklist();
+      if (typeof reloadMLBlacklist === 'function') await reloadMLBlacklist();
+      if (typeof loadAABlacklist === 'function') await loadAABlacklist();
+      if (typeof reloadLFPBlacklist === 'function') await reloadLFPBlacklist();
+      if (typeof populateMLPanel === 'function') populateMLPanel();
     }
   } catch (e) {
     console.log('[BLACKLIST] Error guardando:', e.message);
