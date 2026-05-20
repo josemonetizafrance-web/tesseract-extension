@@ -1982,6 +1982,11 @@ function detectCurrentProfile() {
     const m = location.href.match(/\/(\d{6,15})(?:[/?#]|$)/);
     if (m) profileId = m[1];
   }
+  // 6b. Chat URL: /chat/{ownId}_{otherId}
+  if (!profileId) {
+    const chatM = location.href.match(/\/chat\/(\d{6,15})_(\d{6,15})/);
+    if (chatM) profileId = chatM[2];
+  }
 
   // 7. Enlaces "mi perfil" / "my profile"
   if (!profileName) {
