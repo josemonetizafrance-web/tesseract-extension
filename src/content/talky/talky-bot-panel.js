@@ -762,6 +762,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (isMin) {
       box.removeAttribute('data-min');
       box.style.width = ''; box.style.height = ''; box.style.minWidth = ''; box.style.maxHeight = ''; box.style.borderRadius = ''; box.style.overflow = '';
+      box.style.boxShadow = '';
       var hd = box.querySelector('.tess-header'); if (hd) hd.style.display = '';
       var ri = box.querySelectorAll('.tess-resize'); ri.forEach(function (r) { r.style.display = ''; });
       var mi = box.querySelector('#tess-mini-icon'); if (mi) mi.style.display = 'none';
@@ -770,11 +771,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     } else {
       box.setAttribute('data-min', '1');
       box.style.width = '56px'; box.style.height = '56px'; box.style.minWidth = '56px'; box.style.maxHeight = '56px'; box.style.borderRadius = '50%'; box.style.overflow = 'hidden';
+      box.style.boxShadow = '0 0 20px rgba(139,92,246,0.4)';
       var hd = box.querySelector('.tess-header'); if (hd) hd.style.display = 'none';
       var ri = box.querySelectorAll('.tess-resize'); ri.forEach(function (r) { r.style.display = 'none'; });
       var mi = box.querySelector('#tess-mini-icon'); if (mi) mi.style.display = 'flex';
       var nav = box.querySelector('.tab-nav'); if (nav) nav.style.display = 'none';
       box.querySelectorAll('.tab-content').forEach(function (c) { c.style.display = 'none'; });
+      console.log('[TESSERACT] Minimized - box rect:', box.getBoundingClientRect().width+'x'+box.getBoundingClientRect().height, 'min-icon display:', mi ? mi.style.display : 'N/A');
     }
   }
   document.getElementById('btnMin').addEventListener('click', toggleMin);
