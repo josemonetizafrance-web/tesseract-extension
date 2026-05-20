@@ -50,10 +50,14 @@ async function saveBlacklist() {
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + stored.tess_jwt },
         body: JSON.stringify({ blacklist })
       });
-      console.log('[BLACKLIST] POST status:', res.status, 'enviados:', blacklist.length);
+      if (!res.ok) {
+        console.log('[BLACKLIST] POST status:', res.status, '- No se pudo guardar en servidor');
+        return;
+      }
+      console.log('[BLACKLIST] POST OK, enviados:', blacklist.length);
       const data = await res.json();
       if (data.blacklist) blacklist = data.blacklist;
-      if (typeof reloadMLBlacklist === 'function') { console.log('[BLACKLIST] calling reloadMLBlacklist'); await reloadMLBlacklist(); console.log('[BLACKLIST] reloadMLBlacklist done'); }
+      if (typeof reloadMLBlacklist === 'function') await reloadMLBlacklist();
       if (typeof loadAABlacklist === 'function') await loadAABlacklist();
       if (typeof reloadLFPBlacklist === 'function') await reloadLFPBlacklist();
       if (typeof populateMLPanel === 'function') populateMLPanel();
