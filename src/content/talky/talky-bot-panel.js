@@ -2038,6 +2038,12 @@ function detectCurrentProfile() {
     nameEl.textContent = profileName || '—';
     idEl.textContent = 'ID: ' + (profileId || '—');
     badge.style.display = 'flex';
+    // Actualizar overlay Cribs si el ID cambió
+    var rawId = profileId ? profileId.replace(/^0+/, '') : '';
+    if (rawId && (!window._lastCribsPid || window._lastCribsPid !== rawId)) {
+      window._lastCribsPid = rawId;
+      setTimeout(function () { fetchCribsForProfile(rawId); }, 500);
+    }
   } else {
     badge.style.display = 'none';
   }
@@ -2599,7 +2605,144 @@ chrome.runtime.onMessage.addListener((req, sender, res) => {
   return true;
 });
 
-// ── NUEVA: escuchar eventos del bot nox directamente en la misma página ──
+// ── Floating Cribs Overlay: muestra datos de Cribs del perfil actual ──
+var cribsOverlayState = { visible: false, dragged: false, profileId: null };
+
+function createCribsOverlay() {
+  if (document.getElementById('tess-cribs-overlay')) return;
+  var css = document.createElement('style');
+  css.textContent = `
+    #tess-cribs-toggle { position:fixed; right:10px; bottom:50px; z-index:999999; background:#6d28d9; color:#fff; border:none; border-radius:50%; width:40px; height:40px; font-size:18px; cursor:pointer; box-shadow:0 2px 12px rgba(109,40,217,0.5); display:flex; align-items:center; justify-content:center; opacity:0.8; transition:opacity 0.2s; }
+    #tess-cribs-toggle:hover { opacity:1; }
+    #tess-cribs-overlay { position:fixed; right:10px; bottom:95px; width:280px; max-height:400px; background:#13131a; border:1px solid #2d2d3f; border-radius:8px; box-shadow:0 4px 24px rgba(0,0,0,0.6); z-index:999998; font:10px/1.4 -apple-system,BlinkMacSystemFont,sans-serif; color:#ccc; overflow:hidden; display:none; flex-direction:column; }
+    #tess-cribs-overlay.visible { display:flex; }
+    #tess-cribs-header { display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:#1a1a24; cursor:grab; border-bottom:1px solid #2d2d3f; user-select:none; }
+    #tess-cribs-header:active { cursor:grabbing; }
+    #tess-cribs-title { font-weight:600; font-size:11px; color:#c4b5fd; }
+    #tess-cribs-close { background:none; border:none; color:#666; font-size:14px; cursor:pointer; padding:0 2px; }
+    #tess-cribs-close:hover { color:#fff; }
+    #tess-cribs-body { padding:8px 10px; overflow-y:auto; flex:1; }
+    #tess-cribs-body .cr-row { display:flex; padding:2px 0; border-bottom:1px solid #1f1f2a; }
+    #tess-cribs-body .cr-label { width:70px; flex-shrink:0; color:#888; }
+    #tess-cribs-body .cr-value { flex:1; color:#e0e0e0; word-break:break-word; }
+    #tess-cribs-body .cr-empty { color:#555; font-style:italic; }
+    .tess-cribs-msg { text-align:center; padding:20px; color:#666; font-size:10px; }
+  `;
+  document.head.appendChild(css);
+
+  var toggle = document.createElement('div');
+  toggle.id = 'tess-cribs-toggle';
+  toggle.textContent = '📋';
+  toggle.title = 'Mostrar Cribs del perfil';
+  toggle.addEventListener('click', function () { cribsOverlayState.visible = !cribsOverlayState.visible; document.getElementById('tess-cribs-overlay').classList.toggle('visible', cribsOverlayState.visible); });
+  document.body.appendChild(toggle);
+
+  var overlay = document.createElement('div');
+  overlay.id = 'tess-cribs-overlay';
+  overlay.innerHTML = '<div id="tess-cribs-header"><span id="tess-cribs-title">📋 CRIBS</span><button id="tess-cribs-close">✕</button></div><div id="tess-cribs-body"><div class="tess-cribs-msg">Cargando...</div></div>';
+  document.body.appendChild(overlay);
+
+  document.getElementById('tess-cribs-close').addEventListener('click', function () { cribsOverlayState.visible = false; overlay.classList.remove('visible'); });
+
+  // Make header draggable
+  var header = document.getElementById('tess-cribs-header');
+  var offsetX, offsetY;
+  header.addEventListener('mousedown', function (e) {
+    if (e.target.tagName === 'BUTTON') return;
+    offsetX = e.clientX - overlay.getBoundingClientRect().left;
+    offsetY = e.clientY - overlay.getBoundingClientRect().top;
+    function onMove(ev) { overlay.style.left = (ev.clientX - offsetX) + 'px'; overlay.style.right = 'auto'; overlay.style.top = (ev.clientY - offsetY) + 'px'; overlay.style.bottom = 'auto'; }
+    function onUp() { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function renderCribsOverlay(data) {
+  var body = document.getElementById('tess-cribs-body');
+  if (!body) return;
+  if (!data) { body.innerHTML = '<div class="tess-cribs-msg">No hay datos en Cribs para este perfil</div>'; return; }
+  var fields = [
+    { label: 'Nombre', key: 'profile_name' },
+    { label: 'ID', key: 'profile_id' },
+    { label: 'País', key: 'country' },
+    { label: 'Ciudad', key: 'city' },
+    { label: 'Edad', key: 'age' },
+    { label: 'Intereses', key: 'interests' },
+    { label: 'Trabajo', key: 'work' },
+    { label: 'Estado Civil', key: 'marital_status' },
+    { label: 'Rasgos', key: 'traits' },
+    { label: 'Cine', key: 'movie_genres' },
+    { label: 'Música', key: 'music_genres' },
+    { label: 'Idiomas', key: 'languages' },
+    { label: 'Objetivo', key: 'goal' },
+    { label: 'Educación', key: 'education' },
+    { label: 'Busca', key: 'looking_for' },
+    { label: 'Complexión', key: 'body_type' },
+    { label: 'Status', key: 'status' },
+    { label: 'Prioridad', key: 'priority' },
+    { label: 'Notas', key: 'quick_notes' }
+  ];
+  var html = '';
+  fields.forEach(function (f) {
+    var val = data[f.key];
+    if (val === null || val === undefined || val === '') val = null;
+    html += '<div class="cr-row"><span class="cr-label">' + f.label + '</span><span class="cr-value' + (val === null ? ' cr-empty' : '') + '">' + (val !== null ? String(val) : '—') + '</span></div>';
+  });
+  body.innerHTML = html;
+}
+
+function fetchCribsForProfile(profileId) {
+  if (!profileId) { renderCribsOverlay(null); return; }
+  var body = document.getElementById('tess-cribs-body');
+  if (body) body.innerHTML = '<div class="tess-cribs-msg">Cargando...</div>';
+  setTimeout(function () {
+    if (typeof TESSERACT_API === 'undefined') { if (body) body.innerHTML = '<div class="tess-cribs-msg">API no disponible</div>'; return; }
+    // Try to get jwt from storage
+    chrome.storage.local.get(['tess_jwt'], function (data) {
+      var headers = { 'Content-Type': 'application/json' };
+      if (data.tess_jwt) headers['Authorization'] = 'Bearer ' + data.tess_jwt;
+      fetch(TESSERACT_API + '/api/tess/cribs', { headers: headers })
+        .then(function (r) { return r.json(); })
+        .then(function (resp) {
+          if (!resp.cribs || !Array.isArray(resp.cribs)) { renderCribsOverlay(null); return; }
+          // Search by profile_id (string)
+          var entry = null;
+          for (var i = 0; i < resp.cribs.length; i++) {
+            var c = resp.cribs[i];
+            if (String(c.profile_id) === String(profileId)) { entry = c; break; }
+          }
+          if (entry) {
+            renderCribsOverlay(entry);
+            cribsOverlayState.profileId = profileId;
+            // Auto-show if hidden
+            if (!cribsOverlayState.visible) {
+              cribsOverlayState.visible = true;
+              var el = document.getElementById('tess-cribs-overlay');
+              if (el) el.classList.add('visible');
+            }
+          } else {
+            renderCribsOverlay(null);
+            cribsOverlayState.profileId = null;
+          }
+        })
+        .catch(function () { if (body) body.innerHTML = '<div class="tess-cribs-msg">Error de conexión</div>'; });
+    });
+  }, 300);
+}
+
+// ── Inicializar overlay Cribs ──
+setTimeout(function () {
+  createCribsOverlay();
+  // Si ya hay perfil detectado, buscar sus cribs
+  var pid = window._lastCribsPid || '';
+  if (!pid) {
+    try { var el = document.getElementById('profileId'); if (el) pid = el.textContent.replace('ID: ', '').replace(/^0+/, '').trim(); } catch (e) {}
+  }
+  if (pid) fetchCribsForProfile(pid);
+}, 2000);
+
+// ── escuchar eventos del bot nox directamente en la misma página ──
 (function setupBotEventListeners() {
   const typeMap = { 'nox:likeSent': 'Like', 'nox:followSent': 'Follow', 'nox:saludoSent': 'Saludo', 'nox:cartaSent': 'Cartas' };
   Object.entries(typeMap).forEach(([eventName, category]) => {
