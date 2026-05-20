@@ -77,6 +77,11 @@ function createMailingPanel() {
       </div>
     </div>
     <div class="ml-section">
+      <h4>MODO DE ENVIO</h4>
+      <label><input type="checkbox" id="mlEmailModeToggle"> Modo Email (cartas en seccion correo)</label>
+      <p style="font-size:8px;color:#666;margin-top:4px;">Activa para enviar cartas desde la seccion Email > Active limits. Desactivado = envia mensajes por chat.</p>
+    </div>
+    <div class="ml-section">
       <h4>HORARIO LABORAL</h4>
       <label><input type="checkbox" id="mlRespectHours" checked> Respetar horario</label>
       <div class="ml-hour-row">
@@ -203,6 +208,7 @@ function populateMLPanel() {
 
   document.getElementById('mlEnabledToggle').checked = !!cfg.enabled;
   document.getElementById('mlUseAIToggle').checked = !!cfg.useAI;
+  document.getElementById('mlEmailModeToggle').checked = !!cfg.useEmailSection;
   document.getElementById('mlMaxDaily').value = cfg.maxDaily || 30;
   document.getElementById('mlDelayMin').value = Math.floor((cfg.delay?.min || 3000) / 1000);
   document.getElementById('mlDelayMax').value = Math.floor((cfg.delay?.max || 7000) / 1000);
@@ -238,6 +244,7 @@ async function saveMLPanelConfigWrapper() {
     const cfg = mlCfgCache || {};
     cfg.enabled = !!document.getElementById('mlEnabledToggle').checked;
     cfg.useAI = !!document.getElementById('mlUseAIToggle').checked;
+    cfg.useEmailSection = !!document.getElementById('mlEmailModeToggle').checked;
     cfg.maxDaily = parseInt(document.getElementById('mlMaxDaily').value) || 30;
     cfg.delay = { min: (parseInt(document.getElementById('mlDelayMin').value) || 3) * 1000, max: (parseInt(document.getElementById('mlDelayMax').value) || 7) * 1000 };
     cfg.respectQuietHours = !!document.getElementById('mlRespectHours').checked;
@@ -274,7 +281,7 @@ async function saveMLPanelConfigWrapper() {
 function getDefaultMailingConfig() {
   return {
     enabled: false, maxDaily: 30, sentToday: 0, messageTemplate: '',
-    useAI: false, respectQuietHours: true, workingHours: { start: 8, end: 22 },
+    useAI: false, useEmailSection: false, respectQuietHours: true, workingHours: { start: 8, end: 22 },
     delay: { min: 3000, max: 7000 }, skipPinned: true,
     scheduleEnabled: false, scheduleStartDate: '', scheduleFrequency: 'daily', scheduleCycles: 30, scheduleRemaining: 30,
     templatesNew: '', templatesRecurring: '', blockActiveDialogue: true, activeDialogueHours: 48

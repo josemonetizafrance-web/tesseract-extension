@@ -181,7 +181,7 @@
       if (statusFilter && e.status !== statusFilter) return false;
       if (priorityFilter && e.priority !== priorityFilter) return false;
       if (search) {
-        var text = (e.profile_id + ' ' + e.profile_name + ' ' + e.country + ' ' + e.interests + ' ' + e.quick_notes).toLowerCase();
+        var text = (e.profile_id + ' ' + e.profile_name + ' ' + e.country + ' ' + e.city + ' ' + e.interests + ' ' + e.traits + ' ' + e.work + ' ' + e.marital_status + ' ' + e.movie_genres + ' ' + e.music_genres + ' ' + e.goal + ' ' + e.languages + ' ' + e.education + ' ' + e.looking_for + ' ' + e.body_type + ' ' + e.quick_notes).toLowerCase();
         if (text.indexOf(search) === -1) return false;
       }
       return true;
@@ -216,6 +216,17 @@
       { key: 'country', label: 'Pa\u00eds', editable: true, type: 'select', options: ['','USA','UK','Canada','Australia','Espa\u00f1a','M\u00e9xico','Colombia','Argentina','Chile','Per\u00fa','Brasil','Alemania','Francia','Italia','Otro'] },
       { key: 'age', label: 'Edad', editable: true, type: 'number' },
       { key: 'interests', label: 'Intereses', editable: true },
+      { key: 'city', label: 'Ciudad', editable: true },
+      { key: 'work', label: 'Trabajo', editable: true },
+      { key: 'marital_status', label: 'Estado Civil', editable: true },
+      { key: 'traits', label: 'Rasgos', editable: true },
+      { key: 'movie_genres', label: 'Géneros Cine', editable: true },
+      { key: 'music_genres', label: 'Géneros Música', editable: true },
+      { key: 'goal', label: 'Objetivo', editable: true },
+      { key: 'languages', label: 'Idiomas', editable: true },
+      { key: 'education', label: 'Educación', editable: true },
+      { key: 'looking_for', label: 'Busca', editable: true },
+      { key: 'body_type', label: 'Complexión', editable: true },
       { key: 'status', label: 'Status', editable: true, type: 'select', options: ['Nuevo','Activo','VIP','Fr\u00edo','Inactivo'] },
       { key: 'last_contact', label: '\u00daltimo Contacto', editable: false },
       { key: 'preferred_template', label: 'Plantilla Preferida', editable: true, type: 'select', options: ['default','romantica','amistad','negocios','calida','divertida'] },
@@ -227,7 +238,7 @@
     fields.forEach(function (f) {
       var arrow = '';
       if (cribSortField === f.key) arrow = cribSortDir === 1 ? ' ▲' : ' ▼';
-      html += '<th onclick="window._cribSort(\'' + f.key + '\')">' + f.label + '<span class="sort-arrow">' + arrow + '</span></th>';
+      html += '<th data-sort="' + f.key + '">' + f.label + '<span class="sort-arrow">' + arrow + '</span></th>';
     });
     html += '<th style="width:60px;">ACCI\u00d3N</th></tr></thead><tbody>';
 
@@ -254,7 +265,7 @@
           else html += escapeHtml(val);
         } else if (f.type === 'select') {
           var cls = f.key === 'priority' ? prioClass : (f.key === 'status' ? statusClass : '');
-          html += '<select class="cell-select ' + cls + '" onchange="window._cribUpdate(\'' + entry._id + '\',\'' + f.key + '\',this.value)">';
+          html += '<select class="cell-select ' + cls + '" data-id="' + entry._id + '" data-field="' + f.key + '">';
           f.options.forEach(function (o) {
             html += '<option value="' + escapeHtml(o) + '"' + (val === o ? ' selected' : '') + '>' + escapeHtml(o || '—') + '</option>';
           });
@@ -267,14 +278,31 @@
         html += '</td>';
       });
       html += '<td style="white-space:nowrap;">' +
-        '<button class="btn-crib-chat" onclick="window._cribChat(\'' + escapeHtml(entry.profile_id) + '\')" title="Abrir chat">\uD83D\uDCAC</button>' +
-        '<button class="btn-crib-del" onclick="window._cribDelete(\'' + entry._id + '\')" title="Eliminar">✕</button>' +
+        '<button class="btn-crib-chat" data-profile-id="' + escapeHtml(entry.profile_id) + '" title="Abrir chat">\uD83D\uDCAC</button>' +
+        '<button class="btn-crib-del" data-id="' + entry._id + '" title="Eliminar">✕</button>' +
         '</td>';
       html += '</tr>';
     });
 
     html += '</tbody></table>';
     container.innerHTML = html;
+
+    // Event delegation for sortable headers, selects, and action buttons
+    var table = container.querySelector('table.crib-table');
+    if (table) {
+      table.addEventListener('click', function (e) {
+        var th = e.target.closest('th[data-sort]');
+        if (th) { window._cribSort(th.dataset.sort); return; }
+        var chatBtn = e.target.closest('.btn-crib-chat');
+        if (chatBtn && chatBtn.dataset.profileId) { window._cribChat(chatBtn.dataset.profileId); return; }
+        var delBtn = e.target.closest('.btn-crib-del');
+        if (delBtn && delBtn.dataset.id) { window._cribDelete(delBtn.dataset.id); return; }
+      });
+      table.addEventListener('change', function (e) {
+        var sel = e.target.closest('select.cell-select[data-id][data-field]');
+        if (sel) { window._cribUpdate(sel.dataset.id, sel.dataset.field, sel.value); }
+      });
+    }
 
     // Attach contenteditable blur listeners
     container.querySelectorAll('.cell-editable').forEach(function (el) {
@@ -342,6 +370,14 @@
           document.getElementById('crib-add-id').value = '';
           cribsData = d.cribs || [];
           applyCribFilters();
+          var entryId = d.entry_id;
+          if (entryId) {
+            chrome.tabs.query({ url: '*://talkytimes.com/*' }, function (tabs) {
+              if (tabs && tabs.length > 0) {
+                chrome.tabs.sendMessage(tabs[0].id, { action: 'SCRAPE_PROFILE', profileId: id, entryId: entryId, jwt: currentJwt }, function () {});
+              }
+            });
+          }
         } else {
           alert(d.error || 'Error al agregar');
         }
@@ -350,6 +386,10 @@
 
     document.getElementById('crib-add-id').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') document.getElementById('btn-crib-add').click();
+    });
+
+    chrome.runtime.onMessage.addListener(function (req) {
+      if (req.action === 'CRIBS_REFRESH') { renderCribs(); }
     });
 
     document.getElementById('btn-crib-open-table').addEventListener('click', function () {

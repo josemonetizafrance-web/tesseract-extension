@@ -552,6 +552,7 @@ async function sendResponse(text) {
   }
 
   aaDailyCount++;
+  if (typeof botStats !== 'undefined') { botStats.autoResponse = (botStats.autoResponse || 0) + 1; botStats.repliesResponded = (botStats.repliesResponded || 0) + 1; }
   if (aaConfig) {
     aaConfig.respondedToday = aaDailyCount;
     if (!aaPendingSave) {

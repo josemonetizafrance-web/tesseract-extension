@@ -84,7 +84,8 @@ const DEFAULT_MAILING_CONFIG = {
   blockActiveDialogue: true,
   activeDialogueHours: 48,
   multiProfileEnabled: false,
-  currentProfile: ''
+  currentProfile: '',
+  useEmailSection: false
 };
 
 let mailingConfig = null;
@@ -367,6 +368,11 @@ async function executeMailingRound() {
   if (mailingActive) return { sent: 0, skipped: 0, blacklisted: 0, total: 0 };
   if (!isScheduleActive()) return { sent: 0, skipped: 0, blacklisted: 0, total: 0 };
 
+  // Redirect to email mailing if useEmailSection is enabled
+  if (mailingConfig.useEmailSection) {
+    return await executeEmailMailingRound();
+  }
+
   mailingActive = true;
   mailingAbort = false;
   resetMailingDailyCounter();
@@ -408,6 +414,7 @@ async function executeMailingRound() {
       mailingConfig.sentToday++;
       await saveMailingConfig();
       sent++;
+      if (typeof botStats !== 'undefined') botStats.mailingSent = (botStats.mailingSent || 0) + 1;
     } else { skipped++; }
 
     const delayMs = (mailingConfig.delay?.min || 3000) + Math.random() * ((mailingConfig.delay?.max || 7000) - (mailingConfig.delay?.min || 3000));
@@ -421,6 +428,185 @@ async function executeMailingRound() {
 }
 
 function abortMailingRound() { mailingAbort = true; }
+
+// ─── EMAIL SECTION NAVIGATION ───
+function mlClickEmailIcon() {
+  var svg = document.querySelector('svg#Email, svg[id="Email"]');
+  if (svg) {
+    var btn = svg.closest('button, a, [role="button"], [class*="nav-item"], [class*="menu-item"]') || svg.parentElement;
+    if (btn) { try { btn.click(); } catch (e) {} return true; }
+  }
+  var fallback = document.querySelector('[href*="/mails"], [href*="/email"], [class*="nav"] [class*="mail"], [class*="menu"] [class*="mail"]');
+  if (fallback) { try { fallback.click(); } catch (e) {} return true; }
+  return false;
+}
+
+function mlClickActiveLimitsTab() {
+  var tab = document.querySelector('[data-test-id*="has_limits"]');
+  if (tab) { try { tab.click(); } catch (e) {} return true; }
+  var tab2 = document.querySelector('[class*="has_limits"], [data-test-id*="active-limit"], [data-test-id*="ActiveLimit"]');
+  if (tab2) { try { tab2.click(); } catch (e) {} return true; }
+  return false;
+}
+
+async function mlWaitForEmailContacts(timeout) {
+  var start = Date.now();
+  while (Date.now() - start < timeout) {
+    if (document.querySelectorAll('[class*="contact"] a[href*="/profile"], [class*="limit"] a[href], [class*="active"] a[href*="/profile"]').length > 0) return true;
+    await sleep(500);
+  }
+  return false;
+}
+
+function findEmailInput() {
+  var selectors = [
+    'textarea[class*="letter"], textarea[class*="email"], textarea[class*="mail"], textarea[class*="carta"]',
+    'textarea[placeholder*="letter"], textarea[placeholder*="email"], textarea[placeholder*="carta"]',
+    'div[contenteditable="true"][class*="letter"], div[contenteditable="true"][class*="email"]',
+    '[class*="compose"] textarea, [class*="compose"] [contenteditable="true"]',
+    '[class*="email-body"] textarea, [class*="email-body"] [contenteditable="true"]',
+    '[class*="mail-body"] textarea, [class*="mail-body"] [contenteditable="true"]',
+    '.letter-content textarea, .letter-content [contenteditable="true"]',
+    'textarea',
+  ];
+  for (var i = 0; i < selectors.length; i++) {
+    var el = document.querySelector(selectors[i]);
+    if (el && el.offsetParent !== null) return el;
+  }
+  return null;
+}
+
+function findEmailSendButton() {
+  var selectors = [
+    'button[class*="send-letter"], button[class*="send-email"], button[class*="send-mail"]',
+    'button[aria-label*="send letter"], button[aria-label*="send email"], button[aria-label*="enviar carta"]',
+    '[class*="letter"] button[class*="send"], [class*="email"] button[class*="send"], [class*="mail"] button[class*="send"]',
+    'button[type="submit"][class*="letter"], button[type="submit"][class*="email"]',
+    '#sendLetterBtn', '#sendEmailBtn',
+  ];
+  for (var i = 0; i < selectors.length; i++) {
+    var el = document.querySelector(selectors[i]);
+    if (el && el.offsetParent !== null) return el;
+  }
+  var all = document.querySelectorAll('button, [role="button"]');
+  for (var j = 0; j < all.length; j++) {
+    var t = (all[j].textContent || '').toLowerCase().trim();
+    if ((t === 'send' || t === 'enviar' || t === '\u2192') && all[j].offsetParent !== null) return all[j];
+  }
+  return null;
+}
+
+function typeIntoEmailInput(input, text) {
+  if (!input) return false;
+  try {
+    if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
+      input.value = text;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    } else if (input.isContentEditable) {
+      input.textContent = text;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    return true;
+  } catch (e) { return false; }
+}
+
+async function sendEmailLetter(text, profileId) {
+  if (profileId) {
+    var link = document.querySelector('a[href*="/profile/' + profileId + '"], a[href*="/' + profileId + '"], a[href*="' + profileId + '"]');
+    if (link) { link.click(); await sleep(2000); }
+    else { return false; }
+  }
+  var input = findEmailInput();
+  var sendBtn = findEmailSendButton();
+  if (!input) {
+    input = findChatInput();
+  }
+  if (!sendBtn) {
+    sendBtn = findSendButton();
+  }
+  if (!input || !sendBtn) return false;
+  if (!typeIntoEmailInput(input, text)) return false;
+  var beforeValue = input.value || input.textContent || '';
+  await sleep(1500);
+  sendBtn.click();
+  await sleep(1500);
+  var afterValue = input.value || input.textContent || '';
+  if (afterValue === beforeValue && beforeValue !== '') {
+    var altBtn = document.querySelector('[class*="send"]:not(button), [class*="submit"]:not(button)');
+    if (altBtn) { altBtn.click(); await sleep(1500); var afterValue2 = input.value || input.textContent || ''; if (afterValue2 === beforeValue) return false; }
+    else return false;
+  }
+  return true;
+}
+
+// ─── EMAIL MAILING ROUND ───
+async function executeEmailMailingRound() {
+  if (!mailingConfig || !mailingConfig.enabled) return { sent: 0, skipped: 0, blacklisted: 0, total: 0 };
+  if (mailingActive) return { sent: 0, skipped: 0, blacklisted: 0, total: 0 };
+  if (!isScheduleActive()) return { sent: 0, skipped: 0, blacklisted: 0, total: 0 };
+
+  mailingActive = true;
+  mailingAbort = false;
+  resetMailingDailyCounter();
+
+  if (mailingConfig.maxDaily > 0 && mailingConfig.sentToday >= mailingConfig.maxDaily) {
+    mailingActive = false; return { sent: 0, skipped: 0, blacklisted: 0, total: 0 };
+  }
+  if (!isWithinWorkingHours()) { mailingActive = false; return { sent: 0, skipped: 0, blacklisted: 0, total: 0 }; }
+  if (!mlBlacklistLoaded) await loadMLBlacklist();
+
+  var navOk = mlClickEmailIcon();
+  if (!navOk) { mailingActive = false; return { sent: 0, skipped: 0, blacklisted: 0, total: 0 }; }
+  await sleep(2500);
+
+  mlClickActiveLimitsTab();
+  await sleep(2000);
+
+  await mlWaitForEmailContacts(10000);
+
+  var contacts = scrapeActiveLimitsIds();
+  if (contacts.length === 0) { mailingActive = false; return { sent: 0, skipped: 0, blacklisted: 0, total: 0 }; }
+
+  var sent = 0, skipped = 0, blacklisted = 0, alreadyContacted = 0, activeSkipped = 0;
+
+  for (var i = 0; i < contacts.length; i++) {
+    if (!mailingConfig.enabled || mailingAbort) break;
+    if (mailingConfig.maxDaily > 0 && mailingConfig.sentToday >= mailingConfig.maxDaily) break;
+
+    var contact = contacts[i];
+    var contactId = contact.id;
+    var contactType = contact.contactType || 'new';
+
+    if (contactType === 'active') { activeSkipped++; skipped++; continue; }
+    if (isInMLBlacklist(contactId)) { blacklisted++; continue; }
+    if (await isContactAlreadyContactedML(contactId)) { alreadyContacted++; skipped++; continue; }
+
+    if (mailingConfig.skipPinned && contact.element) {
+      var p = contact.element.closest('[class*="contact"], [class*="user"], [class*="member"], [class*="profile"], [class*="item"], [class*="row"], tr');
+      if (p && isContactPinnedOrSaved(p)) { skipped++; continue; }
+    }
+
+    var message = await getMessageForContact(contactType);
+    if (!message) { skipped++; continue; }
+
+    var success = await sendEmailLetter(message, contactId);
+    if (success) {
+      await markContactAsContactedML(contactId);
+      mailingConfig.sentToday++;
+      await saveMailingConfig();
+      sent++;
+      if (typeof botStats !== 'undefined') botStats.mailingSent = (botStats.mailingSent || 0) + 1;
+    } else { skipped++; }
+
+    var delayMs = (mailingConfig.delay?.min || 5000) + Math.random() * ((mailingConfig.delay?.max || 10000) - (mailingConfig.delay?.min || 5000));
+    await sleep(delayMs);
+  }
+
+  if (sent > 0) consumeScheduleCycle();
+  mailingActive = false;
+  return { sent: sent, skipped: skipped, blacklisted: blacklisted, alreadyContacted: alreadyContacted, activeSkipped: activeSkipped, total: contacts.length };
+}
 
 async function setMailingState(enabled) {
   await loadMailingConfig();
@@ -457,6 +643,12 @@ async function updateMailingBlockActiveDialogue(block, hours) {
   await loadMailingConfig();
   mailingConfig.blockActiveDialogue = block;
   mailingConfig.activeDialogueHours = hours || 48;
+  await saveMailingConfig();
+}
+
+async function updateMailingUseEmailSection(useEmail) {
+  await loadMailingConfig();
+  mailingConfig.useEmailSection = useEmail;
   await saveMailingConfig();
 }
 
@@ -509,8 +701,10 @@ window._updateMailingStopOnBlacklist = updateMailingStopOnBlacklist;
 window._updateMailingSchedule = updateMailingSchedule;
 window._updateMailingTemplates = updateMailingTemplates;
 window._updateMailingBlockActiveDialogue = updateMailingBlockActiveDialogue;
+window._updateMailingUseEmailSection = updateMailingUseEmailSection;
 window._setMailingState = setMailingState;
 window._executeMailingRound = executeMailingRound;
+window._executeEmailMailingRound = executeEmailMailingRound;
 window._abortMailingRound = abortMailingRound;
 window._reloadMLBlacklist = reloadMLBlacklist;
 window._getMailingStats = getMailingStats;

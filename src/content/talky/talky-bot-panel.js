@@ -47,9 +47,10 @@ async function saveBlacklist() {
       });
       const data = await res.json();
       if (data.blacklist) blacklist = data.blacklist;
-      // Recargar blacklist en mailing y auto-answer
+      // Recargar blacklist en mailing, auto-answer y L+F+P
       if (typeof reloadMLBlacklist === 'function') reloadMLBlacklist();
       if (typeof loadAABlacklist === 'function') loadAABlacklist();
+      if (typeof reloadLFPBlacklist === 'function') reloadLFPBlacklist();
     }
   } catch (e) {
     console.log('[BLACKLIST] Error guardando:', e.message);
@@ -160,7 +161,7 @@ function renderIcebreakers(container) {
 }
 
 // Variables de estado global
-let collectedIds = { Saludo: [], Like: [], Follow: [], Cartas: [] };
+let collectedIds = { Saludo: [], Like: [], Follow: [], LFP: [], Cartas: [] };
 let botStats = { likesGiven: 0, followsGiven: 0, cartasSent: 0, contactsProcessed: 0, repliesReceived: 0, repliesResponded: 0, icebreakersSent: 0 };
 let currentTab = 'main';
 let currentStarFilter = 'all';
@@ -268,6 +269,7 @@ async function initTesseract() {
   // Recargar blacklists despues de init
   if (typeof reloadMLBlacklist === 'function') reloadMLBlacklist();
   if (typeof loadAABlacklist === 'function') loadAABlacklist();
+  if (typeof reloadLFPBlacklist === 'function') reloadLFPBlacklist();
 
   // Verificar que storage funciona
   try {
@@ -431,6 +433,7 @@ function createMainPanel() {
 .st-out .idtag{font-size:7px;padding:2px 6px;border-radius:8px;text-transform:uppercase;font-weight:bold;}
 .st-out .idtag.Like{background:#ec4899;color:#fff;}
 .st-out .idtag.Follow{background:#3b82f6;color:#fff;}
+.st-out .idtag.LFP{background:#8b5cf6;color:#fff;}
 .st-out .idtag.Saludo{background:#22c55e;color:#000;}
 .st-out .idtag.Cartas{background:#f59e0b;color:#000;}
 .st-out .empty{text-align:center;padding:20px;color:#666;font-size:10px;letter-spacing:1px;}
@@ -485,13 +488,19 @@ function createMainPanel() {
 <!-- CONTENEDOR DE VENTANAS -->
 <div class="bot-win-container" style="position:relative;min-height:200px;">
 
-<!-- SUB: LIKE & FOLLOW -->
+<!-- SUB: LIKE & FOLLOW + PHOTOS (Unificado) -->
 <div class="bot-subpanel" id="botsubLikefollow" data-z="1">
 <button class="win-close" data-close="botsubLikefollow">×</button>
-<div class="mod-card" style="margin-bottom:8px;"><h4>❤️ BARRIDO LIKES</h4><div class="st" id="likesStatus" style="color:#ffffff;">INACTIVO</div><button id="btnLikesToggle">▶ LIKE</button></div>
-<div class="mod-card" style="margin-bottom:8px;"><h4>➕ BARRIDO FOLLOWS</h4><div class="st" id="followsStatus" style="color:#ffffff;">INACTIVO</div><button id="btnFollowsToggle">▶ FOLLOW</button></div>
+<div class="mod-card" style="margin-bottom:8px;">
+<h4>❤️➕📷 L+F+P UNIFICADO</h4>
+<div class="st" id="lfpStatus" style="color:#ffffff;font-size:13px;font-weight:bold;margin-bottom:8px;">INACTIVO</div>
+<div style="display:flex;gap:6px;justify-content:center;">
+<button id="btnLFPToggle" style="flex:1;padding:12px 8px;border:2px solid #8b5cf6;border-radius:8px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;transition:all 0.3s;text-shadow:0 0 10px rgba(139,92,246,0.5);">▶ L+F+P</button>
+<button id="btnLFPPause" style="width:44px;padding:12px 4px;border:1px solid #f59e0b;border-radius:8px;background:rgba(245,158,11,0.15);color:#f59e0b;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:16px;transition:all 0.3s;" title="Pausar/Reanudar">⏸</button>
+</div>
+</div>
 <div class="stats-row">
-<div class="stat-mini"><span class="val" id="vTotal">0</span>TOTAL ACCIONES</div>
+<div class="stat-mini" style="grid-column:1/-1;"><span class="val" id="vTotal" style="font-size:28px;">0</span>RESULTS</div>
 </div>
 </div>
 
@@ -728,8 +737,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
   
   // Botones de barrido
-  document.getElementById('btnLikesToggle').addEventListener('click', toggleLikes);
-  document.getElementById('btnFollowsToggle').addEventListener('click', toggleFollows);
+  document.getElementById('btnLFPToggle').addEventListener('click', executeLFP);
+  document.getElementById('btnLFPPause').addEventListener('click', lfpTogglePause);
   
   // Eater
   document.getElementById('btnEaterToggle').addEventListener('click', toggleEater);
@@ -925,9 +934,10 @@ async function doLogin() {
     
     // Cargar blacklist del servidor
     loadBlacklist();
-    // Recargar blacklist de mailing despues del login
+    // Recargar blacklist de mailing, auto-answer y L+F+P despues del login
     if (typeof reloadMLBlacklist === 'function') reloadMLBlacklist();
     if (typeof loadAABlacklist === 'function') loadAABlacklist();
+    if (typeof reloadLFPBlacklist === 'function') reloadLFPBlacklist();
     
     document.getElementById('currentUserDisplay').textContent = email;
     renderStarIds();
@@ -954,39 +964,14 @@ function doLogout() {
 }
 
 // ============ MÓDULOS ============
-function toggleLikes() {
-  if (followsActive) { followsActive = false; updateModUI('follows', false); }
-  likesActive = !likesActive;
-  likeFollowActive = likesActive || followsActive;
-  updateModUI('likes', likesActive);
-  if (likesActive) executeLikes();
-  saveAllStates();
+// Bridge: updateStats is called by like-follow-photos.js to refresh results counter
+function updateStats() {
+  var el = document.getElementById('vTotal');
+  if (el) el.textContent = (window.lfpStats && window.lfpStats.processed) || 0;
 }
-function toggleFollows() {
-  if (likesActive) { likesActive = false; updateModUI('likes', false); }
-  followsActive = !followsActive;
-  likeFollowActive = likesActive || followsActive;
-  updateModUI('follows', followsActive);
-  if (followsActive) executeFollows();
-  saveAllStates();
-}
-// Funciones de toggle deshabilitadas (mantener código para futuro)
+
 function toggleSaludos() { console.log('[TESSERACT] Saludos Masivos deshabilitado'); }
 function toggleCartas() { console.log('[TESSERACT] Cartas deshabilitado'); }
-
-function updateModUI(mod, active) {
-  if (mod === 'likes') {
-    const st = document.getElementById('likesStatus');
-    const btn = document.getElementById('btnLikesToggle');
-    if(st) { st.textContent = active ? 'ACTIVO' : 'INACTIVO'; st.style.color = active ? '#4CAF50' : '#ffffff'; }
-    if(btn) { btn.textContent = active ? '⏸ DETENER' : '▶ LIKE'; btn.className = active ? 'on' : ''; }
-  } else if (mod === 'follows') {
-    const st = document.getElementById('followsStatus');
-    const btn = document.getElementById('btnFollowsToggle');
-    if(st) { st.textContent = active ? 'ACTIVO' : 'INACTIVO'; st.style.color = active ? '#4CAF50' : '#ffffff'; }
-    if(btn) { btn.textContent = active ? '⏸ DETENER' : '▶ FOLLOW'; btn.className = active ? 'on' : ''; }
-  }
-}
 
 // ============ EXTRACT ID (12 DÍGITOS) ============
 function extractId(el) {
@@ -1150,224 +1135,7 @@ function sweepSleep(ms) {
   });
 }
 
-// ============ EJECUTAR LIKES (ABRE PERFILES INDIVIDUALMENTE — SOLO LIKE, SIN FOTOS) ============
-async function executeLikes() {
-  console.log('[LIKES] Iniciando barrido de likes...');
-  updateModUI('likes', true);
-
-  var context = detectLFContext();
-  console.log('[LIKES] Contexto detectado:', context);
-
-  var page = 0, totalGiven = 0;
-
-  while (likesActive && page < 50) {
-    page++;
-
-    var contactIds = collectLFContacts(context);
-    if (contactIds.length === 0) {
-      console.log('[LIKES] Sin contactos en pagina', page);
-      if (context === 'search') {
-        var nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
-        if (!nextBtn || nextBtn.disabled) break;
-        nextBtn.click();
-        await sweepSleep(2000);
-        continue;
-      }
-      break;
-    }
-
-    for (var ci = 0; ci < contactIds.length; ci++) {
-      if (!likesActive) break;
-      var contactId = contactIds[ci];
-      if (isBlacklisted(contactId)) continue;
-
-      if (!likesActive) break;
-      console.log('[LIKES] Abriendo perfil:', contactId);
-      var navigated = await navigateToProfile(contactId, context);
-      if (!navigated) {
-        console.log('[LIKES] No se pudo navegar al perfil', contactId);
-        continue;
-      }
-      await sweepSleep(1500);
-      if (!likesActive) break;
-
-      registerIdInStarTools(contactId, 'Like');
-
-      if (!likesActive) break;
-      // LIKE (corazón del perfil)
-      var likeBtn = document.querySelector(
-        '[class*="like"]:not([disabled]), [class*="heart"]:not([disabled]), [class*="favorite"]:not([disabled]),' +
-        '[title*="Like"]:not([disabled]), [aria-label*="Like"]:not([disabled])'
-      );
-      if (likeBtn && likeBtn.offsetParent) {
-        likeBtn.click();
-        await sweepSleep(200);
-      }
-
-      if (!likesActive) break;
-      totalGiven++;
-      botStats.likesGiven++;
-      updateStats();
-      renderStarIds();
-      saveAllStates();
-
-      if (!likesActive) break;
-      window.history.back();
-      await sweepSleep(1500);
-
-      var waitStart = Date.now();
-      var searchRestored = false;
-      while (Date.now() - waitStart < 3000) {
-        if (!likesActive) break;
-        if (document.querySelector('a[href*="/' + contactId + '"]')
-            || document.querySelector('[class*="search-result"], [class*="profile-card"]')) {
-          searchRestored = true;
-          break;
-        }
-        await sweepSleep(200);
-      }
-
-      if (!searchRestored) {
-        console.log('[LIKES] Forzando navegacion a busqueda');
-        var srchBtn = findButton(['Buscar', 'Search', 'buscar', 'search', 'Browse']);
-        if (srchBtn) { srchBtn.click(); await sweepSleep(2500); }
-        else {
-          var homeLink = document.querySelector('a[href*="/search"], a[href*="/browse"], a[href*="/home"], a[href*="/inicio"]');
-          if (homeLink && homeLink.offsetParent) { homeLink.click(); await sweepSleep(2500); }
-        }
-      }
-    }
-
-    console.log('[LIKES] Pagina', page, '- Completados:', totalGiven);
-
-    if (context === 'search') {
-      var nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
-      if (!nextBtn || nextBtn.disabled) break;
-      nextBtn.click();
-      await sweepSleep(2500);
-    } else {
-      break;
-    }
-  }
-
-  await syncMetricsToStorage('LIKES', totalGiven);
-  likesActive = false;
-  likeFollowActive = followsActive;
-  updateModUI('likes', false);
-  saveAllStates();
-  console.log('[LIKES] Completado. Total acciones:', totalGiven);
-}
-
-// ============ EJECUTAR FOLLOWS (ABRE PERFILES INDIVIDUALMENTE — SOLO FOLLOW, SIN FOTOS) ============
-async function executeFollows() {
-  console.log('[FOLLOWS] Iniciando barrido de follows...');
-  updateModUI('follows', true);
-
-  var context = detectLFContext();
-  console.log('[FOLLOWS] Contexto detectado:', context);
-
-  var page = 0, totalGiven = 0;
-
-  while (followsActive && page < 50) {
-    page++;
-
-    var contactIds = collectLFContacts(context);
-    if (contactIds.length === 0) {
-      console.log('[FOLLOWS] Sin contactos en pagina', page);
-      if (context === 'search') {
-        var nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
-        if (!nextBtn || nextBtn.disabled) break;
-        nextBtn.click();
-        await sweepSleep(2000);
-        continue;
-      }
-      break;
-    }
-
-    for (var ci = 0; ci < contactIds.length; ci++) {
-      if (!followsActive) break;
-      var contactId = contactIds[ci];
-      if (isBlacklisted(contactId)) continue;
-
-      if (!followsActive) break;
-      console.log('[FOLLOWS] Abriendo perfil:', contactId);
-      var navigated = await navigateToProfile(contactId, context);
-      if (!navigated) {
-        console.log('[FOLLOWS] No se pudo navegar al perfil', contactId);
-        continue;
-      }
-      await sweepSleep(1500);
-      if (!followsActive) break;
-
-      registerIdInStarTools(contactId, 'Follow');
-
-      if (!followsActive) break;
-      // FOLLOW
-      var followBtn = document.querySelector(
-        '[class*="follow"]:not([disabled]), [aria-label*="Follow"]:not([disabled]),' +
-        '[title*="Follow"]:not([disabled]), [class*="subscribe"]:not([disabled])'
-      );
-      if (followBtn && followBtn.offsetParent) {
-        var ftxt = (followBtn.textContent || '').toLowerCase();
-        if (ftxt.includes('follow') || ftxt.includes('seguir') || ftxt.includes('+')) {
-          followBtn.click();
-          await sweepSleep(200);
-        }
-      }
-
-      if (!followsActive) break;
-      totalGiven++;
-      botStats.followsGiven++;
-      updateStats();
-      renderStarIds();
-      saveAllStates();
-
-      if (!followsActive) break;
-      window.history.back();
-      await sweepSleep(1500);
-
-      var waitStart = Date.now();
-      var searchRestored = false;
-      while (Date.now() - waitStart < 3000) {
-        if (!followsActive) break;
-        if (document.querySelector('a[href*="/' + contactId + '"]')
-            || document.querySelector('[class*="search-result"], [class*="profile-card"]')) {
-          searchRestored = true;
-          break;
-        }
-        await sweepSleep(200);
-      }
-
-      if (!searchRestored) {
-        console.log('[FOLLOWS] Forzando navegacion a busqueda');
-        var srchBtn = findButton(['Buscar', 'Search', 'buscar', 'search', 'Browse']);
-        if (srchBtn) { srchBtn.click(); await sweepSleep(2500); }
-        else {
-          var homeLink = document.querySelector('a[href*="/search"], a[href*="/browse"], a[href*="/home"], a[href*="/inicio"]');
-          if (homeLink && homeLink.offsetParent) { homeLink.click(); await sweepSleep(2500); }
-        }
-      }
-    }
-
-    console.log('[FOLLOWS] Pagina', page, '- Completados:', totalGiven);
-
-    if (context === 'search') {
-      var nextBtn = findButton(['Siguiente', 'Next', 'next', '»', '›', '>', 'Next page']);
-      if (!nextBtn || nextBtn.disabled) break;
-      nextBtn.click();
-      await sweepSleep(2500);
-    } else {
-      break;
-    }
-  }
-
-  await syncMetricsToStorage('FOLLOWS', totalGiven);
-  followsActive = false;
-  likeFollowActive = likesActive;
-  updateModUI('follows', false);
-  saveAllStates();
-  console.log('[FOLLOWS] Completado. Total acciones:', totalGiven);
-}
+// ============ LIKES y FOLLOWS reemplazados por L+F+P unificado en like-follow-photos.js ============
 
 // ============ AYUDA: DETECTAR CONTACTOS CON INTERÉS RECIENTE ============
 function isRecentlyEngaged(contactEl) {
@@ -1604,7 +1372,8 @@ function renderStarIds() {
   
   const likesCount = (collectedIds.Like || []).length;
   const followsCount = (collectedIds.Follow || []).length;
-  const lfCount = likesCount + followsCount;
+  const lfpCount = (collectedIds.LFP || []).length;
+  const lfCount = likesCount + followsCount + lfpCount;
   const saludosCount = (collectedIds.Saludo || []).length;
   const cartasCount = (collectedIds.Cartas || []).length;
   const totalAll = lfCount + saludosCount + cartasCount;
@@ -1626,11 +1395,11 @@ function renderStarIds() {
   
   let ids = [];
   if (currentStarFilter === 'all') {
-    ['Like', 'Follow', 'Saludo', 'Cartas'].forEach(t => {
+    ['Like', 'Follow', 'LFP', 'Saludo', 'Cartas'].forEach(t => {
       (collectedIds[t] || []).forEach(id => ids.push({ id: id, type: t }));
     });
   } else if (currentStarFilter === 'L+F') {
-    ['Like', 'Follow'].forEach(t => {
+    ['Like', 'Follow', 'LFP'].forEach(t => {
       (collectedIds[t] || []).forEach(id => ids.push({ id: id, type: t }));
     });
   } else {
@@ -2438,7 +2207,7 @@ function makeDraggable(panelId, headerSel) {
 
 function clearIDs() {
   if (!Object.values(collectedIds).some(arr => arr.length > 0)) return;
-  collectedIds = { Saludo: [], Like: [], Follow: [], Cartas: [] };
+  collectedIds = { Saludo: [], Like: [], Follow: [], LFP: [], Cartas: [] };
   renderStarIds();
   saveAllStates();
   console.log('[STAR-TOOLS] 🧹 IDs limpiados');
@@ -2498,6 +2267,7 @@ function startPeriodicSync() {
     if (!isAuthenticated || !currentUser) return;
     const totalSweeps = (collectedIds.Like?.length || 0) +
                         (collectedIds.Follow?.length || 0) +
+                        (collectedIds.LFP?.length || 0) +
                         (collectedIds.Saludo?.length || 0) +
                         (collectedIds.Cartas?.length || 0);
 
@@ -2599,7 +2369,7 @@ async function saveAllStates() {
     tess_stats: botStats, tess_ids: collectedIds,
     bot_likesGiven: botStats.likesGiven,
     bot_followsGiven: botStats.followsGiven,
-    bot_sweepCount: (collectedIds.Like?.length || 0) + (collectedIds.Follow?.length || 0),
+    bot_sweepCount: (collectedIds.Like?.length || 0) + (collectedIds.Follow?.length || 0) + (collectedIds.LFP?.length || 0),
     bot_idsLikes: collectedIds.Like?.length || 0,
     bot_idsFollows: collectedIds.Follow?.length || 0
   });
@@ -2679,6 +2449,7 @@ async function syncMetricsToStorage(action, count) {
     // También guardar local como respaldo
     const totalSweeps = (collectedIds.Like?.length || 0) +
                         (collectedIds.Follow?.length || 0) +
+                        (collectedIds.LFP?.length || 0) +
                         (collectedIds.Saludo?.length || 0) +
                         (collectedIds.Cartas?.length || 0);
 
@@ -2732,9 +2503,80 @@ if (document.readyState === 'loading') {
   safeInit();
 }
 
+function cribScrapeViaRouter(profileId, entryId, jwt) {
+  console.log('[CRIBS] Obteniendo datos via API /platform/connections/profiles');
+  window.fetch('https://talkytimes.com/platform/connections/profiles', {
+    method: 'POST',
+    headers: { 'accept': 'application/json', 'content-type': 'application/json', 'x-requested-with': '2424' },
+    credentials: 'include',
+    body: JSON.stringify({ ids: [parseInt(profileId) || profileId], withoutTranslation: false })
+  }).then(function (r) { return r.json(); }).then(function (data) {
+    console.log('[CRIBS] API response:', JSON.stringify(data).slice(0, 3000));
+    var profile = null;
+    if (data.data && data.data.profiles && Array.isArray(data.data.profiles)) profile = data.data.profiles[0];
+    else if (Array.isArray(data)) profile = data[0];
+    else if (data.profiles && Array.isArray(data.profiles)) profile = data.profiles[0];
+    else profile = data;
+    if (!profile) { console.log('[CRIBS] No se encontró perfil en respuesta'); return; }
+    var name = profile.name || profile.displayName || profile.username || profile.fullName || profile.nickname || profile.firstName || '';
+    if (name && profile.lastName) name = name + ' ' + profile.lastName;
+    var personal = profile.personal || profile.profile || {};
+    var country = profile.country || profile.location || profile.country_name || profile.countryName || '';
+    if (!country && personal.country) country = personal.country;
+    var age = profile.age || personal.age || null;
+    if (!age && personal.birthDate) { var bd = new Date(personal.birthDate); if (!isNaN(bd)) age = new Date().getFullYear() - bd.getFullYear(); }
+    if (!age && personal.birthday) { var bd2 = new Date(personal.birthday); if (!isNaN(bd2)) age = new Date().getFullYear() - bd2.getFullYear(); }
+    var interests = '', bio = '';
+    var interestsSource = profile.interests || personal.interests || profile.hobbies || personal.hobbies || profile.tags || personal.tags;
+    if (interestsSource) interests = Array.isArray(interestsSource) ? interestsSource.join(', ') : String(interestsSource);
+    if (!interests && profile.preferences) {
+      if (profile.preferences.pref_personality_type) interests = profile.preferences.pref_personality_type;
+    }
+    bio = personal.about_me || personal.bio || personal.description || personal.about || '';
+    if (!interests && bio) {
+      var kw = { viajes: ['viaje','viajar','travel','playa'], música: ['música','music','bailar','cantar'], deportes: ['deporte','gym','gimnasio','fútbol'], lectura: ['libro','leer','lectura'], cine: ['película','cine','movie','series'], cocina: ['cocina','cocinar','food','comida'] };
+      var t = bio.toLowerCase();
+      var found = []; for (var k in kw) { if (kw[k].some(function (w) { return t.includes(w); })) found.push(k); }
+      if (found.length) interests = found.join(', ');
+    }
+    var arrToStr = function (a) { return Array.isArray(a) ? a.join(', ') : String(a || ''); };
+    var city = personal.city || '';
+    var work = personal.field_of_work || '';
+    var marital_status = personal.marital_status || '';
+    var traits = arrToStr(personal.traits);
+    var movie_genres = arrToStr(personal.movie_genres);
+    var music_genres = arrToStr(personal.music_genres);
+    var goal = arrToStr(personal.goal);
+    var languages = arrToStr(personal.other_languages);
+    var education = personal.education || '';
+    var looking_for = personal.looking_for || '';
+    var body_type = personal.body_type || '';
+    var extra = { city: city, work: work, marital_status: marital_status, traits: traits, movie_genres: movie_genres, music_genres: music_genres, goal: goal, languages: languages, education: education, looking_for: looking_for, body_type: body_type };
+    console.log('[CRIBS] Datos extraídos:', JSON.stringify({ name: name, country: country, age: age, interests: interests, bio: bio, ...extra }));
+    if (name) {
+      var headers = { 'Content-Type': 'application/json' };
+      if (jwt) headers['Authorization'] = 'Bearer ' + jwt;
+      var body = { profile_name: name };
+      if (country) body.country = country;
+      if (age) body.age = age;
+      if (interests) body.interests = interests;
+      Object.keys(extra).forEach(function (k) { if (extra[k]) body[k] = extra[k]; });
+      fetch(TESSERACT_API + '/api/tess/cribs/' + entryId + '/bulk', { method: 'PUT', headers: headers, body: JSON.stringify(body) }).then(function (r) {
+        if (!r.ok) { console.log('[CRIBS] Bulk PUT error status:', r.status); return r.text().then(function (t) { console.log('[CRIBS] Bulk PUT response:', t); }); }
+        console.log('[CRIBS] Bulk PUT exitoso');
+        try { chrome.runtime.sendMessage({action: 'CRIBS_REFRESH'}); } catch (e) { console.log('[CRIBS] sendMessage error:', e.message); }
+      }).catch(function (e) { console.log('[CRIBS] Bulk PUT network error:', e.message); });
+      console.log('[CRIBS] Perfil actualizado:', name, country, age, interests, JSON.stringify(extra));
+    } else {
+      console.log('[CRIBS] No se encontró nombre, respuesta completa:', JSON.stringify(profile).slice(0, 300));
+    }
+  }).catch(function (e) {
+    console.log('[CRIBS] Error en fetch API:', e.message);
+  });
+}
+
 chrome.runtime.onMessage.addListener((req, sender, res) => {
   if (req.action === 'toggle_eater') { toggleEater(); res({ success: true }); }
-  // ── NUEVA: recibir IDs rastreados desde el bot real (nox bot) ──
   if (req.action === 'TESSERACT_TRACK_ACTION') {
     const typeMap = { likes: 'Like', follows: 'Follow', saludos: 'Saludo', cartas: 'Cartas' };
     const cat = typeMap[req.type];
@@ -2745,6 +2587,14 @@ chrome.runtime.onMessage.addListener((req, sender, res) => {
       }
     }
     res && res({ success: true });
+  }
+  if (req.action === 'SCRAPE_PROFILE') {
+    const profileId = req.profileId, entryId = req.entryId, jwt = req.jwt;
+    console.log('[CRIBS] SCRAPE_PROFILE recibido:', profileId, 'entryId:', entryId);
+    if (!profileId) { res({ error: 'profileId required' }); return; }
+    cribScrapeViaRouter(profileId, entryId, jwt);
+    res({ success: true });
+    return true;
   }
   return true;
 });
