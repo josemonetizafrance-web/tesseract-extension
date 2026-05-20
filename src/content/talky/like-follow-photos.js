@@ -1,7 +1,8 @@
 // TESSERACT v24 - L+F+P (Like + Follow + Photos) Module
 // Simplified approach: history.back() always, no queue forward, robust photo likes
 
-var lfpActive = false;
+// Exports to both local scope (shared content script world) and window (page)
+var executeLFP, lfpTogglePause, lfpActive = false;
 var lfpPaused = false;
 var lfpStats = { likes: 0, follows: 0, photoLikes: 0, processed: 0 };
 var lfpVisited = [];
@@ -177,7 +178,7 @@ async function lfpProcessOne() {
 }
 
 // ============ MAIN SWEEP ============
-window.executeLFP = async function () {
+executeLFP = window.executeLFP = async function () {
   if (lfpActive) {
     lfpActive = false; lfpPaused = false;
     if (typeof updateStats === 'function') updateStats();
@@ -281,6 +282,6 @@ function lfpUpdateUI() {
   if (typeof updateStats === 'function') updateStats();
 }
 
-window.lfpTogglePause = function () { if (!lfpActive) return; lfpPaused = !lfpPaused; lfpUpdateUI(); if (typeof saveAllStates === 'function') saveAllStates(); };
+lfpTogglePause = window.lfpTogglePause = function () { if (!lfpActive) return; lfpPaused = !lfpPaused; lfpUpdateUI(); if (typeof saveAllStates === 'function') saveAllStates(); };
 window.lfpActive = false;
 window.lfpStats = lfpStats;
