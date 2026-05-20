@@ -35,8 +35,10 @@ async function loadMLBlacklist(retries) {
 }
 
 async function reloadMLBlacklist() {
+  console.log('[ML] reloadMLBlacklist start, current:', mlBlacklist.length);
   mlBlacklist = []; mlBlacklistLoaded = false; mlBlacklistLoadPromise = null;
   await loadMLBlacklist();
+  console.log('[ML] reloadMLBlacklist done, loaded:', mlBlacklist.length, 'ok:', mlBlacklistLoaded);
 }
 
 function isInMLBlacklist(contactId) {
