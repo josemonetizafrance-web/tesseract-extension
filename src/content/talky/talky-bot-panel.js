@@ -51,7 +51,8 @@ async function saveBlacklist() {
         body: JSON.stringify({ blacklist })
       });
       if (!res.ok) {
-        console.log('[BLACKLIST] POST status:', res.status, '- No se pudo guardar en servidor');
+        const errText = await res.text();
+        console.log('[BLACKLIST] POST status:', res.status, '- ', errText);
         return;
       }
       console.log('[BLACKLIST] POST OK, enviados:', blacklist.length);
