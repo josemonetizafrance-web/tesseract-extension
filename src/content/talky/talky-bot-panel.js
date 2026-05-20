@@ -2697,7 +2697,7 @@ function fetchCribsForProfile(profileId) {
   if (!profileId) { renderCribsOverlay(null); return; }
   createCribsOverlay();
   var body = document.getElementById('tess-cribs-body');
-  if (body) body.innerHTML = '<div class="tess-cribs-msg">Cargando...</div>';
+  if (body) body.innerHTML = '<div class="tess-cribs-msg">Buscando en Cribs...</div>';
   setTimeout(function () {
     body = document.getElementById('tess-cribs-body');
     if (!body) return;
@@ -2709,12 +2709,15 @@ function fetchCribsForProfile(profileId) {
         .then(function (r) { return r.json(); })
         .then(function (resp) {
           if (!resp.cribs || !Array.isArray(resp.cribs)) { renderCribsOverlay(null); return; }
-          // Search by profile_id (string)
+          // Normalize both stored and searched IDs (strip leading zeros)
+          var searchId = String(profileId).replace(/^0+/, '');
           var entry = null;
           for (var i = 0; i < resp.cribs.length; i++) {
             var c = resp.cribs[i];
-            if (String(c.profile_id) === String(profileId)) { entry = c; break; }
+            var storedId = String(c.profile_id).replace(/^0+/, '');
+            if (storedId === searchId) { entry = c; break; }
           }
+          console.log('[CRIBS-OVERLAY] Profile', searchId, entry ? 'encontrado en Cribs' : 'NO encontrado en Cribs');
           if (entry) {
             renderCribsOverlay(entry);
             cribsOverlayState.profileId = profileId;
@@ -2727,6 +2730,14 @@ function fetchCribsForProfile(profileId) {
           } else {
             renderCribsOverlay(null);
             cribsOverlayState.profileId = null;
+            // Auto-hide after 3s if no data
+            setTimeout(function () {
+              if (!cribsOverlayState.profileId && cribsOverlayState.visible) {
+                cribsOverlayState.visible = false;
+                var el2 = document.getElementById('tess-cribs-overlay');
+                if (el2) el2.classList.remove('visible');
+              }
+            }, 3000);
           }
         })
         .catch(function () { if (body) body.innerHTML = '<div class="tess-cribs-msg">Error de conexión</div>'; });
