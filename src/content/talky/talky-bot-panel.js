@@ -250,6 +250,7 @@ async function initTesseract() {
     startChatWatcher();
     startBackgroundIdCapture();
     startProfileWatcher();
+    createCribsOverlay();
   } catch (e) {
     console.error('[TESSERACT] ❌ Error creando panel:', e);
   }
@@ -2612,7 +2613,7 @@ function createCribsOverlay() {
   if (document.getElementById('tess-cribs-overlay')) return;
   var css = document.createElement('style');
   css.textContent = `
-    #tess-cribs-toggle { position:fixed; right:10px; bottom:50px; z-index:999999; background:#6d28d9; color:#fff; border:none; border-radius:50%; width:40px; height:40px; font-size:18px; cursor:pointer; box-shadow:0 2px 12px rgba(109,40,217,0.5); display:flex; align-items:center; justify-content:center; opacity:0.8; transition:opacity 0.2s; }
+    #tess-cribs-toggle { position:fixed; right:10px; bottom:50px; z-index:999999; background:#6d28d9; color:#fff; border:none; border-radius:50%; width:44px; height:44px; font-size:20px; cursor:pointer; box-shadow:0 2px 12px rgba(109,40,217,0.5); display:flex; align-items:center; justify-content:center; opacity:0.8; transition:opacity 0.2s; }
     #tess-cribs-toggle:hover { opacity:1; }
     #tess-cribs-overlay { position:fixed; right:10px; bottom:95px; width:280px; max-height:400px; background:#13131a; border:1px solid #2d2d3f; border-radius:8px; box-shadow:0 4px 24px rgba(0,0,0,0.6); z-index:999998; font:10px/1.4 -apple-system,BlinkMacSystemFont,sans-serif; color:#ccc; overflow:hidden; display:none; flex-direction:column; }
     #tess-cribs-overlay.visible { display:flex; }
@@ -2694,11 +2695,13 @@ function renderCribsOverlay(data) {
 
 function fetchCribsForProfile(profileId) {
   if (!profileId) { renderCribsOverlay(null); return; }
+  createCribsOverlay();
   var body = document.getElementById('tess-cribs-body');
   if (body) body.innerHTML = '<div class="tess-cribs-msg">Cargando...</div>';
   setTimeout(function () {
-    if (typeof TESSERACT_API === 'undefined') { if (body) body.innerHTML = '<div class="tess-cribs-msg">API no disponible</div>'; return; }
-    // Try to get jwt from storage
+    body = document.getElementById('tess-cribs-body');
+    if (!body) return;
+    if (typeof TESSERACT_API === 'undefined') { body.innerHTML = '<div class="tess-cribs-msg">API no disponible</div>'; return; }
     chrome.storage.local.get(['tess_jwt'], function (data) {
       var headers = { 'Content-Type': 'application/json' };
       if (data.tess_jwt) headers['Authorization'] = 'Bearer ' + data.tess_jwt;
@@ -2730,17 +2733,6 @@ function fetchCribsForProfile(profileId) {
     });
   }, 300);
 }
-
-// ── Inicializar overlay Cribs ──
-setTimeout(function () {
-  createCribsOverlay();
-  // Si ya hay perfil detectado, buscar sus cribs
-  var pid = window._lastCribsPid || '';
-  if (!pid) {
-    try { var el = document.getElementById('profileId'); if (el) pid = el.textContent.replace('ID: ', '').replace(/^0+/, '').trim(); } catch (e) {}
-  }
-  if (pid) fetchCribsForProfile(pid);
-}, 2000);
 
 // ── escuchar eventos del bot nox directamente en la misma página ──
 (function setupBotEventListeners() {
