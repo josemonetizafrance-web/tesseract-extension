@@ -2250,49 +2250,41 @@ function clearIDs() {
   console.log('[STAR-TOOLS] 🧹 IDs limpiados');
 }
 
-function exportIDs() {
-  let ids = [];
+function collectFilteredIds() {
+  var ids = [];
   if (currentStarFilter === 'all') {
-    ['Like', 'Follow', 'Saludo', 'Cartas'].forEach(t => (collectedIds[t] || []).forEach(id => ids.push({ id, type: t })));
+    ['Like', 'Follow', 'Saludo', 'Cartas'].forEach(function (t) { (collectedIds[t] || []).forEach(function (id) { ids.push(id); }); });
   } else if (currentStarFilter === 'L+F') {
-    ['Like', 'Follow'].forEach(t => (collectedIds[t] || []).forEach(id => ids.push({ id, type: t })));
+    ['Like', 'Follow'].forEach(function (t) { (collectedIds[t] || []).forEach(function (id) { ids.push(id); }); });
   } else {
-    (collectedIds[currentStarFilter] || []).forEach(id => ids.push({ id, type: currentStarFilter }));
+    ids = (collectedIds[currentStarFilter] || []).slice();
   }
+  return ids;
+}
+
+function exportIDs() {
+  var ids = collectFilteredIds();
   if (!ids.length) { alert('⭐ No hay IDs para exportar.'); return; }
+  var clean = ids.map(function (id) { return String(id).replace(/^0+/, ''); });
 
-  const now = new Date();
-  const ts = now.toISOString().slice(0,19).replace('T','_').replace(/:/g,'-');
-  const fecha = now.toLocaleDateString('es-CO');
-  const hora = now.toLocaleTimeString('es-CO');
+  var now = new Date();
+  var ts = now.toISOString().slice(0,19).replace('T','_').replace(/:/g,'-');
 
-  // BOM UTF-8 para compatibilidad con Excel y Google Sheets
-  const BOM = '\uFEFF';
-  const header = 'N°,ID_CLIENTE,TIPO,FECHA,HORA\r\n';
-  const rows = ids.map((item, i) =>
-    `${i+1},${item.id},${item.type},${fecha},${hora}`
-  ).join('\r\n');
-
-  const csv = BOM + header + rows;
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const a = document.createElement('a');
+  var BOM = '\uFEFF';
+  var csv = BOM + clean.join('\r\n');
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `tesseract_star_ids_${ts}.csv`;
+  a.download = 'tesseract_ids_' + ts + '.csv';
   a.click();
-  console.log('[STAR-TOOLS] 📊 Exportados', ids.length, 'IDs');
+  console.log('[STAR-TOOLS] Exportados', ids.length, 'IDs');
 }
 
 function copyIDs() {
-  let ids = [];
-  if (currentStarFilter === 'all') {
-    ['Like', 'Follow', 'Saludo', 'Cartas'].forEach(t => ids.push(...(collectedIds[t] || [])));
-  } else if (currentStarFilter === 'L+F') {
-    ['Like', 'Follow'].forEach(t => ids.push(...(collectedIds[t] || [])));
-  } else {
-    ids = collectedIds[currentStarFilter] || [];
-  }
+  var ids = collectFilteredIds();
   if (!ids.length) return;
-  navigator.clipboard.writeText(ids.join('\n'));
+  var clean = ids.map(function (id) { return String(id).replace(/^0+/, ''); });
+  navigator.clipboard.writeText(clean.join('\n'));
 }
 
 // ============ SINCRONIZACIÓN PERIÓDICA CON SERVIDOR ============
