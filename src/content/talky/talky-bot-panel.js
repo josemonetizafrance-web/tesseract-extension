@@ -758,16 +758,29 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   // Panel
   function toggleMin(e) {
     var panel = document.getElementById('tesseract-main-panel');
-    var isMin = panel.classList.contains('minimized');
+    var box = panel.querySelector('.tess-box');
+    var isMin = box.getAttribute('data-min') === '1';
     if (isMin) {
-      panel.classList.remove('minimized');
+      box.removeAttribute('data-min');
+      box.style.width = ''; box.style.height = ''; box.style.borderRadius = ''; box.style.overflow = '';
+      var hd = box.querySelector('.tess-header'); if (hd) hd.style.display = '';
+      var ri = box.querySelectorAll('.tess-resize'); ri.forEach(function (r) { r.style.display = ''; });
+      var mi = box.querySelector('#tess-mini-icon'); if (mi) mi.style.display = 'none';
+      var nav = box.querySelector('.tab-nav'); if (nav) nav.style.display = '';
+      box.querySelectorAll('.tab-content').forEach(function (c) { c.style.display = ''; });
     } else {
-      panel.classList.add('minimized');
+      box.setAttribute('data-min', '1');
+      box.style.width = '56px'; box.style.height = '56px'; box.style.borderRadius = '50%'; box.style.overflow = 'hidden';
+      var hd = box.querySelector('.tess-header'); if (hd) hd.style.display = 'none';
+      var ri = box.querySelectorAll('.tess-resize'); ri.forEach(function (r) { r.style.display = 'none'; });
+      var mi = box.querySelector('#tess-mini-icon'); if (mi) mi.style.display = 'flex';
+      var nav = box.querySelector('.tab-nav'); if (nav) nav.style.display = 'none';
+      box.querySelectorAll('.tab-content').forEach(function (c) { c.style.display = 'none'; });
     }
   }
   document.getElementById('btnMin').addEventListener('click', toggleMin);
   document.querySelector('.tess-box').addEventListener('click', function (e) {
-    if (document.getElementById('tesseract-main-panel').classList.contains('minimized')) {
+    if (e.target.id === 'tess-mini-icon' || e.currentTarget.getAttribute('data-min') === '1') {
       toggleMin(e);
     }
   });
