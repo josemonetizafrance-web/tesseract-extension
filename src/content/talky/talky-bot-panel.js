@@ -756,7 +756,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   document.getElementById('btnRefreshEater').addEventListener('click', refreshEaterSuggestions);
   
   // Panel
+  console.log('[TESSERACT] btnMin exists:', !!document.getElementById('btnMin'));
   function toggleMin(e) {
+    console.log('[TESSERACT] toggleMin called, minimized:', document.querySelector('.tess-box').getAttribute('data-min'));
+    
     var panel = document.getElementById('tesseract-main-panel');
     var box = panel.querySelector('.tess-box');
     var isMin = box.getAttribute('data-min') === '1';
