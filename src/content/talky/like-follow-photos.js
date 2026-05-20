@@ -16,7 +16,7 @@ async function lfpLoadBlacklist() {
     try {
       var stored = await chrome.storage.local.get(['tess_jwt']);
       if (!stored.tess_jwt) { lfpBlacklistLoadPromise = null; return; }
-      var res = await fetch('https://tesseract-jblo.onrender.com/api/tess/blacklist', {
+      var res = await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
         headers: { 'Authorization': 'Bearer ' + stored.tess_jwt }
       });
       if (res.ok) {

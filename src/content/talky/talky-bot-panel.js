@@ -12,20 +12,25 @@ let isUsingAI = false;
 // Blacklist - contactos protegidos
 let blacklist = [];
 
-// Cargar blacklist desde servidor
-async function loadBlacklist() {
-  try {
-    const stored = await chrome.storage.local.get(['tess_jwt']);
-    if (stored.tess_jwt) {
-      const res = await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
-        headers: { 'Authorization': 'Bearer ' + stored.tess_jwt }
-      });
-      const data = await res.json();
-      blacklist = data.blacklist || [];
-      console.log('[BLACKLIST] Cargada:', blacklist.length, 'contactos');
+// Cargar blacklist desde servidor (con reintentos)
+async function loadBlacklist(retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const stored = await chrome.storage.local.get(['tess_jwt']);
+      if (stored.tess_jwt) {
+        const res = await fetch(`${TESSERACT_API}/api/tess/blacklist`, {
+          headers: { 'Authorization': 'Bearer ' + stored.tess_jwt }
+        });
+        if (!res.ok && attempt < retries) continue;
+        const data = await res.json();
+        blacklist = data.blacklist || [];
+        console.log('[BLACKLIST] Cargada:', blacklist.length, 'contactos');
+      }
+      return;
+    } catch (e) {
+      console.log('[BLACKLIST] Error (intento '+(attempt+1)+'/'+(retries+1)+'):', e.message);
+      if (attempt >= retries) return;
     }
-  } catch (e) {
-    console.log('[BLACKLIST] Error al cargar:', e.message);
   }
 }
 
