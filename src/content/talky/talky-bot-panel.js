@@ -2739,190 +2739,206 @@ function scrapeProfileFromDOM() {
   var r = {};
   console.log('[CRIBS-DOM] Iniciando escaneo completo del DOM');
 
-  // A) Extraer nombre
-  var nameSelectors = [
-    '[class*="profile-name"]', '[class*="display-name"]', '[class*="username"]',
-    'h1', 'h2', '[class*="user-name"]', '[class*="member-name"]',
-    '[class*="profile"] h1', '[class*="profile"] h2', '[class*="header"] h1'
-  ];
-  for (var ni = 0; ni < nameSelectors.length; ni++) {
-    var el = document.querySelector(nameSelectors[ni]);
-    if (el) {
-      var t = el.textContent.trim();
-      if (t && t.length > 1 && t.length < 50 && !t.includes('@') && !t.match(/^(Chat|Profile|Home|Settings|Search)/i)) {
-        r.profile_name = cleanExtractedName(t);
-        if (r.profile_name) break;
-      }
+  // A) Nombre — selector exacto de TalkyTimes
+  var nameEl = document.querySelector('[data-test-id="file:user-profile-title-name"]');
+  if (nameEl) {
+    var nameText = nameEl.textContent.trim();
+    if (nameText && nameText.length < 50) {
+      r.profile_name = cleanExtractedName(nameText);
+    }
+  }
+  if (!r.profile_name) {
+    var fallbackName = document.querySelector('[class*="username"], [class*="display-name"], [class*="profile-name"], h1, h2');
+    if (fallbackName) {
+      var ft = fallbackName.textContent.trim();
+      if (ft && ft.length > 1 && ft.length < 50) r.profile_name = cleanExtractedName(ft);
     }
   }
 
-  // B) Extraer campos por patrones label-valor en toda la página
-  var labelFieldMap = [
-    { labels: ['age', 'edad', 'años', 'years'], field: 'age', type: 'number' },
-    { labels: ['country', 'país', 'pais', 'location', 'ubicación', 'ubicacion'], field: 'country' },
-    { labels: ['city', 'ciudad', 'town'], field: 'city' },
-    { labels: ['work', 'trabajo', 'job', 'occupation', 'ocupación', 'ocupacion', 'career', 'profesión', 'profesion', 'field of work'], field: 'work' },
-    { labels: ['marital', 'estado civil', 'relationship', 'relación', 'relacion', 'single', 'married', 'divorced', 'widowed'], field: 'marital_status' },
-    { labels: ['education', 'educación', 'educacion', 'school', 'study', 'estudio'], field: 'education' },
-    { labels: ['looking for', 'busca', 'busco', 'seeking', 'wants'], field: 'looking_for' },
-    { labels: ['body type', 'complexion', 'complexión', 'complexion', 'body', 'tipo de cuerpo', 'figura'], field: 'body_type' },
-    { labels: ['languages', 'idiomas', 'language', 'speaks', 'habla'], field: 'languages' },
-    { labels: ['religion', 'religión', 'religion', 'faith', 'fe', 'credo'], field: 'religion' },
-    { labels: ['height', 'altura', 'estatura', 'tamaño', 'tamano'], field: 'height' },
-    { labels: ['ethnicity', 'etnia', 'race', 'raza'], field: 'ethnicity' },
-    { labels: ['children', 'hijos', 'kids', 'child'], field: 'children' },
-    { labels: ['smoking', 'fumar', 'smoke', 'tabaco'], field: 'smoking' },
-    { labels: ['drinking', 'beber', 'drink', 'alcohol'], field: 'drinking' }
-  ];
+  // B) País — [data-test-id="about country"]
+  var countryEl = document.querySelector('[data-test-id="about country"]');
+  if (countryEl) r.country = countryEl.textContent.trim();
 
-  // Buscar en toda la página elementos que contengan labels
-  var allElements = document.querySelectorAll('div, span, p, li, td, dt, dd, label, section, article');
-  for (var ei = 0; ei < allElements.length; ei++) {
-    var elem = allElements[ei];
-    var text = elem.textContent.trim();
-    if (!text || text.length > 500) continue;
+  // C) Fecha de nacimiento → calcular edad — [data-test-id="about birthday"]
+  var birthdayEl = document.querySelector('[data-test-id="about birthday"]');
+  if (birthdayEl) {
+    var birthdayText = birthdayEl.textContent.trim();
+    var age = parseAgeFromDate(birthdayText);
+    if (age != null) r.age = age;
+  }
 
-    for (var li = 0; li < labelFieldMap.length; li++) {
-      var mapping = labelFieldMap[li];
-      for (var lbi = 0; lbi < mapping.labels.length; lbi++) {
-        var label = mapping.labels[lbi];
-        var labelLower = text.toLowerCase();
-        if (labelLower.indexOf(label) !== -1) {
-          // Extraer el valor después del label
-          var value = extractValueAfterLabel(text, label, mapping.type);
-          if (value && (!r[mapping.field] || r[mapping.field] === '')) {
-            r[mapping.field] = value;
-          }
+  // D) Estado civil — [data-test-id="about maritalStatus"]
+  var maritalEl = document.querySelector('[data-test-id="about maritalStatus"]');
+  if (maritalEl) r.marital_status = maritalEl.textContent.trim();
+
+  // E) Intereses/Hobbies — [data-test-id="op-about__block-hobbies"] .tag-label
+  var hobbiesBlock = document.querySelector('[data-test-id="op-about__block-hobbies"]');
+  if (hobbiesBlock) {
+    var hobbyTags = hobbiesBlock.querySelectorAll('.tag-label');
+    var hobbies = [];
+    for (var hi = 0; hi < hobbyTags.length; hi++) {
+      var ht = hobbyTags[hi].textContent.trim();
+      if (ht && ht.length > 1 && ht.length < 40) hobbies.push(ht);
+    }
+    if (hobbies.length > 0) r.interests = hobbies.join(', ');
+  }
+
+  // F) Looking For — [data-test-id="op-about__block-looking-for"] .tag-label
+  var lookingBlock = document.querySelector('[data-test-id="op-about__block-looking-for"]');
+  if (lookingBlock) {
+    var lookingTags = lookingBlock.querySelectorAll('.tag-label');
+    var lookings = [];
+    for (var li = 0; li < lookingTags.length; li++) {
+      var lt = lookingTags[li].textContent.trim();
+      if (lt && lt.length > 1 && lt.length < 100) lookings.push(lt);
+    }
+    if (lookings.length > 0) r.looking_for = lookings.join(', ');
+  }
+
+  // G) About Me / Rasgos — [data-test-id="op-about__block-about-me"] .tag-label
+  var aboutBlock = document.querySelector('[data-test-id="op-about__block-about-me"]');
+  if (aboutBlock) {
+    var aboutTags = aboutBlock.querySelectorAll('.tag-label');
+    var abouts = [];
+    for (var ai = 0; ai < aboutTags.length; ai++) {
+      var at = aboutTags[ai].textContent.trim();
+      if (at && at.length > 1 && at.length < 100) abouts.push(at);
+    }
+    if (abouts.length > 0) {
+      r.traits = abouts.join(', ');
+      r.bio = abouts.join(', ');
+    }
+  }
+
+  // H) Bio completa — buscar bloques de texto descriptivo
+  if (!r.bio) {
+    var bioSelectors = [
+      '[data-test-id="op-about__block-about-me"]',
+      '[class*="about"]', '[class*="bio"]', '[class*="description"]',
+      '[class*="profile-text"]', '[class*="profile-bio"]'
+    ];
+    for (var bi = 0; bi < bioSelectors.length; bi++) {
+      var bioEl = document.querySelector(bioSelectors[bi]);
+      if (bioEl) {
+        var bioText = bioEl.textContent.trim();
+        if (bioText && bioText.length > 10 && bioText.length < 2000) {
+          r.bio = bioText;
           break;
         }
       }
     }
   }
 
-  // C) Extraer intereses/hobbies desde elementos tipo tag
-  var tagSelectors = [
-    '[class*="interest"]', '[class*="hobby"]', '[class*="tag"]',
-    '[class*="interest"] [class*="tag"]', '[class*="tag-list"]',
-    '[class*="interest-list"]', '[class*="hobby-list"]',
-    '[class*="interests"] span', '[class*="tags"] span',
-    '[class*="pill"]', '[class*="badge"]'
-  ];
-  var interests = [];
-  for (var ti = 0; ti < tagSelectors.length; ti++) {
-    var tagEls = document.querySelectorAll(tagSelectors[ti]);
-    for (var tji = 0; tji < tagEls.length; tji++) {
-      var tagText = tagEls[tji].textContent.trim();
-      if (tagText && tagText.length > 1 && tagText.length < 40 && !tagText.match(/^\d+$/) && !tagText.match(/^(Chat|Profile|Home|Settings)/i)) {
-        interests.push(tagText);
-      }
+  // I) Ciudad — [data-test-id="about city"] o [data-test-id="about location"]
+  var cityEl = document.querySelector('[data-test-id="about city"], [data-test-id="about location"]');
+  if (cityEl) r.city = cityEl.textContent.trim();
+
+  // J) Trabajo — [data-test-id="about work"] o [data-test-id="about occupation"]
+  var workEl = document.querySelector('[data-test-id="about work"], [data-test-id="about occupation"], [data-test-id="about profession"]');
+  if (workEl) r.work = workEl.textContent.trim();
+
+  // K) Educación — [data-test-id="about education"]
+  var eduEl = document.querySelector('[data-test-id="about education"]');
+  if (eduEl) r.education = eduEl.textContent.trim();
+
+  // L) Idiomas — [data-test-id="about languages"]
+  var langEl = document.querySelector('[data-test-id="about languages"]');
+  if (langEl) r.languages = langEl.textContent.trim();
+
+  // M) Complexión — [data-test-id="about bodyType"]
+  var bodyEl = document.querySelector('[data-test-id="about bodyType"], [data-test-id="about body-type"]');
+  if (bodyEl) r.body_type = bodyEl.textContent.trim();
+
+  // N) Fumar — [data-test-id="about smoking"]
+  var smokeEl = document.querySelector('[data-test-id="about smoking"]');
+  if (smokeEl) r.smoking = smokeEl.textContent.trim();
+
+  // O) Beber — [data-test-id="about drinking"]
+  var drinkEl = document.querySelector('[data-test-id="about drinking"]');
+  if (drinkEl) r.drinking = drinkEl.textContent.trim();
+
+  // P) Hijos — [data-test-id="about children"]
+  var childEl = document.querySelector('[data-test-id="about children"]');
+  if (childEl) r.children = childEl.textContent.trim();
+
+  // Q) Religión — [data-test-id="about religion"]
+  var religEl = document.querySelector('[data-test-id="about religion"]');
+  if (religEl) r.religion = religEl.textContent.trim();
+
+  // R) Etnia — [data-test-id="about ethnicity"]
+  var ethEl = document.querySelector('[data-test-id="about ethnicity"]');
+  if (ethEl) r.ethnicity = ethEl.textContent.trim();
+
+  // S) Altura — [data-test-id="about height"]
+  var heightEl = document.querySelector('[data-test-id="about height"]');
+  if (heightEl) r.height = heightEl.textContent.trim();
+
+  // T) Género de cine — [data-test-id="op-about__block-movieGenres"] .tag-label
+  var movieBlock = document.querySelector('[data-test-id="op-about__block-movieGenres"], [data-test-id="op-about__block-movie-genres"]');
+  if (movieBlock) {
+    var movieTags = movieBlock.querySelectorAll('.tag-label');
+    var movies = [];
+    for (var mvi = 0; mvi < movieTags.length; mvi++) {
+      var mvt = movieTags[mvi].textContent.trim();
+      if (mvt && mvt.length > 1 && mvt.length < 40) movies.push(mvt);
     }
-    if (interests.length > 0) break;
-  }
-  if (interests.length > 0) {
-    r.interests = interests.join(', ');
+    if (movies.length > 0) r.movie_genres = movies.join(', ');
   }
 
-  // D) Extraer bio/descripción
-  var bioSelectors = [
-    '[class*="about"]', '[class*="bio"]', '[class*="description"]',
-    '[class*="about-me"]', '[class*="aboutme"]', '[class*="summary"]',
-    '[class*="introduction"]', '[class*="profile-text"]', '[class*="profile-bio"]',
-    '[class*="profile-about"]', '[class*="personal-info"]'
-  ];
-  for (var bi = 0; bi < bioSelectors.length; bi++) {
-    var bioEl = document.querySelector(bioSelectors[bi]);
-    if (bioEl) {
-      var bioText = bioEl.textContent.trim();
-      if (bioText && bioText.length > 10 && bioText.length < 2000) {
-        r.bio = bioText;
-        break;
-      }
+  // U) Género de música — [data-test-id="op-about__block-musicGenres"] .tag-label
+  var musicBlock = document.querySelector('[data-test-id="op-about__block-musicGenres"], [data-test-id="op-about__block-music-genres"]');
+  if (musicBlock) {
+    var musicTags = musicBlock.querySelectorAll('.tag-label');
+    var music = [];
+    for (var mui = 0; mui < musicTags.length; mui++) {
+      var mut = musicTags[mui].textContent.trim();
+      if (mut && mut.length > 1 && mut.length < 40) music.push(mut);
     }
+    if (music.length > 0) r.music_genres = music.join(', ');
   }
 
-  // E) Extraer rasgos/personalidad
-  var traitsSelectors = [
-    '[class*="trait"]', '[class*="personality"]', '[class*="characteristic"]',
-    '[class*="quality"]', '[class*="attribute"]'
-  ];
-  var traits = [];
-  for (var tri = 0; tri < traitsSelectors.length; tri++) {
-    var traitEls = document.querySelectorAll(traitsSelectors[tri]);
-    for (var trj = 0; trj < traitEls.length; trj++) {
-      var traitText = traitEls[trj].textContent.trim();
-      if (traitText && traitText.length > 1 && traitText.length < 50) {
-        traits.push(traitText);
-      }
+  // V) Objetivo — [data-test-id="op-about__block-goal"] .tag-label
+  var goalBlock = document.querySelector('[data-test-id="op-about__block-goal"]');
+  if (goalBlock) {
+    var goalTags = goalBlock.querySelectorAll('.tag-label');
+    var goals = [];
+    for (var goi = 0; goi < goalTags.length; goi++) {
+      var got = goalTags[goi].textContent.trim();
+      if (got && got.length > 1 && got.length < 100) goals.push(got);
     }
-    if (traits.length > 0) break;
-  }
-  if (traits.length > 0) {
-    r.traits = traits.join(', ');
-  }
-
-  // F) Extraer géneros de cine/música desde secciones específicas
-  var genreSections = document.querySelectorAll('[class*="movie"]', '[class*="film"]', '[class*="music"]', '[class*="song"]');
-  var movies = [], music = [];
-  for (var gi = 0; gi < genreSections.length; gi++) {
-    var section = genreSections[gi];
-    var sectionText = section.textContent.toLowerCase();
-    var sectionClass = (section.className || '').toLowerCase();
-    if (sectionClass.indexOf('movie') !== -1 || sectionClass.indexOf('film') !== -1 || sectionClass.indexOf('cine') !== -1) {
-      var movieTags = section.querySelectorAll('span, [class*="tag"], [class*="pill"]');
-      for (var mi = 0; mi < movieTags.length; mi++) {
-        var mt = movieTags[mi].textContent.trim();
-        if (mt && mt.length > 1 && mt.length < 40) movies.push(mt);
-      }
-    } else if (sectionClass.indexOf('music') !== -1 || sectionClass.indexOf('song') !== -1 || sectionClass.indexOf('música') !== -1) {
-      var musicTags = section.querySelectorAll('span, [class*="tag"], [class*="pill"]');
-      for (var mui = 0; mui < musicTags.length; mui++) {
-        var mut = musicTags[mui].textContent.trim();
-        if (mut && mut.length > 1 && mut.length < 40) music.push(mut);
-      }
-    }
-  }
-  if (movies.length > 0) r.movie_genres = movies.join(', ');
-  if (music.length > 0) r.music_genres = music.join(', ');
-
-  // G) Extraer objetivo/goal
-  var goalSelectors = ['[class*="goal"]', '[class*="objective"]', '[class*="purpose"]', '[class*="intent"]'];
-  for (var goi = 0; goi < goalSelectors.length; goi++) {
-    var goalEl = document.querySelector(goalSelectors[goi]);
-    if (goalEl) {
-      var goalText = goalEl.textContent.trim();
-      if (goalText && goalText.length > 2 && goalText.length < 200) {
-        r.goal = goalText;
-        break;
-      }
-    }
+    if (goals.length > 0) r.goal = goals.join(', ');
   }
 
   console.log('[CRIBS-DOM] Campos extraídos del DOM:', Object.keys(r).length, 'campos:', JSON.stringify(r));
   return r.profile_name ? r : null;
 }
 
-function extractValueAfterLabel(text, label, type) {
-  // Patrones: "Label: Value", "Label - Value", "Label\nValue", "Label Value"
-  var patterns = [
-    new RegExp(label + '\\s*[:\\-–—]\\s*([^\\n,;]{1,100})', 'i'),
-    new RegExp(label + '\\s+([^\\n,;:]{1,100})', 'i')
-  ];
-  for (var pi = 0; pi < patterns.length; pi++) {
-    var m = text.match(patterns[pi]);
-    if (m) {
-      var val = m[1].trim();
-      // Limpiar valor
-      val = val.replace(/^[:\-\s]+/, '').replace(/[:\-\s]+$/, '');
-      if (type === 'number') {
-        var num = parseInt(val);
-        if (num > 0 && num < 150) return num;
-        // Buscar número en el texto
-        var numM = val.match(/(\d{1,3})/);
-        if (numM) return parseInt(numM[1]);
-        return null;
-      }
-      if (val.length > 1 && val.length < 100) return val;
+function parseAgeFromDate(dateStr) {
+  if (!dateStr) return null;
+  // Intentar parsear "January 01, 1973" o "01/01/1973" o "1973"
+  var m = dateStr.match(/(\w+)\s+(\d{1,2}),?\s+(\d{4})/);
+  if (m) {
+    var months = { january:0, february:1, march:2, april:3, may:4, june:5, july:6, august:7, september:8, october:9, november:10, december:11 };
+    var month = months[m[1].toLowerCase()];
+    if (month !== undefined) {
+      var year = parseInt(m[3]);
+      var currentYear = new Date().getFullYear();
+      var age = currentYear - year;
+      if (age > 17 && age < 120) return age;
     }
+  }
+  // Intentar solo año
+  var ym = dateStr.match(/(\d{4})/);
+  if (ym) {
+    var year2 = parseInt(ym[1]);
+    var age2 = new Date().getFullYear() - year2;
+    if (age2 > 17 && age2 < 120) return age2;
+  }
+  // Intentar número directo
+  var nm = dateStr.match(/\b(\d{1,3})\b/);
+  if (nm) {
+    var num = parseInt(nm[1]);
+    if (num > 17 && num < 120) return num;
   }
   return null;
 }
