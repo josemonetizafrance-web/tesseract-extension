@@ -2592,6 +2592,11 @@ function cribScrapeViaRouter(profileId, entryId, jwt) {
         if (!r.ok) { console.log('[CRIBS] Bulk PUT error status:', r.status); return r.text().then(function (t) { console.log('[CRIBS] Bulk PUT response:', t); }); }
         console.log('[CRIBS] Bulk PUT exitoso');
         try { chrome.runtime.sendMessage({action: 'CRIBS_REFRESH'}); } catch (e) { console.log('[CRIBS] sendMessage error:', e.message); }
+        // Refrescar overlay si el perfil actual coincide con el scrapeado
+        try {
+          var rawScrapedId = String(profileId).replace(/^0+/, '');
+          if (window._lastCribsPid === rawScrapedId) { fetchCribsForProfile(rawScrapedId); }
+        } catch (e) { console.log('[CRIBS] overlay refresh error:', e.message); }
       }).catch(function (e) { console.log('[CRIBS] Bulk PUT network error:', e.message); });
       console.log('[CRIBS] Perfil actualizado:', name, country, age, interests, JSON.stringify(extra));
     } else {
@@ -2625,6 +2630,123 @@ chrome.runtime.onMessage.addListener((req, sender, res) => {
   }
   return true;
 });
+
+// ── Scraper DOM: extrae datos del perfil desde la página actual ──
+function domScrapeProfile(profileId) {
+  console.log('[CRIBS-DOM] Extrayendo perfil', profileId, 'desde la página');
+  try {
+    // Buscar en objetos globales del state (SPA) de forma recursiva
+    var stateKeys = ['__INITIAL_STATE__', '__DATA__', '__USER__', '__PROFILE__', '__NEXT_DATA__', 'store', '__store__', '__PRELOADED_STATE__'];
+    for (var si = 0; si < stateKeys.length; si++) {
+      var source = window[stateKeys[si]];
+      if (source && typeof source === 'object') {
+        var found = deepFindProfile(source, profileId, 0);
+        if (found && found.profile_name) {
+          console.log('[CRIBS-DOM] Datos extraídos de window.' + stateKeys[si], JSON.stringify(found));
+          return found;
+        }
+      }
+    }
+  } catch (e) { console.log('[CRIBS-DOM] Error en estado global:', e.message); }
+
+  // Fallback: extraer nombre desde el DOM visible
+  var nameSelectors = [
+    '[class*="username"]', '[class*="display-name"]', '[class*="profile-name"]',
+    '[class*="user-name"]', '[class*="member-name"]', '[class*="nickname"]',
+    '[class*="conversation"] [class*="name"]', '[class*="chat-header"] [class*="name"]',
+    '[class*="top"] [class*="name"]', 'h1', 'h2', '[class*="title"]'
+  ];
+  for (var ns = 0; ns < nameSelectors.length; ns++) {
+    var el = document.querySelector(nameSelectors[ns]);
+    if (el) {
+      var t = el.textContent.trim();
+      if (t && t.length > 1 && t.length < 50 && !t.includes('@') && !t.includes('http') && !t.match(/^(Chat|Profile|Home|Settings|Search)/i)) {
+        console.log('[CRIBS-DOM] Nombre extraído del DOM:', t);
+        return { profile_name: t };
+      }
+    }
+  }
+
+  // Buscar en meta tags
+  try {
+    var metaTitle = document.querySelector('meta[property="og:title"], meta[name="twitter:title"]');
+    if (metaTitle) {
+      var mt = metaTitle.getAttribute('content');
+      if (mt && mt.length < 50) {
+        console.log('[CRIBS-DOM] Nombre desde meta tag:', mt);
+        return { profile_name: mt };
+      }
+    }
+  } catch (e) {}
+
+  console.log('[CRIBS-DOM] No se pudo extraer datos');
+  return null;
+}
+
+function deepFindProfile(obj, targetId, depth) {
+  if (depth > 5 || !obj || typeof obj !== 'object') return null;
+  var rawTarget = String(targetId).replace(/^0+/, '');
+  var result = null;
+
+  // Verificar si este objeto es el perfil buscado
+  var objId = (obj.id != null ? String(obj.id) : '') || (obj.userId != null ? String(obj.userId) : '') ||
+              (obj.profileId != null ? String(obj.profileId) : '') || (obj.memberId != null ? String(obj.memberId) : '');
+  if (objId) {
+    var cleanId = objId.replace(/^0+/, '');
+    if (cleanId === rawTarget) {
+      result = {};
+      if (obj.name || obj.displayName || obj.username || obj.fullName || obj.nickname || obj.firstName) {
+        result.profile_name = obj.name || obj.displayName || obj.username || obj.fullName || obj.nickname || obj.firstName;
+        if (result.profile_name && obj.lastName) result.profile_name += ' ' + obj.lastName;
+      }
+      if (obj.country || obj.location || obj.country_name) result.country = obj.country || obj.location || obj.country_name;
+      if (obj.age != null) result.age = obj.age;
+      if (obj.interests || obj.hobbies || obj.tags) {
+        var isrc = obj.interests || obj.hobbies || obj.tags;
+        result.interests = Array.isArray(isrc) ? isrc.join(', ') : String(isrc);
+      }
+      if (obj.city) result.city = obj.city;
+      if (obj.field_of_work || obj.work) result.work = obj.field_of_work || obj.work;
+      if (obj.marital_status) result.marital_status = obj.marital_status;
+      if (obj.bio || obj.about_me || obj.description || obj.about) result.bio = obj.bio || obj.about_me || obj.description || obj.about;
+
+      // Campos anidados en personal/profile
+      var personal = obj.personal || obj.profile || {};
+      if (!result.country && personal.country) result.country = personal.country;
+      if (result.age == null && personal.age != null) result.age = personal.age;
+      if (!result.interests && (personal.interests || personal.hobbies || personal.tags)) {
+        var psrc = personal.interests || personal.hobbies || personal.tags;
+        result.interests = Array.isArray(psrc) ? psrc.join(', ') : String(psrc);
+      }
+      if (!result.city && personal.city) result.city = personal.city;
+      if (!result.work && personal.field_of_work) result.work = personal.field_of_work;
+      if (!result.marital_status && personal.marital_status) result.marital_status = personal.marital_status;
+      if (personal.traits) result.traits = Array.isArray(personal.traits) ? personal.traits.join(', ') : String(personal.traits);
+      if (personal.movie_genres) result.movie_genres = Array.isArray(personal.movie_genres) ? personal.movie_genres.join(', ') : String(personal.movie_genres);
+      if (personal.music_genres) result.music_genres = Array.isArray(personal.music_genres) ? personal.music_genres.join(', ') : String(personal.music_genres);
+      if (personal.goal) result.goal = Array.isArray(personal.goal) ? personal.goal.join(', ') : String(personal.goal);
+      if (personal.other_languages) result.languages = Array.isArray(personal.other_languages) ? personal.other_languages.join(', ') : String(personal.other_languages);
+      if (personal.education) result.education = personal.education;
+      if (personal.looking_for) result.looking_for = personal.looking_for;
+      if (personal.body_type) result.body_type = personal.body_type;
+
+      if (result.profile_name) return result;
+    }
+  }
+
+  // Recursión en propiedades y arrays
+  var keys = Object.keys(obj);
+  for (var ki = 0; ki < keys.length; ki++) {
+    try {
+      var val = obj[keys[ki]];
+      if (val && typeof val === 'object') {
+        var sub = deepFindProfile(val, targetId, depth + 1);
+        if (sub) return sub;
+      }
+    } catch (e) {}
+  }
+  return null;
+}
 
 // ── Floating Cribs Overlay: muestra datos de Cribs del perfil actual ──
 var cribsOverlayState = { visible: false, dragged: false, profileId: null };
@@ -2759,6 +2881,40 @@ function fetchCribsForProfile(profileId) {
               cribsOverlayState.visible = true;
               var el = document.getElementById('tess-cribs-overlay');
               if (el) el.classList.add('visible');
+            }
+            // Auto-scrape si la entrada no tiene datos (ej: agregada desde dashboard sin API)
+            if (!entry.profile_name && data.tess_jwt) {
+              console.log('[CRIBS-OVERLAY] Entrada sin datos, intentando extraer desde la página...');
+              var domData = domScrapeProfile(profileId);
+              if (domData && domData.profile_name) {
+                var bodyData = { profile_name: domData.profile_name };
+                if (domData.country) bodyData.country = domData.country;
+                if (domData.age != null) bodyData.age = domData.age;
+                if (domData.interests) bodyData.interests = domData.interests;
+                if (domData.city) bodyData.city = domData.city;
+                if (domData.work) bodyData.work = domData.work;
+                if (domData.marital_status) bodyData.marital_status = domData.marital_status;
+                if (domData.traits) bodyData.traits = domData.traits;
+                if (domData.movie_genres) bodyData.movie_genres = domData.movie_genres;
+                if (domData.music_genres) bodyData.music_genres = domData.music_genres;
+                if (domData.goal) bodyData.goal = domData.goal;
+                if (domData.languages) bodyData.languages = domData.languages;
+                if (domData.education) bodyData.education = domData.education;
+                if (domData.looking_for) bodyData.looking_for = domData.looking_for;
+                if (domData.body_type) bodyData.body_type = domData.body_type;
+                fetch(TESSERACT_API + '/api/tess/cribs/' + entry._id + '/bulk', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.tess_jwt },
+                  body: JSON.stringify(bodyData)
+                }).then(function (r) {
+                  if (r.ok) {
+                    console.log('[CRIBS-DOM] Datos guardados exitosamente');
+                    // Refrescar overlay con datos actualizados
+                    renderCribsOverlay(domData);
+                    try { chrome.runtime.sendMessage({action: 'CRIBS_REFRESH'}); } catch (e) {}
+                  }
+                }).catch(function () {});
+              }
             }
           } else {
             renderCribsOverlay(null);

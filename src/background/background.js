@@ -22,6 +22,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.action === 'GET_SUBSCRIPTION') {
     (async () => { sendResponse(await getSubscriptionInfo()); })();
     return true;
+  } else if (message.action === 'CRIBS_REFRESH') {
+    // Reenviar a todas las extension pages (dashboard)
+    chrome.runtime.sendMessage({ action: 'CRIBS_REFRESH' }, function () { if (chrome.runtime.lastError) { /* no hay páginas abiertas */ } });
+    sendResponse({ success: true });
   }
   return true;
 });

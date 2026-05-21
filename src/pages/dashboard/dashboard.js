@@ -372,9 +372,9 @@
           applyCribFilters();
           var entryId = d.entry_id;
           if (entryId) {
-            chrome.tabs.query({ url: '*://talkytimes.com/*' }, function (tabs) {
+            chrome.tabs.query({ url: ['*://talkytimes.com/*', '*://www.talkytimes.com/*'] }, function (tabs) {
               if (tabs && tabs.length > 0) {
-                chrome.tabs.sendMessage(tabs[0].id, { action: 'SCRAPE_PROFILE', profileId: id, entryId: entryId, jwt: currentJwt }, function () {});
+                chrome.tabs.sendMessage(tabs[0].id, { action: 'SCRAPE_PROFILE', profileId: id, entryId: entryId, jwt: currentJwt }, function () { if (chrome.runtime.lastError) { console.log('[CRIBS] No se pudo enviar SCRAPE_PROFILE:', chrome.runtime.lastError.message); } });
               }
             });
           }
