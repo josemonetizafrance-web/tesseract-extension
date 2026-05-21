@@ -2634,45 +2634,71 @@ chrome.runtime.onMessage.addListener((req, sender, res) => {
 // ── Scraper DOM: extrae datos del perfil desde la página actual ──
 function domScrapeProfile(profileId) {
   console.log('[CRIBS-DOM] Extrayendo perfil', profileId, 'desde la página');
+  var rawTarget = String(profileId).replace(/^0+/, '');
+
+  // 1. Buscar en objetos globales del state (SPA) — primero por navegación recursiva, luego por escaneo JSON
   try {
-    // Buscar en objetos globales del state (SPA) de forma recursiva
     var stateKeys = ['__INITIAL_STATE__', '__DATA__', '__USER__', '__PROFILE__', '__NEXT_DATA__', 'store', '__store__', '__PRELOADED_STATE__'];
     for (var si = 0; si < stateKeys.length; si++) {
       var source = window[stateKeys[si]];
-      if (source && typeof source === 'object') {
-        var found = deepFindProfile(source, profileId, 0);
-        if (found && found.profile_name) {
-          console.log('[CRIBS-DOM] Datos extraídos de window.' + stateKeys[si], JSON.stringify(found));
-          return found;
-        }
+      if (!source || typeof source !== 'object') continue;
+      // 1a. Navegación recursiva
+      var found = deepFindProfile(source, rawTarget, 0);
+      if (found && found.profile_name) {
+        console.log('[CRIBS-DOM] Datos extraídos por navegación de', stateKeys[si], JSON.stringify(found));
+        return found;
+      }
+    }
+    // 1b. Escaneo sobre JSON serializado (para datos anidados que la navegación no alcanza)
+    for (var si2 = 0; si2 < stateKeys.length; si2++) {
+      var src2 = window[stateKeys[si2]];
+      if (!src2 || typeof src2 !== 'object') continue;
+      var str = JSON.stringify(src2);
+      if (str.indexOf(rawTarget) === -1) continue;
+      var parsed = jsonScanProfile(str, rawTarget);
+      if (parsed && parsed.profile_name) {
+        console.log('[CRIBS-DOM] Datos extraídos por jsonScan de', stateKeys[si2], JSON.stringify(parsed));
+        return parsed;
       }
     }
   } catch (e) { console.log('[CRIBS-DOM] Error en estado global:', e.message); }
 
-  // Fallback: extraer nombre desde el DOM visible
+  // 2. Extraer nombre desde el DOM visible
   var nameSelectors = [
     '[class*="username"]', '[class*="display-name"]', '[class*="profile-name"]',
     '[class*="user-name"]', '[class*="member-name"]', '[class*="nickname"]',
     '[class*="conversation"] [class*="name"]', '[class*="chat-header"] [class*="name"]',
-    '[class*="top"] [class*="name"]', 'h1', 'h2', '[class*="title"]'
+    '[class*="chat"] [class*="name"]', '[class*="dialog"] [class*="name"]',
+    '[class*="contact"] [class*="name"]', '[class*="active"] [class*="name"]',
+    '[class*="selected"] [class*="name"]', '[class*="header"] [class*="name"]',
+    '[class*="top"] [class*="heading"]', 'h1', 'h2', '[class*="title"]'
   ];
   for (var ns = 0; ns < nameSelectors.length; ns++) {
     var el = document.querySelector(nameSelectors[ns]);
     if (el) {
       var t = el.textContent.trim();
-      if (t && t.length > 1 && t.length < 50 && !t.includes('@') && !t.includes('http') && !t.match(/^(Chat|Profile|Home|Settings|Search)/i)) {
+      if (t && t.length > 1 && t.length < 50 && !t.includes('@') && !t.includes('http') && !t.match(/^(Chat|Profile|Home|Settings|Search|\d)/i)) {
         console.log('[CRIBS-DOM] Nombre extraído del DOM:', t);
         return { profile_name: t };
       }
     }
   }
 
-  // Buscar en meta tags
+  // 3. Intentar con el título de la página (limpiar nombre de la plataforma)
   try {
-    var metaTitle = document.querySelector('meta[property="og:title"], meta[name="twitter:title"]');
+    var titleText = document.title.replace(/[-|].*$/, '').trim();
+    if (titleText && titleText.toLowerCase() !== 'talkytimes' && titleText.length < 40) {
+      console.log('[CRIBS-DOM] Nombre desde title:', titleText);
+      return { profile_name: titleText };
+    }
+  } catch (e) {}
+
+  // 4. Buscar en meta tags
+  try {
+    var metaTitle = document.querySelector('meta[property="og:title"], meta[name="twitter:title"], meta[name="title"]');
     if (metaTitle) {
       var mt = metaTitle.getAttribute('content');
-      if (mt && mt.length < 50) {
+      if (mt && mt.length > 1 && mt.length < 50) {
         console.log('[CRIBS-DOM] Nombre desde meta tag:', mt);
         return { profile_name: mt };
       }
@@ -2684,13 +2710,18 @@ function domScrapeProfile(profileId) {
 }
 
 function deepFindProfile(obj, targetId, depth) {
-  if (depth > 5 || !obj || typeof obj !== 'object') return null;
+  if (depth > 6 || !obj || typeof obj !== 'object') return null;
   var rawTarget = String(targetId).replace(/^0+/, '');
   var result = null;
 
-  // Verificar si este objeto es el perfil buscado
-  var objId = (obj.id != null ? String(obj.id) : '') || (obj.userId != null ? String(obj.userId) : '') ||
-              (obj.profileId != null ? String(obj.profileId) : '') || (obj.memberId != null ? String(obj.memberId) : '');
+  // Determinar ID del objeto actual
+  var objId = '';
+  try { if (obj.id != null) objId = String(obj.id); } catch (e) {}
+  if (!objId) try { if (obj.userId != null) objId = String(obj.userId); } catch (e) {}
+  if (!objId) try { if (obj.profileId != null) objId = String(obj.profileId); } catch (e) {}
+  if (!objId) try { if (obj.memberId != null) objId = String(obj.memberId); } catch (e) {}
+  if (!objId) try { if (obj.uid != null) objId = String(obj.uid); } catch (e) {}
+
   if (objId) {
     var cleanId = objId.replace(/^0+/, '');
     if (cleanId === rawTarget) {
@@ -2746,6 +2777,61 @@ function deepFindProfile(obj, targetId, depth) {
     } catch (e) {}
   }
   return null;
+}
+
+function jsonScanProfile(str, targetId) {
+  var r = {};
+  // Buscar el contexto del ID en el JSON (500 chars alrededor)
+  var idRegex = new RegExp('"((?:id|userId|profileId|memberId))"\\s*:\\s*"?\\s*' + targetId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*"?', 'i');
+  var idMatch = idRegex.exec(str);
+  if (!idMatch) return null;
+  var ctxStart = Math.max(0, idMatch.index - 800);
+  var ctxEnd = Math.min(str.length, idMatch.index + 800);
+  var ctx = str.substring(ctxStart, ctxEnd);
+
+  var fieldPatterns = {
+    profile_name: [/"name"\s*:\s*"([^"\\]{2,40})"/, /"displayName"\s*:\s*"([^"\\]{2,40})"/, /"username"\s*:\s*"([^"\\]{2,40})"/, /"fullName"\s*:\s*"([^"\\]{2,40})"/],
+    country: [/"country"\s*:\s*"([^"\\]+)"/, /"location"\s*:\s*"([^"\\]+)"/],
+    age: [/"age"\s*:\s*(\d{1,3})\b/],
+    city: [/"city"\s*:\s*"([^"\\]+)"/],
+    work: [/"field_of_work"\s*:\s*"([^"\\]+)"/, /"work"\s*:\s*"([^"\\]+)"/],
+    marital_status: [/"marital_status"\s*:\s*"([^"\\]+)"/],
+    education: [/"education"\s*:\s*"([^"\\]+)"/],
+    looking_for: [/"looking_for"\s*:\s*"([^"\\]+)"/],
+    body_type: [/"body_type"\s*:\s*"([^"\\]+)"/]
+  };
+
+  for (var field in fieldPatterns) {
+    for (var pi = 0; pi < fieldPatterns[field].length; pi++) {
+      var m = ctx.match(fieldPatterns[field][pi]);
+      if (m) {
+        r[field] = field === 'age' ? parseInt(m[1]) : m[1];
+        break;
+      }
+    }
+  }
+
+  // Intereses, rasgos, géneros (arrays en JSON)
+  var arrFieldMap = { interests: [/"(?:interests|hobbies|tags)"\s*:\s*\[([^\]]{2,300})\]/], traits: [/"(?:traits|characteristics)"\s*:\s*\[([^\]]{2,300})\]/], movie_genres: [/"movie_genres"\s*:\s*\[([^\]]{2,300})\]/], music_genres: [/"music_genres"\s*:\s*\[([^\]]{2,300})\]/], goal: [/"goal"\s*:\s*\[([^\]]{2,300})\]/], languages: [/"other_languages"\s*:\s*\[([^\]]{2,300})\]/] };
+  for (var af in arrFieldMap) {
+    for (var api = 0; api < arrFieldMap[af].length; api++) {
+      var am = ctx.match(arrFieldMap[af][api]);
+      if (am) { r[af] = am[1].replace(/"/g, '').replace(/\s*,\s*/g, ', '); break; }
+    }
+  }
+
+  // Bio (puede ser larga, buscar con límite)
+  var bioM = ctx.match(/"(?:about_me|bio|description)"\s*:\s*"([^"\\]{10,200})"/);
+  if (bioM) r.bio = bioM[1];
+
+  // Combinar firstName + lastName para profile_name si no encontramos name directo
+  if (!r.profile_name) {
+    var fn = ctx.match(/"firstName"\s*:\s*"([^"\\]{2,40})"/);
+    var ln = ctx.match(/"lastName"\s*:\s*"([^"\\]{2,40})"/);
+    if (fn) r.profile_name = fn[1] + (ln ? ' ' + ln[1] : '');
+  }
+
+  return r.profile_name ? r : null;
 }
 
 // ── Floating Cribs Overlay: muestra datos de Cribs del perfil actual ──
