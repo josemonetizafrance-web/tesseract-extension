@@ -2649,6 +2649,7 @@ function cleanExtractedName(raw) {
 function domScrapeProfile(profileId) {
   console.log('[CRIBS-DOM] Extrayendo perfil', profileId, 'desde la página');
   var rawTarget = String(profileId).replace(/^0+/, '');
+  var result = null;
 
   // 1. Buscar en objetos globales del state (SPA) — primero por navegación recursiva, luego por escaneo JSON
   try {
@@ -2663,7 +2664,7 @@ function domScrapeProfile(profileId) {
         return found;
       }
     }
-    // 1b. Escaneo sobre JSON serializado (para datos anidados que la navegación no alcanza)
+    // 1b. Escaneo sobre JSON serializado
     for (var si2 = 0; si2 < stateKeys.length; si2++) {
       var src2 = window[stateKeys[si2]];
       if (!src2 || typeof src2 !== 'object') continue;
@@ -2677,7 +2678,14 @@ function domScrapeProfile(profileId) {
     }
   } catch (e) { console.log('[CRIBS-DOM] Error en estado global:', e.message); }
 
-  // 2. Extraer nombre desde el DOM visible
+  // 2. Scraper DOM completo: extrae TODOS los campos desde la página de perfil
+  result = scrapeProfileFromDOM();
+  if (result && result.profile_name) {
+    console.log('[CRIBS-DOM] Datos extraídos del DOM completo:', JSON.stringify(result));
+    return result;
+  }
+
+  // 3. Fallback: solo nombre desde selectores básicos
   var nameSelectors = [
     '[class*="username"]', '[class*="display-name"]', '[class*="profile-name"]',
     '[class*="user-name"]', '[class*="member-name"]', '[class*="nickname"]',
@@ -2694,14 +2702,14 @@ function domScrapeProfile(profileId) {
       if (t && t.length > 1 && t.length < 50 && !t.includes('@') && !t.includes('http') && !t.match(/^(Chat|Profile|Home|Settings|Search|\d)/i)) {
         var cleaned = cleanExtractedName(t);
         if (cleaned) {
-          console.log('[CRIBS-DOM] Nombre extraído del DOM:', cleaned, '(original:', t + ')');
+          console.log('[CRIBS-DOM] Solo nombre extraído del DOM:', cleaned, '(original:', t + ')');
           return { profile_name: cleaned };
         }
       }
     }
   }
 
-  // 3. Intentar con el título de la página (limpiar nombre de la plataforma)
+  // 4. Intentar con el título de la página
   try {
     var titleText = document.title.replace(/[-|].*$/, '').trim();
     if (titleText && titleText.toLowerCase() !== 'talkytimes' && titleText.length < 40) {
@@ -2710,7 +2718,7 @@ function domScrapeProfile(profileId) {
     }
   } catch (e) {}
 
-  // 4. Buscar en meta tags
+  // 5. Buscar en meta tags
   try {
     var metaTitle = document.querySelector('meta[property="og:title"], meta[name="twitter:title"], meta[name="title"]');
     if (metaTitle) {
@@ -2723,6 +2731,199 @@ function domScrapeProfile(profileId) {
   } catch (e) {}
 
   console.log('[CRIBS-DOM] No se pudo extraer datos');
+  return null;
+}
+
+// ── Scraper DOM completo: extrae TODOS los campos del perfil desde la página ──
+function scrapeProfileFromDOM() {
+  var r = {};
+  console.log('[CRIBS-DOM] Iniciando escaneo completo del DOM');
+
+  // A) Extraer nombre
+  var nameSelectors = [
+    '[class*="profile-name"]', '[class*="display-name"]', '[class*="username"]',
+    'h1', 'h2', '[class*="user-name"]', '[class*="member-name"]',
+    '[class*="profile"] h1', '[class*="profile"] h2', '[class*="header"] h1'
+  ];
+  for (var ni = 0; ni < nameSelectors.length; ni++) {
+    var el = document.querySelector(nameSelectors[ni]);
+    if (el) {
+      var t = el.textContent.trim();
+      if (t && t.length > 1 && t.length < 50 && !t.includes('@') && !t.match(/^(Chat|Profile|Home|Settings|Search)/i)) {
+        r.profile_name = cleanExtractedName(t);
+        if (r.profile_name) break;
+      }
+    }
+  }
+
+  // B) Extraer campos por patrones label-valor en toda la página
+  var labelFieldMap = [
+    { labels: ['age', 'edad', 'años', 'years'], field: 'age', type: 'number' },
+    { labels: ['country', 'país', 'pais', 'location', 'ubicación', 'ubicacion'], field: 'country' },
+    { labels: ['city', 'ciudad', 'town'], field: 'city' },
+    { labels: ['work', 'trabajo', 'job', 'occupation', 'ocupación', 'ocupacion', 'career', 'profesión', 'profesion', 'field of work'], field: 'work' },
+    { labels: ['marital', 'estado civil', 'relationship', 'relación', 'relacion', 'single', 'married', 'divorced', 'widowed'], field: 'marital_status' },
+    { labels: ['education', 'educación', 'educacion', 'school', 'study', 'estudio'], field: 'education' },
+    { labels: ['looking for', 'busca', 'busco', 'seeking', 'wants'], field: 'looking_for' },
+    { labels: ['body type', 'complexion', 'complexión', 'complexion', 'body', 'tipo de cuerpo', 'figura'], field: 'body_type' },
+    { labels: ['languages', 'idiomas', 'language', 'speaks', 'habla'], field: 'languages' },
+    { labels: ['religion', 'religión', 'religion', 'faith', 'fe', 'credo'], field: 'religion' },
+    { labels: ['height', 'altura', 'estatura', 'tamaño', 'tamano'], field: 'height' },
+    { labels: ['ethnicity', 'etnia', 'race', 'raza'], field: 'ethnicity' },
+    { labels: ['children', 'hijos', 'kids', 'child'], field: 'children' },
+    { labels: ['smoking', 'fumar', 'smoke', 'tabaco'], field: 'smoking' },
+    { labels: ['drinking', 'beber', 'drink', 'alcohol'], field: 'drinking' }
+  ];
+
+  // Buscar en toda la página elementos que contengan labels
+  var allElements = document.querySelectorAll('div, span, p, li, td, dt, dd, label, section, article');
+  for (var ei = 0; ei < allElements.length; ei++) {
+    var elem = allElements[ei];
+    var text = elem.textContent.trim();
+    if (!text || text.length > 500) continue;
+
+    for (var li = 0; li < labelFieldMap.length; li++) {
+      var mapping = labelFieldMap[li];
+      for (var lbi = 0; lbi < mapping.labels.length; lbi++) {
+        var label = mapping.labels[lbi];
+        var labelLower = text.toLowerCase();
+        if (labelLower.indexOf(label) !== -1) {
+          // Extraer el valor después del label
+          var value = extractValueAfterLabel(text, label, mapping.type);
+          if (value && (!r[mapping.field] || r[mapping.field] === '')) {
+            r[mapping.field] = value;
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // C) Extraer intereses/hobbies desde elementos tipo tag
+  var tagSelectors = [
+    '[class*="interest"]', '[class*="hobby"]', '[class*="tag"]',
+    '[class*="interest"] [class*="tag"]', '[class*="tag-list"]',
+    '[class*="interest-list"]', '[class*="hobby-list"]',
+    '[class*="interests"] span', '[class*="tags"] span',
+    '[class*="pill"]', '[class*="badge"]'
+  ];
+  var interests = [];
+  for (var ti = 0; ti < tagSelectors.length; ti++) {
+    var tagEls = document.querySelectorAll(tagSelectors[ti]);
+    for (var tji = 0; tji < tagEls.length; tji++) {
+      var tagText = tagEls[tji].textContent.trim();
+      if (tagText && tagText.length > 1 && tagText.length < 40 && !tagText.match(/^\d+$/) && !tagText.match(/^(Chat|Profile|Home|Settings)/i)) {
+        interests.push(tagText);
+      }
+    }
+    if (interests.length > 0) break;
+  }
+  if (interests.length > 0) {
+    r.interests = interests.join(', ');
+  }
+
+  // D) Extraer bio/descripción
+  var bioSelectors = [
+    '[class*="about"]', '[class*="bio"]', '[class*="description"]',
+    '[class*="about-me"]', '[class*="aboutme"]', '[class*="summary"]',
+    '[class*="introduction"]', '[class*="profile-text"]', '[class*="profile-bio"]',
+    '[class*="profile-about"]', '[class*="personal-info"]'
+  ];
+  for (var bi = 0; bi < bioSelectors.length; bi++) {
+    var bioEl = document.querySelector(bioSelectors[bi]);
+    if (bioEl) {
+      var bioText = bioEl.textContent.trim();
+      if (bioText && bioText.length > 10 && bioText.length < 2000) {
+        r.bio = bioText;
+        break;
+      }
+    }
+  }
+
+  // E) Extraer rasgos/personalidad
+  var traitsSelectors = [
+    '[class*="trait"]', '[class*="personality"]', '[class*="characteristic"]',
+    '[class*="quality"]', '[class*="attribute"]'
+  ];
+  var traits = [];
+  for (var tri = 0; tri < traitsSelectors.length; tri++) {
+    var traitEls = document.querySelectorAll(traitsSelectors[tri]);
+    for (var trj = 0; trj < traitEls.length; trj++) {
+      var traitText = traitEls[trj].textContent.trim();
+      if (traitText && traitText.length > 1 && traitText.length < 50) {
+        traits.push(traitText);
+      }
+    }
+    if (traits.length > 0) break;
+  }
+  if (traits.length > 0) {
+    r.traits = traits.join(', ');
+  }
+
+  // F) Extraer géneros de cine/música desde secciones específicas
+  var genreSections = document.querySelectorAll('[class*="movie"]', '[class*="film"]', '[class*="music"]', '[class*="song"]');
+  var movies = [], music = [];
+  for (var gi = 0; gi < genreSections.length; gi++) {
+    var section = genreSections[gi];
+    var sectionText = section.textContent.toLowerCase();
+    var sectionClass = (section.className || '').toLowerCase();
+    if (sectionClass.indexOf('movie') !== -1 || sectionClass.indexOf('film') !== -1 || sectionClass.indexOf('cine') !== -1) {
+      var movieTags = section.querySelectorAll('span, [class*="tag"], [class*="pill"]');
+      for (var mi = 0; mi < movieTags.length; mi++) {
+        var mt = movieTags[mi].textContent.trim();
+        if (mt && mt.length > 1 && mt.length < 40) movies.push(mt);
+      }
+    } else if (sectionClass.indexOf('music') !== -1 || sectionClass.indexOf('song') !== -1 || sectionClass.indexOf('música') !== -1) {
+      var musicTags = section.querySelectorAll('span, [class*="tag"], [class*="pill"]');
+      for (var mui = 0; mui < musicTags.length; mui++) {
+        var mut = musicTags[mui].textContent.trim();
+        if (mut && mut.length > 1 && mut.length < 40) music.push(mut);
+      }
+    }
+  }
+  if (movies.length > 0) r.movie_genres = movies.join(', ');
+  if (music.length > 0) r.music_genres = music.join(', ');
+
+  // G) Extraer objetivo/goal
+  var goalSelectors = ['[class*="goal"]', '[class*="objective"]', '[class*="purpose"]', '[class*="intent"]'];
+  for (var goi = 0; goi < goalSelectors.length; goi++) {
+    var goalEl = document.querySelector(goalSelectors[goi]);
+    if (goalEl) {
+      var goalText = goalEl.textContent.trim();
+      if (goalText && goalText.length > 2 && goalText.length < 200) {
+        r.goal = goalText;
+        break;
+      }
+    }
+  }
+
+  console.log('[CRIBS-DOM] Campos extraídos del DOM:', Object.keys(r).length, 'campos:', JSON.stringify(r));
+  return r.profile_name ? r : null;
+}
+
+function extractValueAfterLabel(text, label, type) {
+  // Patrones: "Label: Value", "Label - Value", "Label\nValue", "Label Value"
+  var patterns = [
+    new RegExp(label + '\\s*[:\\-–—]\\s*([^\\n,;]{1,100})', 'i'),
+    new RegExp(label + '\\s+([^\\n,;:]{1,100})', 'i')
+  ];
+  for (var pi = 0; pi < patterns.length; pi++) {
+    var m = text.match(patterns[pi]);
+    if (m) {
+      var val = m[1].trim();
+      // Limpiar valor
+      val = val.replace(/^[:\-\s]+/, '').replace(/[:\-\s]+$/, '');
+      if (type === 'number') {
+        var num = parseInt(val);
+        if (num > 0 && num < 150) return num;
+        // Buscar número en el texto
+        var numM = val.match(/(\d{1,3})/);
+        if (numM) return parseInt(numM[1]);
+        return null;
+      }
+      if (val.length > 1 && val.length < 100) return val;
+    }
+  }
   return null;
 }
 
