@@ -2631,6 +2631,36 @@ chrome.runtime.onMessage.addListener((req, sender, res) => {
   return true;
 });
 
+// ── Storage listener: detecta cuando el dashboard agrega un profile para scrapear ──
+chrome.storage.onChanged.addListener(function (changes, namespace) {
+  if (namespace !== 'local') return;
+  if (changes._tess_pending_scrape && changes._tess_pending_scrape.newValue) {
+    var scrape = changes._tess_pending_scrape.newValue;
+    console.log('[CRIBS-STORAGE] Pending scrape detected:', scrape.profileId, 'entryId:', scrape.entryId);
+    // Limpiar storage para evitar re-procesamiento
+    chrome.storage.local.remove('_tess_pending_scrape');
+    // Ejecutar scrape
+    cribScrapeViaRouter(scrape.profileId, scrape.entryId, scrape.jwt);
+  }
+});
+
+// ── Al iniciar, verificar si hay pending scrapes ──
+(function checkPendingScrapes() {
+  chrome.storage.local.get('_tess_pending_scrape', function (data) {
+    if (data._tess_pending_scrape) {
+      var scrape = data._tess_pending_scrape;
+      // Solo procesar si es reciente (últimos 30 segundos)
+      if (Date.now() - scrape.timestamp < 30000) {
+        console.log('[CRIBS-STORAGE] Pending scrape al iniciar:', scrape.profileId);
+        chrome.storage.local.remove('_tess_pending_scrape');
+        cribScrapeViaRouter(scrape.profileId, scrape.entryId, scrape.jwt);
+      } else {
+        chrome.storage.local.remove('_tess_pending_scrape');
+      }
+    }
+  });
+})();
+
 // ── Scraper DOM: extrae datos del perfil desde la página actual ──
 function cleanExtractedName(raw) {
   if (!raw) return '';

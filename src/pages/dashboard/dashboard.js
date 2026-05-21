@@ -372,9 +372,20 @@
           applyCribFilters();
           var entryId = d.entry_id;
           if (entryId) {
+            // Guardar en storage para que el content script lo detecte (más fiable que tabs.sendMessage)
+            chrome.storage.local.set({ _tess_pending_scrape: { profileId: id, entryId: entryId, jwt: currentJwt, timestamp: Date.now() } }, function () {
+              console.log('[CRIBS] Scrape request stored for profile', id);
+            });
+            // Intentar también enviar mensaje directo como fallback
             chrome.tabs.query({ url: ['*://talkytimes.com/*', '*://www.talkytimes.com/*'] }, function (tabs) {
               if (tabs && tabs.length > 0) {
-                chrome.tabs.sendMessage(tabs[0].id, { action: 'SCRAPE_PROFILE', profileId: id, entryId: entryId, jwt: currentJwt }, function () { if (chrome.runtime.lastError) { console.log('[CRIBS] No se pudo enviar SCRAPE_PROFILE:', chrome.runtime.lastError.message); } });
+                chrome.tabs.sendMessage(tabs[0].id, { action: 'SCRAPE_PROFILE', profileId: id, entryId: entryId, jwt: currentJwt }, function () {
+                  if (chrome.runtime.lastError) {
+                    console.log('[CRIBS] tabs.sendMessage falló, usando storage fallback:', chrome.runtime.lastError.message);
+                  } else {
+                    console.log('[CRIBS] SCRAPE_PROFILE enviado exitosamente');
+                  }
+                });
               }
             });
           }
