@@ -3055,6 +3055,117 @@ function jsonScanProfile(str, targetId) {
 // ── Floating Cribs Overlay: muestra datos de Cribs del perfil actual ──
 var cribsOverlayState = { visible: false, dragged: false, profileId: null };
 
+// ── Trigger scrape desde overlay: extrae del DOM y guarda al servidor ──
+function triggerScrapeAndSave(profileId) {
+  if (!profileId) { console.log('[CRIBS-SCRAPE] No hay profileId'); return; }
+  console.log('[CRIBS-SCRAPE] Iniciando scrape completo para perfil', profileId);
+
+  var body = document.getElementById('tess-cribs-body');
+  if (body) body.innerHTML = '<div class="tess-cribs-msg">Extrayendo datos del perfil...</div>';
+
+  var scrapeBtn = document.getElementById('tess-cribs-scrape');
+  if (scrapeBtn) { scrapeBtn.textContent = '⏳ ...'; scrapeBtn.disabled = true; }
+
+  // Paso 1: Extraer datos del DOM
+  var domData = scrapeProfileFromDOM();
+  if (!domData || !domData.profile_name) {
+    console.log('[CRIBS-SCRAPE] No se pudo extraer datos del DOM');
+    if (body) body.innerHTML = '<div class="tess-cribs-msg">No se encontraron datos. Visita la página de perfil del usuario.</div>';
+    if (scrapeBtn) { scrapeBtn.textContent = '⬇ SCRAPE'; scrapeBtn.disabled = false; }
+    return;
+  }
+
+  console.log('[CRIBS-SCRAPE] Datos extraídos:', JSON.stringify(domData));
+
+  // Paso 2: Buscar entry en Cribs para obtener el _id
+  chrome.storage.local.get(['tess_jwt'], function (storageData) {
+    if (!storageData.tess_jwt) {
+      console.log('[CRIBS-SCRAPE] No hay JWT');
+      if (scrapeBtn) { scrapeBtn.textContent = '⬇ SCRAPE'; scrapeBtn.disabled = false; }
+      return;
+    }
+
+    var headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + storageData.tess_jwt };
+
+    fetch(TESSERACT_API + '/api/tess/cribs', { headers: headers })
+      .then(function (r) { return r.json(); })
+      .then(function (resp) {
+        if (!resp.cribs || !Array.isArray(resp.cribs)) {
+          console.log('[CRIBS-SCRAPE] No hay cribs en el servidor');
+          if (body) body.innerHTML = '<div class="tess-cribs-msg">Perfil no encontrado en Cribs. Agrégalo desde el dashboard primero.</div>';
+          if (scrapeBtn) { scrapeBtn.textContent = '⬇ SCRAPE'; scrapeBtn.disabled = false; }
+          return;
+        }
+
+        var rawTarget = String(profileId).replace(/^0+/, '');
+        var entry = null;
+        for (var i = 0; i < resp.cribs.length; i++) {
+          var c = resp.cribs[i];
+          var storedId = String(c.profile_id).replace(/^0+/, '');
+          if (storedId === rawTarget) { entry = c; break; }
+        }
+
+        if (!entry) {
+          console.log('[CRIBS-SCRAPE] Perfil no encontrado en Cribs');
+          if (body) body.innerHTML = '<div class="tess-cribs-msg">Perfil no en Cribs. Agrégalo desde el dashboard primero.</div>';
+          if (scrapeBtn) { scrapeBtn.textContent = '⬇ SCRAPE'; scrapeBtn.disabled = false; }
+          return;
+        }
+
+        // Paso 3: Guardar datos via bulk PUT
+        var bodyData = { profile_name: domData.profile_name };
+        if (domData.country) bodyData.country = domData.country;
+        if (domData.age != null) bodyData.age = domData.age;
+        if (domData.interests) bodyData.interests = domData.interests;
+        if (domData.city) bodyData.city = domData.city;
+        if (domData.work) bodyData.work = domData.work;
+        if (domData.marital_status) bodyData.marital_status = domData.marital_status;
+        if (domData.traits) bodyData.traits = domData.traits;
+        if (domData.movie_genres) bodyData.movie_genres = domData.movie_genres;
+        if (domData.music_genres) bodyData.music_genres = domData.music_genres;
+        if (domData.goal) bodyData.goal = domData.goal;
+        if (domData.languages) bodyData.languages = domData.languages;
+        if (domData.education) bodyData.education = domData.education;
+        if (domData.looking_for) bodyData.looking_for = domData.looking_for;
+        if (domData.body_type) bodyData.body_type = domData.body_type;
+        if (domData.bio) bodyData.bio = domData.bio;
+
+        console.log('[CRIBS-SCRAPE] Guardando datos:', JSON.stringify(bodyData));
+
+        fetch(TESSERACT_API + '/api/tess/cribs/' + entry._id + '/bulk', {
+          method: 'PUT',
+          headers: headers,
+          body: JSON.stringify(bodyData)
+        }).then(function (r) {
+          if (r.ok) {
+            console.log('[CRIBS-SCRAPE] Datos guardados exitosamente');
+            // Refrescar overlay con datos completos
+            renderCribsOverlay(domData);
+            // Refrescar dashboard
+            try { chrome.runtime.sendMessage({action: 'CRIBS_REFRESH'}); } catch (e) {}
+            if (scrapeBtn) { scrapeBtn.textContent = '✓ DONE'; setTimeout(function () { if (scrapeBtn) { scrapeBtn.textContent = '⬇ SCRAPE'; scrapeBtn.disabled = false; } }, 2000); }
+          } else {
+            console.log('[CRIBS-SCRAPE] Error al guardar:', r.status);
+            if (body) body.innerHTML = '<div class="tess-cribs-msg">Error al guardar datos</div>';
+            if (scrapeBtn) { scrapeBtn.textContent = '⬇ SCRAPE'; scrapeBtn.disabled = false; }
+          }
+        }).catch(function (e) {
+          console.log('[CRIBS-SCRAPE] Error de red:', e.message);
+          if (body) body.innerHTML = '<div class="tess-cribs-msg">Error de conexión</div>';
+          if (scrapeBtn) { scrapeBtn.textContent = '⬇ SCRAPE'; scrapeBtn.disabled = false; }
+        });
+      })
+      .catch(function (e) {
+        console.log('[CRIBS-SCRAPE] Error al obtener cribs:', e.message);
+        if (body) body.innerHTML = '<div class="tess-cribs-msg">Error de conexión</div>';
+        if (scrapeBtn) { scrapeBtn.textContent = '⬇ SCRAPE'; scrapeBtn.disabled = false; }
+      });
+  });
+}
+
+// ── Floating Cribs Overlay: muestra datos de Cribs del perfil actual ──
+var cribsOverlayState = { visible: false, dragged: false, profileId: null };
+
 function createCribsOverlay() {
   if (document.getElementById('tess-cribs-overlay')) return;
   var css = document.createElement('style');
@@ -3067,6 +3178,9 @@ function createCribsOverlay() {
     #tess-cribs-header { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:#1a1a24; cursor:grab; border-bottom:1px solid #2d2d3f; user-select:none; }
     #tess-cribs-title { font-weight:600; font-size:14px; color:#c4b5fd; }
     #tess-cribs-header:active { cursor:grabbing; }
+    #tess-cribs-actions { display:flex; gap:4px; }
+    #tess-cribs-scrape { background:#22c55e; border:none; color:#fff; font-size:11px; font-weight:600; cursor:pointer; padding:3px 8px; border-radius:4px; }
+    #tess-cribs-scrape:hover { background:#16a34a; }
     #tess-cribs-close { background:none; border:none; color:#666; font-size:14px; cursor:pointer; padding:0 2px; }
     #tess-cribs-close:hover { color:#fff; }
     #tess-cribs-body { padding:8px 10px; overflow-y:auto; flex:1; }
@@ -3087,10 +3201,11 @@ function createCribsOverlay() {
 
   var overlay = document.createElement('div');
   overlay.id = 'tess-cribs-overlay';
-  overlay.innerHTML = '<div id="tess-cribs-header"><span id="tess-cribs-title">📋 CRIBS</span><button id="tess-cribs-close">✕</button></div><div id="tess-cribs-body"><div class="tess-cribs-msg">Cargando...</div></div>';
+  overlay.innerHTML = '<div id="tess-cribs-header"><span id="tess-cribs-title">📋 CRIBS</span><div id="tess-cribs-actions"><button id="tess-cribs-scrape" title="Extraer datos del perfil">⬇ SCRAPE</button><button id="tess-cribs-close">✕</button></div></div><div id="tess-cribs-body"><div class="tess-cribs-msg">Cargando...</div></div>';
   document.body.appendChild(overlay);
 
   document.getElementById('tess-cribs-close').addEventListener('click', function () { cribsOverlayState.visible = false; overlay.classList.remove('visible'); });
+  document.getElementById('tess-cribs-scrape').addEventListener('click', function () { triggerScrapeAndSave(cribsOverlayState.profileId); });
 
   // Draggable: both toggle and overlay move together
   function makeCribsDraggable(el, fromOverlay) {
@@ -3207,6 +3322,14 @@ function fetchCribsForProfile(profileId) {
                 if (domData.work) bodyData.work = domData.work;
                 if (domData.marital_status) bodyData.marital_status = domData.marital_status;
                 if (domData.traits) bodyData.traits = domData.traits;
+                if (domData.movie_genres) bodyData.movie_genres = domData.movie_genres;
+                if (domData.music_genres) bodyData.music_genres = domData.music_genres;
+                if (domData.goal) bodyData.goal = domData.goal;
+                if (domData.languages) bodyData.languages = domData.languages;
+                if (domData.education) bodyData.education = domData.education;
+                if (domData.looking_for) bodyData.looking_for = domData.looking_for;
+                if (domData.body_type) bodyData.body_type = domData.body_type;
+                if (domData.bio) bodyData.bio = domData.bio;
                 if (domData.movie_genres) bodyData.movie_genres = domData.movie_genres;
                 if (domData.music_genres) bodyData.music_genres = domData.music_genres;
                 if (domData.goal) bodyData.goal = domData.goal;
