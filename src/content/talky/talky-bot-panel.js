@@ -2632,6 +2632,20 @@ chrome.runtime.onMessage.addListener((req, sender, res) => {
 });
 
 // ── Scraper DOM: extrae datos del perfil desde la página actual ──
+function cleanExtractedName(raw) {
+  if (!raw) return '';
+  var t = raw.trim();
+  // Remover sufijos de edad: ", 53", " - 53", "(53)", "53"
+  t = t.replace(/\s*[,–—-]\s*\d{1,3}\s*$/, '');
+  t = t.replace(/\s*\(?\d{1,3}\)?\s*$/, '');
+  t = t.replace(/\s*\d{1,3}\s*$/, '');
+  // Remover texto después de paréntesis
+  t = t.replace(/\s*\(.*$/, '');
+  // Remover espacios múltiples
+  t = t.replace(/\s{2,}/g, ' ').trim();
+  return t.length > 1 ? t : '';
+}
+
 function domScrapeProfile(profileId) {
   console.log('[CRIBS-DOM] Extrayendo perfil', profileId, 'desde la página');
   var rawTarget = String(profileId).replace(/^0+/, '');
@@ -2678,8 +2692,11 @@ function domScrapeProfile(profileId) {
     if (el) {
       var t = el.textContent.trim();
       if (t && t.length > 1 && t.length < 50 && !t.includes('@') && !t.includes('http') && !t.match(/^(Chat|Profile|Home|Settings|Search|\d)/i)) {
-        console.log('[CRIBS-DOM] Nombre extraído del DOM:', t);
-        return { profile_name: t };
+        var cleaned = cleanExtractedName(t);
+        if (cleaned) {
+          console.log('[CRIBS-DOM] Nombre extraído del DOM:', cleaned, '(original:', t + ')');
+          return { profile_name: cleaned };
+        }
       }
     }
   }
@@ -2841,10 +2858,10 @@ function createCribsOverlay() {
   if (document.getElementById('tess-cribs-overlay')) return;
   var css = document.createElement('style');
   css.textContent = `
-    #tess-cribs-toggle { position:fixed; left:10px; bottom:50px; z-index:999999; background:#6d28d9; color:#fff; border:none; border-radius:50%; width:44px; height:44px; font-size:20px; cursor:grab; box-shadow:0 2px 12px rgba(109,40,217,0.5); display:flex; align-items:center; justify-content:center; opacity:0.8; user-select:none; }
+    #tess-cribs-toggle { position:fixed !important; left:10px !important; bottom:50px !important; z-index:2147483647 !important; background:#6d28d9; color:#fff; border:none; border-radius:50%; width:44px; height:44px; font-size:20px; cursor:grab; box-shadow:0 2px 12px rgba(109,40,217,0.5); display:flex !important; align-items:center; justify-content:center; opacity:0.85; user-select:none; visibility:visible !important; }
     #tess-cribs-toggle:active { cursor:grabbing; }
     #tess-cribs-toggle:hover { opacity:1; }
-    #tess-cribs-overlay { position:fixed; left:10px; bottom:95px; width:300px; max-height:420px; background:#13131a; border:1px solid #2d2d3f; border-radius:8px; box-shadow:0 4px 24px rgba(0,0,0,0.6); z-index:999998; font:13px/1.5 -apple-system,BlinkMacSystemFont,sans-serif; color:#ddd; overflow:hidden; display:none; flex-direction:column; }
+    #tess-cribs-overlay { position:fixed; left:10px; bottom:95px; width:300px; max-height:420px; background:#13131a; border:1px solid #2d2d3f; border-radius:8px; box-shadow:0 4px 24px rgba(0,0,0,0.6); z-index:2147483646; font:13px/1.5 -apple-system,BlinkMacSystemFont,sans-serif; color:#ddd; overflow:hidden; display:none; flex-direction:column; }
     #tess-cribs-overlay.visible { display:flex; }
     #tess-cribs-header { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:#1a1a24; cursor:grab; border-bottom:1px solid #2d2d3f; user-select:none; }
     #tess-cribs-title { font-weight:600; font-size:14px; color:#c4b5fd; }
@@ -2879,6 +2896,7 @@ function createCribsOverlay() {
     var startX, startY, stL, stT, soL, soT;
     el.addEventListener('mousedown', function (e) {
       if (e.target.tagName === 'BUTTON') return;
+      e.preventDefault();
       startX = e.clientX; startY = e.clientY;
       stL = parseInt(toggle.style.left) || toggle.getBoundingClientRect().left;
       stT = parseInt(toggle.style.top) || toggle.getBoundingClientRect().top;
@@ -2888,7 +2906,14 @@ function createCribsOverlay() {
       overlay.style.right = 'auto'; overlay.style.bottom = 'auto';
       function onMove(ev) {
         var dx = ev.clientX - startX, dy = ev.clientY - startY;
-        toggle.style.left = (stL + dx) + 'px'; toggle.style.top = (stT + dy) + 'px';
+        var newL = stL + dx, newT = stT + dy;
+        // Boundary checks: keep toggle within viewport
+        var vw = window.innerWidth, vh = window.innerHeight;
+        if (newL < 0) newL = 10;
+        if (newL > vw - 50) newL = vw - 50;
+        if (newT < 0) newT = 10;
+        if (newT > vh - 50) newT = vh - 50;
+        toggle.style.left = newL + 'px'; toggle.style.top = newT + 'px';
         overlay.style.left = (soL + dx) + 'px'; overlay.style.top = (soT + dy) + 'px';
       }
       function onUp() { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); }
