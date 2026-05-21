@@ -3291,32 +3291,44 @@ function renderCribsOverlay(data) {
   var body = document.getElementById('tess-cribs-body');
   if (!body) return;
   if (!data) { body.innerHTML = '<div class="tess-cribs-msg">No hay datos en Cribs para este perfil</div>'; return; }
+  // Mismos campos que el dashboard table (crib-table-container)
   var fields = [
+    { label: 'ID Usuario', key: 'profile_id' },
     { label: 'Nombre', key: 'profile_name' },
-    { label: 'ID', key: 'profile_id' },
     { label: 'País', key: 'country' },
-    { label: 'Ciudad', key: 'city' },
     { label: 'Edad', key: 'age' },
     { label: 'Intereses', key: 'interests' },
+    { label: 'Ciudad', key: 'city' },
     { label: 'Trabajo', key: 'work' },
     { label: 'Estado Civil', key: 'marital_status' },
     { label: 'Rasgos', key: 'traits' },
-    { label: 'Cine', key: 'movie_genres' },
-    { label: 'Música', key: 'music_genres' },
-    { label: 'Idiomas', key: 'languages' },
+    { label: 'Géneros Cine', key: 'movie_genres' },
+    { label: 'Géneros Música', key: 'music_genres' },
     { label: 'Objetivo', key: 'goal' },
+    { label: 'Idiomas', key: 'languages' },
     { label: 'Educación', key: 'education' },
     { label: 'Busca', key: 'looking_for' },
     { label: 'Complexión', key: 'body_type' },
     { label: 'Status', key: 'status' },
-    { label: 'Prioridad', key: 'priority' },
-    { label: 'Notas', key: 'quick_notes' }
+    { label: 'Último Contacto', key: 'last_contact' },
+    { label: 'Plantilla Preferida', key: 'preferred_template' },
+    { label: 'Notas Rápidas', key: 'quick_notes' },
+    { label: 'Prioridad', key: 'priority' }
   ];
   var html = '';
   fields.forEach(function (f) {
     var val = data[f.key];
     if (val === null || val === undefined || val === '') val = null;
-    html += '<div class="cr-row"><span class="cr-label">' + f.label + '</span><span class="cr-value' + (val === null ? ' cr-empty' : '') + '">' + (val !== null ? String(val) : '—') + '</span></div>';
+    var displayVal = val !== null ? String(val) : '—';
+    // Formatear último contacto como fecha
+    if (f.key === 'last_contact' && val) {
+      try { displayVal = new Date(val).toLocaleDateString(); } catch (e) {}
+    }
+    // Resaltar ID Usuario
+    if (f.key === 'profile_id' && val) {
+      displayVal = '<span style="font-weight:600;color:#c4b5fd;">' + displayVal + '</span>';
+    }
+    html += '<div class="cr-row"><span class="cr-label">' + f.label + '</span><span class="cr-value' + (val === null ? ' cr-empty' : '') + '">' + displayVal + '</span></div>';
   });
   body.innerHTML = html;
 }
@@ -3376,13 +3388,6 @@ function fetchCribsForProfile(profileId) {
                 if (domData.looking_for) bodyData.looking_for = domData.looking_for;
                 if (domData.body_type) bodyData.body_type = domData.body_type;
                 if (domData.bio) bodyData.bio = domData.bio;
-                if (domData.movie_genres) bodyData.movie_genres = domData.movie_genres;
-                if (domData.music_genres) bodyData.music_genres = domData.music_genres;
-                if (domData.goal) bodyData.goal = domData.goal;
-                if (domData.languages) bodyData.languages = domData.languages;
-                if (domData.education) bodyData.education = domData.education;
-                if (domData.looking_for) bodyData.looking_for = domData.looking_for;
-                if (domData.body_type) bodyData.body_type = domData.body_type;
                 fetch(TESSERACT_API + '/api/tess/cribs/' + entry._id + '/bulk', {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.tess_jwt },
