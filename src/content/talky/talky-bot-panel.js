@@ -2943,6 +2943,26 @@ function scrapeProfileFromDOM() {
   return r.profile_name ? r : null;
 }
 
+// ── Reintentar scrapeProfileFromDOM con delay (para SPA loading) ──
+function scrapeProfileWithRetry(profileId, attempts, delay, callback) {
+  var attempt = 0;
+  function tryScrape() {
+    attempt++;
+    var result = scrapeProfileFromDOM();
+    if (result && result.profile_name) {
+      console.log('[CRIBS-DOM] Scrape exitoso en intento', attempt, ':', JSON.stringify(result));
+      callback(result);
+    } else if (attempt < attempts) {
+      console.log('[CRIBS-DOM] Intento', attempt, 'fallido, reintentando en', delay, 'ms...');
+      setTimeout(tryScrape, delay);
+    } else {
+      console.log('[CRIBS-DOM] Todos los', attempts, 'intentos fallidos');
+      callback(null);
+    }
+  }
+  tryScrape();
+}
+
 function parseAgeFromDate(dateStr) {
   if (!dateStr) return null;
   // Intentar parsear "January 01, 1973" o "01/01/1973" o "1973"
@@ -3112,14 +3132,14 @@ function triggerScrapeAndSave(profileId) {
   var scrapeBtn = document.getElementById('tess-cribs-scrape');
   if (scrapeBtn) { scrapeBtn.textContent = '⏳ ...'; scrapeBtn.disabled = true; }
 
-  // Paso 1: Extraer datos del DOM
-  var domData = scrapeProfileFromDOM();
-  if (!domData || !domData.profile_name) {
-    console.log('[CRIBS-SCRAPE] No se pudo extraer datos del DOM');
-    if (body) body.innerHTML = '<div class="tess-cribs-msg">No se encontraron datos. Visita la página de perfil del usuario.</div>';
-    if (scrapeBtn) { scrapeBtn.textContent = '⬇ SCRAPE'; scrapeBtn.disabled = false; }
-    return;
-  }
+  // Paso 1: Extraer datos del DOM con reintentos (SPA loading)
+  scrapeProfileWithRetry(profileId, 5, 800, function (domData) {
+    if (!domData || !domData.profile_name) {
+      console.log('[CRIBS-SCRAPE] No se pudo extraer datos del DOM tras reintentos');
+      if (body) body.innerHTML = '<div class="tess-cribs-msg">No se encontraron datos. Visita la página de perfil del usuario.</div>';
+      if (scrapeBtn) { scrapeBtn.textContent = '⬇ SCRAPE'; scrapeBtn.disabled = false; }
+      return;
+    }
 
   console.log('[CRIBS-SCRAPE] Datos extraídos:', JSON.stringify(domData));
 
