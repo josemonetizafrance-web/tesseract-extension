@@ -102,17 +102,22 @@ function lfpFindNextPage() {
 }
 
 // Navigate back to search preserving history state
+// IMPORTANT: call history.back() only ONCE — retrying navigates further back past search!
 async function lfpGoBack() {
-  for (var attempt = 0; attempt < 3 && lfpActive; attempt++) {
-    try { window.history.back(); } catch (e) {}
-    for (var w = 0; w < 30 && lfpActive; w++) {
-      if (document.querySelectorAll('img.person-card__photo, img.photo-card, .person-card, [data-test-id*="person-card"]').length > 0) return;
-      await lfpSleep(100);
-    }
+  try { window.history.back(); } catch (e) {}
+  for (var w = 0; w < 100 && lfpActive; w++) {
+    if (document.querySelectorAll('img.person-card__photo, img.photo-card, .person-card, [data-test-id*="person-card"]').length > 0) return;
+    await lfpSleep(100);
   }
-  // Fallback: navigate directly to search page
+  // Fallback: save sweep state before hard navigation so it can resume
+  try {
+    localStorage.setItem('lfpSweepActive', '1');
+    localStorage.setItem('lfpVisited', JSON.stringify(lfpVisited));
+    localStorage.setItem('lfpStats', JSON.stringify(lfpStats));
+    localStorage.setItem('lfpPage', localStorage.getItem('tessSearchPage') || '1');
+  } catch (e) {}
   try { window.location.href = '/search/all'; } catch (e) {}
-  for (var w2 = 0; w2 < 50 && lfpActive; w2++) {
+  for (var w2 = 0; w2 < 100 && lfpActive; w2++) {
     if (document.querySelectorAll('img.person-card__photo, img.photo-card, .person-card, [data-test-id*="person-card"]').length > 0) return;
     await lfpSleep(200);
   }
@@ -202,6 +207,8 @@ async function lfpProcessOne() {
 executeLFP = window.executeLFP = async function () {
   if (lfpActive) {
     lfpActive = false; lfpPaused = false;
+    // Clear saved sweep state on toggle-off
+    try { localStorage.removeItem('lfpSweepActive'); localStorage.removeItem('lfpVisited'); localStorage.removeItem('lfpStats'); localStorage.removeItem('lfpPage'); } catch (e) {}
     if (typeof updateStats === 'function') updateStats();
     lfpUpdateUI();
     if (typeof saveAllStates === 'function') saveAllStates();
@@ -221,20 +228,40 @@ executeLFP = window.executeLFP = async function () {
   try { var m = window.location.href.match(/[?&]page=(\d+)/); localStorage.setItem('tessSearchPage', m ? m[1] : '1'); } catch (e) {}
   if (window.location.href.includes('/mails/')) { lfpToast('\u26A0\uFE0F Est\u00E1s en Mail. Usa Search.', 'error'); lfpActive = false; lfpUpdateUI(); return; }
 
-  // Recovery: if on a profile page, process it first
-  if (!window.location.href.includes('/search/all') && !window.location.href.includes('/search?')) {
-    var isP = document.querySelectorAll('button[data-test-id*="on-like"], button[data-test-id*="on-follow"]').length > 0;
-    if (isP) {
-      lfpToast('\uD83D\uDD04 Recuperando perfil...', 'success');
-      var recId = (window.location.href.match(/\/(\d{6,15})(?:[/?#]|$)/) || [])[1];
-      await lfpProcessOne();
-      if (recId && typeof registerIdInStarTools === 'function') registerIdInStarTools(recId, 'LFP');
-      await lfpGoBack();
-      await lfpSleep(1000);
+  // Restore sweep state after hard reload
+  var resumed = false;
+  try {
+    if (localStorage.getItem('lfpSweepActive') === '1') {
+      var savedVisited = JSON.parse(localStorage.getItem('lfpVisited') || '[]');
+      var savedStats = JSON.parse(localStorage.getItem('lfpStats') || '{}');
+      if (Array.isArray(savedVisited) && savedVisited.length > 0) {
+        lfpVisited = savedVisited;
+        if (savedStats.likes != null) { lfpStats.likes = savedStats.likes; lfpStats.follows = savedStats.follows; lfpStats.photoLikes = savedStats.photoLikes; lfpStats.processed = savedStats.processed; }
+        var savedPage = localStorage.getItem('lfpPage');
+        if (savedPage) localStorage.setItem('tessSearchPage', savedPage);
+        resumed = true;
+        lfpToast('\uD83D\uDD04 Reanudando L+F+P (' + lfpStats.processed + ' procesados)...', 'success');
+      }
+      localStorage.removeItem('lfpSweepActive');
+    }
+  } catch (e) {}
+
+  if (!resumed) {
+    // Recovery: if on a profile page, process it first
+    if (!window.location.href.includes('/search/all') && !window.location.href.includes('/search?')) {
+      var isP = document.querySelectorAll('button[data-test-id*="on-like"], button[data-test-id*="on-follow"]').length > 0;
+      if (isP) {
+        lfpToast('\uD83D\uDD04 Recuperando perfil...', 'success');
+        var recId = (window.location.href.match(/\/(\d{6,15})(?:[/?#]|$)/) || [])[1];
+        await lfpProcessOne();
+        if (recId && typeof registerIdInStarTools === 'function') registerIdInStarTools(recId, 'LFP');
+        await lfpGoBack();
+        await lfpSleep(1000);
+      }
     }
   }
 
-  lfpToast('\u26A1 L+F+P Iniciado', 'success');
+  if (!resumed) lfpToast('\u26A1 L+F+P Iniciado', 'success');
   var maxPages = 25;
 
   while (lfpActive) {
@@ -289,6 +316,7 @@ executeLFP = window.executeLFP = async function () {
     await lfpSleep(600);
   }
   lfpActive = false; lfpPaused = false;
+  try { localStorage.removeItem('lfpSweepActive'); localStorage.removeItem('lfpVisited'); localStorage.removeItem('lfpStats'); localStorage.removeItem('lfpPage'); } catch (e) {}
   lfpUpdateUI();
   if (typeof saveAllStates === 'function') saveAllStates();
   if (typeof syncMetricsToStorage === 'function') syncMetricsToStorage('LFP', lfpStats.processed);
