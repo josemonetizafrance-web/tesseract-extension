@@ -2007,10 +2007,13 @@ function detectCurrentProfile() {
     const m = location.href.match(/\/(\d{6,15})(?:[/?#]|$)/);
     if (m) profileId = m[1];
   }
-  // 6b. Chat URL: /chat/{ownId}_{otherId}
-  if (!profileId) {
-    const chatM = location.href.match(/\/chat\/(\d{6,15})_(\d{6,15})/);
-    if (chatM) profileId = chatM[2];
+  // 6b. Chat URL: /chat/{id1}_{id2} - ambos IDs pueden ser el contacto (pineado vs no)
+  const chatM = location.href.match(/\/chat\/(\d{6,15})_(\d{6,15})/);
+  if (chatM) {
+    window._cribsChatIds = [chatM[1], chatM[2]];
+    if (!profileId) profileId = chatM[1];
+  } else {
+    window._cribsChatIds = null;
   }
 
   // 7. Enlaces "mi perfil" / "my profile"
@@ -2062,34 +2065,64 @@ function detectCurrentProfile() {
     } catch (e) {}
   }
 
-  console.log('[TESSERACT] Profile detection:', { profileName, profileId, url: location.href, title: document.title });
+  console.log('[TESSERACT] Profile detection:', profileId, '| name:', profileName, '| url:', location.href);
 
   // Actualizar UI
   if (profileName || profileId) {
     nameEl.textContent = profileName || '—';
     idEl.textContent = 'ID: ' + (profileId || '—');
     badge.style.display = 'flex';
-    // Actualizar overlay Cribs si el ID cambió
+    // Actualizar overlay Cribs si el ID cambió o hay alternates distintos
     var rawId = profileId ? profileId.replace(/^0+/, '') : '';
-    if (rawId && (!window._lastCribsPid || window._lastCribsPid !== rawId)) {
-      window._lastCribsPid = rawId;
-      setTimeout(function () { fetchCribsForProfile(rawId); }, 500);
+    if (rawId) {
+      var isSame = window._lastCribsPid === rawId;
+      var hasAlternates = window._cribsChatIds && window._cribsChatIds.length > 1 && window._cribsChatIds.some(function (id) { return String(id).replace(/^0+/, '') !== rawId; });
+      if (!isSame || hasAlternates) {
+        console.log('[CRIBS] Detectado:', rawId, '| anterior:', window._lastCribsPid, '| alternates:', window._cribsChatIds ? JSON.stringify(window._cribsChatIds) : 'ninguno');
+        window._lastCribsPid = rawId;
+        if (window._cribsDetectTimer) { clearTimeout(window._cribsDetectTimer); window._cribsDetectTimer = null; }
+        window._cribsDetectTimer = setTimeout(function () { window._cribsDetectTimer = null; fetchCribsForProfile(rawId); }, 150);
+      } else {
+        console.log('[CRIBS] Mismo perfil sin alternates, saltando:', rawId);
+      }
     }
   } else {
     badge.style.display = 'none';
+    window._lastCribsPid = '';
+    if (cribsOverlayState.visible) {
+      cribsOverlayState.visible = false;
+      var te = document.getElementById('tess-cribs-overlay');
+      if (te) te.classList.remove('visible');
+    }
   }
 }
 
 function startProfileWatcher() {
   detectCurrentProfile();
-  // Re-detectar cuando cambie la URL (navegación SPA)
+  // 1. DETECCIÓN RÁPIDA: reaccionar cuando SPA cambia el <title>
+  var titleEl = document.querySelector('title');
+  if (titleEl) {
+    var lastTitle = titleEl.textContent;
+    var titleObserver = new MutationObserver(function () {
+      if (titleEl.textContent !== lastTitle) {
+        lastTitle = titleEl.textContent;
+        setTimeout(detectCurrentProfile, 400);
+      }
+    });
+    titleObserver.observe(titleEl, { childList: true, characterData: true, subtree: true });
+  }
+  // 2. FALLBACK: intervalo cada 1.5s para cambios de URL
   let lastUrl = location.href;
   setInterval(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
-      setTimeout(detectCurrentProfile, 500);
+      setTimeout(detectCurrentProfile, 600);
     }
-  }, 2000);
+  }, 1500);
+  // 3. popstate (back/forward)
+  window.addEventListener('popstate', function () {
+    setTimeout(detectCurrentProfile, 600);
+  });
   // También detectar después de login
   const loginObserver = new MutationObserver(() => {
     if (isAuthenticated) detectCurrentProfile();
@@ -2536,7 +2569,7 @@ function cribScrapeViaRouter(profileId, entryId, jwt) {
     method: 'POST',
     headers: { 'accept': 'application/json', 'content-type': 'application/json', 'x-requested-with': '2424' },
     credentials: 'include',
-    body: JSON.stringify({ ids: [parseInt(profileId) || profileId], withoutTranslation: false })
+    body: JSON.stringify({ ids: [Number(profileId)], withoutTranslation: false })
   }).then(function (r) { return r.json(); }).then(function (data) {
     console.log('[CRIBS] API response:', JSON.stringify(data).slice(0, 3000));
     var profile = null;
@@ -2624,6 +2657,7 @@ chrome.runtime.onMessage.addListener((req, sender, res) => {
     const profileId = req.profileId, entryId = req.entryId, jwt = req.jwt;
     console.log('[CRIBS] SCRAPE_PROFILE recibido:', profileId, 'entryId:', entryId);
     if (!profileId) { res({ error: 'profileId required' }); return; }
+    _tessJwtCache = jwt || '';
     cribScrapeViaRouter(profileId, entryId, jwt);
     res({ success: true });
     return true;
@@ -3232,6 +3266,16 @@ function triggerScrapeAndSave(profileId) {
 // ── Floating Cribs Overlay: muestra datos de Cribs del perfil actual ──
 var cribsOverlayState = { visible: false, dragged: false, profileId: null };
 
+function ensureCribsElements() {
+  var hasToggle = document.getElementById('tess-cribs-toggle');
+  var hasOverlay = document.getElementById('tess-cribs-overlay');
+  if (!hasToggle || !hasOverlay) {
+    if (hasToggle) hasToggle.remove();
+    if (hasOverlay) hasOverlay.remove();
+    createCribsOverlay();
+  }
+}
+
 function createCribsOverlay() {
   if (document.getElementById('tess-cribs-overlay')) return;
   var css = document.createElement('style');
@@ -3308,6 +3352,7 @@ function createCribsOverlay() {
 }
 
 function renderCribsOverlay(data) {
+  ensureCribsElements();
   var body = document.getElementById('tess-cribs-body');
   if (!body) return;
   if (!data) { body.innerHTML = '<div class="tess-cribs-msg">No hay datos en Cribs para este perfil</div>'; return; }
@@ -3353,91 +3398,121 @@ function renderCribsOverlay(data) {
   body.innerHTML = html;
 }
 
-function fetchCribsForProfile(profileId) {
-  if (!profileId) { renderCribsOverlay(null); return; }
-  createCribsOverlay();
-  var body = document.getElementById('tess-cribs-body');
-  if (body) body.innerHTML = '<div class="tess-cribs-msg">Buscando en Cribs...</div>';
-  setTimeout(function () {
-    body = document.getElementById('tess-cribs-body');
-    if (!body) return;
-    if (typeof TESSERACT_API === 'undefined') { body.innerHTML = '<div class="tess-cribs-msg">API no disponible</div>'; return; }
-    chrome.storage.local.get(['tess_jwt'], function (data) {
+var _cribsFetchTimer = null;
+var _cribsHideTimer = null;
+var _cribsRetryTimer = null;
+var _tessJwtCache = '';
+var _cribsLocalCache = null;
+var _cribsCacheLastFetch = 0;
+
+function cribFindEntry(profileId) {
+  if (!_cribsLocalCache) return null;
+  var searchId = String(profileId).replace(/^0+/, '');
+  for (var i = 0; i < _cribsLocalCache.length; i++) {
+    if (String(_cribsLocalCache[i].profile_id).replace(/^0+/, '') === searchId) return _cribsLocalCache[i];
+  }
+  if (window._cribsChatIds) {
+    for (var ci = 0; ci < window._cribsChatIds.length; ci++) {
+      var altId = String(window._cribsChatIds[ci]).replace(/^0+/, '');
+      if (altId !== searchId) {
+        for (var ci2 = 0; ci2 < _cribsLocalCache.length; ci2++) {
+          if (String(_cribsLocalCache[ci2].profile_id).replace(/^0+/, '') === altId) {
+            return _cribsLocalCache[ci2];
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function cribLoadOrRefresh(fetchIfStale) {
+  return new Promise(function (resolve) {
+    if (_cribsLocalCache && Date.now() - _cribsCacheLastFetch < 60000 && !fetchIfStale) { resolve(); return; }
+    var retried = false;
+    function doFetch(token) {
       var headers = { 'Content-Type': 'application/json' };
-      if (data.tess_jwt) headers['Authorization'] = 'Bearer ' + data.tess_jwt;
-      fetch(TESSERACT_API + '/api/tess/cribs', { headers: headers })
-        .then(function (r) { return r.json(); })
-        .then(function (resp) {
-          if (!resp.cribs || !Array.isArray(resp.cribs)) { renderCribsOverlay(null); return; }
-          // Normalize both stored and searched IDs (strip leading zeros)
-          var searchId = String(profileId).replace(/^0+/, '');
-          var entry = null;
-          for (var i = 0; i < resp.cribs.length; i++) {
-            var c = resp.cribs[i];
-            var storedId = String(c.profile_id).replace(/^0+/, '');
-            if (storedId === searchId) { entry = c; break; }
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      var controller = new AbortController();
+      var timeoutId = setTimeout(function () { controller.abort(); }, 10000);
+      function handleResponse(r) {
+        clearTimeout(timeoutId);
+        if (r.status === 401 && !retried) {
+          retried = true;
+          _tessJwtCache = '';
+          chrome.storage.local.get(['tess_jwt'], function (data) { _tessJwtCache = data.tess_jwt || ''; doFetch(_tessJwtCache); });
+          return;
+        }
+        r.json().then(function (resp) {
+          if (resp && resp.cribs && Array.isArray(resp.cribs)) {
+            _cribsLocalCache = resp.cribs;
+            _cribsCacheLastFetch = Date.now();
           }
-          console.log('[CRIBS-OVERLAY] Profile', searchId, entry ? 'encontrado en Cribs' : 'NO encontrado en Cribs');
-          if (entry) {
-            renderCribsOverlay(entry);
-            cribsOverlayState.profileId = profileId;
-            // Auto-show if hidden
-            if (!cribsOverlayState.visible) {
-              cribsOverlayState.visible = true;
-              var el = document.getElementById('tess-cribs-overlay');
-              if (el) el.classList.add('visible');
-            }
-            // Auto-scrape si la entrada no tiene datos (ej: agregada desde dashboard sin API)
-            if (!entry.profile_name && data.tess_jwt) {
-              console.log('[CRIBS-OVERLAY] Entrada sin datos, intentando extraer desde la página...');
-              var domData = domScrapeProfile(profileId);
-              if (domData && domData.profile_name) {
-                var bodyData = { profile_name: domData.profile_name };
-                if (domData.country) bodyData.country = domData.country;
-                if (domData.age != null) bodyData.age = domData.age;
-                if (domData.interests) bodyData.interests = domData.interests;
-                if (domData.city) bodyData.city = domData.city;
-                if (domData.work) bodyData.work = domData.work;
-                if (domData.marital_status) bodyData.marital_status = domData.marital_status;
-                if (domData.traits) bodyData.traits = domData.traits;
-                if (domData.movie_genres) bodyData.movie_genres = domData.movie_genres;
-                if (domData.music_genres) bodyData.music_genres = domData.music_genres;
-                if (domData.goal) bodyData.goal = domData.goal;
-                if (domData.languages) bodyData.languages = domData.languages;
-                if (domData.education) bodyData.education = domData.education;
-                if (domData.looking_for) bodyData.looking_for = domData.looking_for;
-                if (domData.body_type) bodyData.body_type = domData.body_type;
-                if (domData.bio) bodyData.bio = domData.bio;
-                fetch(TESSERACT_API + '/api/tess/cribs/' + entry._id + '/bulk', {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.tess_jwt },
-                  body: JSON.stringify(bodyData)
-                }).then(function (r) {
-                  if (r.ok) {
-                    console.log('[CRIBS-DOM] Datos guardados exitosamente');
-                    // Refrescar overlay con datos actualizados
-                    renderCribsOverlay(domData);
-                    try { chrome.runtime.sendMessage({action: 'CRIBS_REFRESH'}); } catch (e) {}
-                  }
-                }).catch(function () {});
-              }
-            }
-          } else {
-            renderCribsOverlay(null);
-            cribsOverlayState.profileId = null;
-            // Auto-hide after 3s if no data
-            setTimeout(function () {
-              if (!cribsOverlayState.profileId && cribsOverlayState.visible) {
-                cribsOverlayState.visible = false;
-                var el2 = document.getElementById('tess-cribs-overlay');
-                if (el2) el2.classList.remove('visible');
-              }
-            }, 3000);
+          resolve();
+        });
+      }
+      fetch(TESSERACT_API + '/api/tess/cribs', { headers: headers, signal: controller.signal })
+        .then(handleResponse)
+        .catch(function (e) { clearTimeout(timeoutId); console.log('[CRIBS] Error fetching cribs:', e && e.message ? e.message : e); resolve(); });
+    }
+    if (_tessJwtCache) { doFetch(_tessJwtCache); }
+    else { chrome.storage.local.get(['tess_jwt'], function (data) { _tessJwtCache = data.tess_jwt || ''; doFetch(_tessJwtCache); }); }
+  });
+}
+
+function fetchCribsForProfile(profileId) {
+  if (!profileId) { console.log('[CRIBS] fetchCribsForProfile: sin profileId'); renderCribsOverlay(null); return; }
+  console.log('[CRIBS] ▶ fetchCribsForProfile:', profileId, '| _lastCribsPid:', window._lastCribsPid);
+  if (_cribsFetchTimer) { clearTimeout(_cribsFetchTimer); _cribsFetchTimer = null; }
+  if (_cribsHideTimer) { clearTimeout(_cribsHideTimer); _cribsHideTimer = null; }
+  if (_cribsRetryTimer) { clearTimeout(_cribsRetryTimer); _cribsRetryTimer = null; }
+  window._cribsScrapingPid = null;
+  ensureCribsElements();
+  var body = document.getElementById('tess-cribs-body');
+  // Buscar en cache local primero (instantáneo)
+  var cached = cribFindEntry(profileId);
+  if (cached) {
+    renderCribsOverlay(cached);
+    cribsOverlayState.profileId = profileId;
+    if (!cribsOverlayState.visible) {
+      cribsOverlayState.visible = true;
+      var el = document.getElementById('tess-cribs-overlay');
+      if (el) el.classList.add('visible');
+    }
+    // Refrescar cache en background si está stale
+    cribLoadOrRefresh(false);
+    return;
+  }
+  // No está en cache, mostrar buscando y cargar cache
+  if (body) body.innerHTML = '<div class="tess-cribs-msg">Cargando datos...</div>';
+  _cribsFetchTimer = setTimeout(function () {
+    _cribsFetchTimer = null;
+    cribLoadOrRefresh(true).then(function () {
+      body = document.getElementById('tess-cribs-body');
+      if (!body) return;
+      var entry = cribFindEntry(profileId);
+      if (entry) {
+        renderCribsOverlay(entry);
+        cribsOverlayState.profileId = profileId;
+        if (!cribsOverlayState.visible) {
+          cribsOverlayState.visible = true;
+          var el = document.getElementById('tess-cribs-overlay');
+          if (el) el.classList.add('visible');
+        }
+      } else {
+        renderCribsOverlay(null);
+        cribsOverlayState.profileId = null;
+        _cribsHideTimer = setTimeout(function () {
+          _cribsHideTimer = null;
+          if (!cribsOverlayState.profileId && cribsOverlayState.visible) {
+            cribsOverlayState.visible = false;
+            var el2 = document.getElementById('tess-cribs-overlay');
+            if (el2) el2.classList.remove('visible');
           }
-        })
-        .catch(function () { if (body) body.innerHTML = '<div class="tess-cribs-msg">Error de conexión</div>'; });
+        }, 3000);
+      }
     });
-  }, 300);
+  }, 0);
 }
 
 // ── escuchar eventos del bot nox directamente en la misma página ──
