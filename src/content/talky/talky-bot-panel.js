@@ -3261,6 +3261,7 @@ function triggerScrapeAndSave(profileId) {
         if (scrapeBtn) { scrapeBtn.textContent = '⬇ SCRAPE'; scrapeBtn.disabled = false; }
       });
   });
+  });
 }
 
 // ── Floating Cribs Overlay: muestra datos de Cribs del perfil actual ──

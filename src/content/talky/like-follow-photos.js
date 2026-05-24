@@ -91,17 +91,31 @@ function lfpFindNextPage() {
   btn = document.querySelector('button:has(svg[data-icon="chevron-right"])');
   if (btn) return btn;
   btn = Array.from(document.querySelectorAll('a, button')).find(function (el) { var t = el.textContent && el.textContent.trim(); return t === 'Next' || t === 'Siguiente'; });
-  return btn || null;
+  if (btn) return btn;
+  // Fallback: buscar cualquier botón de paginación numérica
+  var allBtns = document.querySelectorAll('[data-test-id*="change-page-n"]');
+  for (var i = 0; i < allBtns.length; i++) {
+    var match = allBtns[i].getAttribute('data-test-id').match(/change-page-n\s+(\d+)/);
+    if (match && parseInt(match[1]) === np) return allBtns[i];
+  }
+  return null;
 }
 
 // Navigate back to search preserving history state
 async function lfpGoBack() {
-  try { window.history.back(); } catch (e) {}
-  for (var w = 0; w < 30 && lfpActive; w++) {
-    if (document.querySelectorAll('img.person-card__photo, img.photo-card, .person-card, [data-test-id*="person-card"]').length > 0) return;
-    await lfpSleep(100);
+  for (var attempt = 0; attempt < 3 && lfpActive; attempt++) {
+    try { window.history.back(); } catch (e) {}
+    for (var w = 0; w < 30 && lfpActive; w++) {
+      if (document.querySelectorAll('img.person-card__photo, img.photo-card, .person-card, [data-test-id*="person-card"]').length > 0) return;
+      await lfpSleep(100);
+    }
   }
-  // fallback silent
+  // Fallback: navigate directly to search page
+  try { window.location.href = '/search/all'; } catch (e) {}
+  for (var w2 = 0; w2 < 50 && lfpActive; w2++) {
+    if (document.querySelectorAll('img.person-card__photo, img.photo-card, .person-card, [data-test-id*="person-card"]').length > 0) return;
+    await lfpSleep(200);
+  }
 }
 
 // ============ PHOTO LIKES ============
@@ -227,7 +241,7 @@ executeLFP = window.executeLFP = async function () {
     var hasC = document.querySelectorAll('img.person-card__photo, img.photo-card, .person-card, [data-test-id*="person-card"]').length > 0;
     if (!hasC) {
       var pg = lfpFindNextPage();
-      if (pg) { try { pg.click(); } catch (e) {} await lfpSleep(1600); continue; }
+      if (pg) { try { pg.click(); } catch (e) {} var nextCp = parseInt(localStorage.getItem('tessSearchPage') || '1') + 1; localStorage.setItem('tessSearchPage', String(nextCp)); await lfpSleep(1600); continue; }
       lfpToast('No hay perfiles. Fin.', 'info');
       break;
     }
@@ -247,7 +261,7 @@ executeLFP = window.executeLFP = async function () {
     }
     if (!toProcess) {
       var pg = lfpFindNextPage();
-      if (pg) { try { pg.click(); } catch (e) {} await lfpSleep(2000); continue; }
+      if (pg) { try { pg.click(); } catch (e) {} var nextCp2 = parseInt(localStorage.getItem('tessSearchPage') || '1') + 1; localStorage.setItem('tessSearchPage', String(nextCp2)); await lfpSleep(2000); continue; }
       lfpToast('No m\u00E1s p\u00E1ginas. Fin.', 'info');
       break;
     }

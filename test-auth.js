@@ -1,7 +1,8 @@
 const { spawn } = require('child_process');
 const http = require('http');
 
-const serverPath = 'C:\\Users\\Familia Molina Rojas\\Downloads\\TESSERACT_v24_temp\\TESSERACT_extension_v24\\server';
+// Ajusta esta ruta a la ubicación real del servidor en tu máquina
+const serverPath = __dirname + '/server';
 
 const server = spawn('node', ['server.js'], { 
   cwd: serverPath,

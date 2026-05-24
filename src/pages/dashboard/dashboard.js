@@ -333,11 +333,12 @@
       body: JSON.stringify({ field: field, value: value })
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (d.success) {
-        // Update local data
         var entry = cribsData.find(function (e) { return e._id === id; });
         if (entry) entry[field] = value;
+      } else {
+        showNotification('Error al actualizar ' + field, 'error');
       }
-    }).catch(function () {});
+    }).catch(function () { showNotification('Error de conexión al actualizar', 'error'); });
   };
 
   window._cribChat = function (profileId) {
@@ -350,11 +351,35 @@
       if (d.success) {
         cribsData = cribsData.filter(function (e) { return e._id !== id; });
         applyCribFilters();
+        showNotification('Registro eliminado', 'success');
+      } else {
+        showNotification('Error al eliminar', 'error');
       }
-    }).catch(function () {});
+    }).catch(function () { showNotification('Error de conexión al eliminar', 'error'); });
   };
 
+  function saveCribFilterState() {
+    chrome.storage.local.set({
+      crib_search: document.getElementById('crib-search').value,
+      crib_status: document.getElementById('crib-filter-status').value,
+      crib_priority: document.getElementById('crib-filter-priority').value,
+      crib_sort_field: cribSortField,
+      crib_sort_dir: cribSortDir
+    });
+  }
+
+  function restoreCribFilterState() {
+    chrome.storage.local.get(['crib_search', 'crib_status', 'crib_priority', 'crib_sort_field', 'crib_sort_dir'], function (data) {
+      if (data.crib_search) document.getElementById('crib-search').value = data.crib_search;
+      if (data.crib_status) document.getElementById('crib-filter-status').value = data.crib_status;
+      if (data.crib_priority) document.getElementById('crib-filter-priority').value = data.crib_priority;
+      if (data.crib_sort_field) cribSortField = data.crib_sort_field;
+      if (data.crib_sort_dir) cribSortDir = data.crib_sort_dir;
+    });
+  }
+
   function initCribs() {
+    restoreCribFilterState();
     document.getElementById('btn-back-dash-cribs').addEventListener('click', function () {
       switchView('dashboard');
     });
@@ -408,14 +433,17 @@
     });
 
     document.getElementById('crib-search').addEventListener('input', function () {
+      saveCribFilterState();
       applyCribFilters();
     });
 
     document.getElementById('crib-filter-status').addEventListener('change', function () {
+      saveCribFilterState();
       applyCribFilters();
     });
 
     document.getElementById('crib-filter-priority').addEventListener('change', function () {
+      saveCribFilterState();
       applyCribFilters();
     });
   }

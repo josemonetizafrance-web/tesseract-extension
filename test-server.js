@@ -2,7 +2,7 @@ const { spawn } = require('child_process');
 const http = require('http');
 
 const server = spawn('node', ['server.js'], { 
-  cwd: 'C:\\Users\\Familia Molina Rojas\\Downloads\\TESSERACT_v24_temp\\TESSERACT_extension_v24\\server',
+  cwd: __dirname + '/server',
   detached: true,
   stdio: 'ignore'
  });
