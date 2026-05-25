@@ -177,6 +177,7 @@ async function lfpProcessOne() {
     var svg = lb.querySelector('svg');
     if ((svg && svg.id === 'HeartOutline') || lb.getAttribute('data-selected') === 'false') {
       try { lb.scrollIntoView({ block: 'center' }); await lfpSleep(80); lb.click(); lfpStats.likes++; lfpStats.processed++; if (typeof botStats !== 'undefined') { botStats.likesGiven++; botStats.contactsProcessed++; } } catch (e) {}
+      if (typeof updateStats === 'function') updateStats();
       await lfpSleep(120);
     }
   }
