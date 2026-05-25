@@ -176,7 +176,7 @@ async function lfpProcessOne() {
   if (lb) {
     var svg = lb.querySelector('svg');
     if ((svg && svg.id === 'HeartOutline') || lb.getAttribute('data-selected') === 'false') {
-      try { lb.scrollIntoView({ block: 'center' }); await lfpSleep(80); lb.click(); lfpStats.likes++; if (typeof botStats !== 'undefined') botStats.likesGiven++; } catch (e) {}
+      try { lb.scrollIntoView({ block: 'center' }); await lfpSleep(80); lb.click(); lfpStats.likes++; lfpStats.processed++; if (typeof botStats !== 'undefined') { botStats.likesGiven++; botStats.contactsProcessed++; } } catch (e) {}
       await lfpSleep(120);
     }
   }
@@ -200,8 +200,6 @@ async function lfpProcessOne() {
   } else { await lfpSleep(100); }
   if (!lfpActive) return;
 
-  lfpStats.processed++;
-  if (typeof botStats !== 'undefined') botStats.contactsProcessed++;
   if (typeof updateStats === 'function') updateStats();
 }
 
