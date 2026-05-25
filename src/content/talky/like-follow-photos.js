@@ -104,6 +104,8 @@ function lfpFindNextPage() {
 // Navigate back to search preserving history state
 // IMPORTANT: call history.back() only ONCE — retrying navigates further back past search!
 async function lfpGoBack() {
+  // Already on search page? nothing to do
+  if (window.location.href.includes('/search/all') || window.location.href.includes('/search?')) return;
   try { window.history.back(); } catch (e) {}
   for (var w = 0; w < 100 && lfpActive; w++) {
     if (document.querySelectorAll('img.person-card__photo, img.photo-card, .person-card, [data-test-id*="person-card"]').length > 0) return;
@@ -160,7 +162,7 @@ async function lfpProcessOne() {
   for (var a = 0; a < 30 && lfpActive; a++) {
     if (lfpIsBlocked()) {
       lfpToast('\u23ED\uFE0F Bloqueado', 'info');
-      await lfpGoBack(); return;
+      return;
     }
     if (document.querySelectorAll('button[data-test-id*="on-like"], button[data-test-id*="on-follow"]').length > 0) break;
     var bt = Array.from(document.querySelectorAll('button, a[role="button"]')).find(function (el) { var t = (el.textContent || '') + (el.getAttribute('aria-label') || ''); return /like|follow|wink/i.test(t); });
