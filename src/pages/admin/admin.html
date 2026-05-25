@@ -5,260 +5,216 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TESSERACT - Admin Panel</title>
     <link rel="stylesheet" href="admin.css">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <img id="cursor-tesseract" src="/assets/logo.png" alt="">
     <div class="admin-container">
         <header class="admin-header">
             <div class="logo">
                 <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="8" y="8" width="48" height="48" rx="4" stroke="#8b5cf6" stroke-width="2"/>
-                    <path d="M20 32L28 40L44 24" stroke="#8b5cf6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                    <rect x="8" y="8" width="48" height="48" rx="4" stroke="#7c3aed" stroke-width="2"/>
+                    <path d="M20 32L28 40L44 24" stroke="#7c3aed" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
             </div>
             <div class="header-info">
                 <h1>TESSERACT ADMIN</h1>
                 <p class="admin-email" id="admin-email">admin@tesseract.com</p>
             </div>
-            <button id="btn-refresh" class="btn-primary" style="margin-right:8px;">REFRESH</button>
-            <select id="office-filter" class="input-field" style="margin-right:8px;width:180px;">
+            <select id="office-filter" class="input-field" style="width:180px;flex:none;">
                 <option value="all">Todas las oficinas</option>
             </select>
-            <button id="btn-logout" class="btn-secondary">LOGOUT</button>
+            <button id="btn-refresh" class="btn-primary" style="flex:none;">REFRESH</button>
+            <button id="btn-logout" class="btn-secondary" style="flex:none;">LOGOUT</button>
         </header>
 
+        <!-- Tab Navigation -->
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="dashboard">📊 DASHBOARD</button>
+            <button class="tab-btn" data-tab="users">👥 USUARIOS</button>
+            <button class="tab-btn" data-tab="offices">🏢 OFICINAS</button>
+            <button class="tab-btn" data-tab="calendar">📅 CALENDARIO</button>
+            <button class="tab-btn" data-tab="activity">📋 ACTIVIDAD</button>
+            <button class="tab-btn" data-tab="admin">⚙️ ADMIN</button>
+        </div>
+
         <main class="admin-main">
-            <!-- Metrics Overview -->
-            <section class="metrics-grid">
-                <div class="metric-card">
-                    <div class="metric-label">OPERADORES ACTIVOS</div>
-                    <div class="metric-value" id="metric-active-users">0</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">DEMO ACTIVOS</div>
-                    <div class="metric-value" id="metric-demo-users">0</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">PREMIUM</div>
-                    <div class="metric-value" id="metric-premium-users">0</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">DESARROLLADORES</div>
-                    <div class="metric-value" id="metric-developer-users" style="color:#22c55e;">0</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">SESIONES HOY</div>
-                    <div class="metric-value" id="metric-today-sessions">0</div>
-                </div>
-            </section>
 
-            <!-- Offices List -->
-            <section class="panel" id="offices-section" style="border-color:#f59e0b;">
-                <h2 class="panel-title" style="color:#f59e0b;">OFICINAS REGISTRADAS</h2>
-                <div id="offices-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;padding:8px 0;"></div>
-            </section>
+            <!-- ═══ TAB: DASHBOARD ═══ -->
+            <div id="tabDashboard" class="tab-content active">
+                <section class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">OPERADORES ACTIVOS</div>
+                        <div class="metric-value" id="metric-active-users">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">DEMO ACTIVOS</div>
+                        <div class="metric-value" id="metric-demo-users">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">PREMIUM</div>
+                        <div class="metric-value" id="metric-premium-users">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">DESARROLLADORES</div>
+                        <div class="metric-value" id="metric-developer-users">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">SESIONES HOY</div>
+                        <div class="metric-value" id="metric-today-sessions">0</div>
+                    </div>
+                </section>
 
-            <!-- Create New User (solo adminchevy) -->
-            <section class="panel" id="create-user-section" style="border-color:#8b5cf6;">
-                <h2 class="panel-title" style="color:#8b5cf6;">CREAR NUEVO USUARIO</h2>
-                <div class="panel-controls">
-                    <input type="email" id="new-user-email" placeholder="usuario@tesseract.com" class="input-field">
-                    <input type="text" id="new-user-password" placeholder="Contraseña*+" class="input-field">
-                    <select id="new-user-type" class="input-field">
-                        <option value="operador">Operador</option>
-                        <option value="admin">Admin de Oficina</option>
-                    </select>
-                    <input type="text" id="new-user-office" placeholder="Oficina (ej: Lima, Bogotá)" class="input-field">
-                    <button id="btn-create-user" class="btn-primary" style="background:#8b5cf6;">CREAR USUARIO</button>
-                </div>
-            </section>
+                <section class="panel">
+                    <h2 class="panel-title">ESTADO DE CONEXIÓN</h2>
+                    <div class="panel-controls" style="margin-bottom:10px;">
+                        <span style="font-size:11px;color:#888;">🟢 Últimos 5 min de actividad</span>
+                    </div>
+                    <div id="user-status-grid"></div>
+                </section>
+            </div>
 
-            <!-- User Management (solo adminchevy) -->
-            <section class="panel" id="user-management-section" style="display:none;border-color:#8b5cf6;">
-                <h2 class="panel-title" style="color:#8b5cf6;">GESTIÓN DE USUARIOS — BD COMPLETA</h2>
-                <div class="panel-controls">
-                    <input type="email" id="input-email" placeholder="usuario@tesseract.com" class="input-field">
-                    <button id="btn-activate-premium" class="btn-primary">ACTIVAR PREMIUM (3M)</button>
-                    <button id="btn-ban-user" class="btn-danger">BANEAR</button>
-                    <button id="btn-unban-user" class="btn-secondary">DESBANEAR</button>
-                    <input type="password" id="new-password-input" placeholder="Nueva contraseña*+" class="input-field" style="width:160px;">
-                    <button id="btn-change-password" class="btn-primary" style="background:#f59e0b;">CAMBIAR PASS</button>
-                </div>
-                <div class="user-list" id="user-list">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>OFICINA</th>
-                                <th>EMAIL</th>
-                                <th>ESTADO</th>
-                                <th>LOGINS</th>
-                                <th>ÚLTIMO ACCESO</th>
-                                <th>ACCIONES</th>
-                                <th>PLAN</th>
-                                <th>ELIMINAR</th>
-                            </tr>
-                        </thead>
-                        <tbody id="user-table-body">
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+            <!-- ═══ TAB: USUARIOS ═══ -->
+            <div id="tabUsers" class="tab-content">
+                <section class="panel" id="create-user-section">
+                    <h2 class="panel-title">CREAR NUEVO USUARIO</h2>
+                    <div class="panel-controls">
+                        <input type="email" id="new-user-email" placeholder="usuario@tesseract.com" class="input-field">
+                        <input type="text" id="new-user-password" placeholder="Contraseña*+" class="input-field" style="min-width:160px;">
+                        <select id="new-user-type" class="input-field" style="min-width:140px;flex:none;">
+                            <option value="operador">Operador</option>
+                            <option value="admin">Admin de Oficina</option>
+                        </select>
+                        <input type="text" id="new-user-office" placeholder="Oficina" class="input-field" style="min-width:140px;flex:none;">
+                        <button id="btn-create-user" class="btn-primary">CREAR</button>
+                    </div>
+                </section>
 
-            <!-- Developer Management (solo adminchevy) -->
-            <section class="panel" id="dev-section" style="display:none;border-color:#22c55e;">
-                <h2 class="panel-title" style="color:#22c55e;">GESTIÓN DE DESARROLLADORES</h2>
-                <p style="font-size:11px;color:#8888a0;margin-bottom:12px;">Solo el administrador maestro puede agregar desarrolladores. Los desarrolladores tienen acceso ilimitado y privilegios de administrador.</p>
-                <div class="panel-controls">
-                    <input type="email" id="input-dev-email" placeholder="nuevo@tesseract.com" class="input-field">
-                    <button id="btn-add-dev" class="btn-primary" style="background:#22c55e;">AGREGAR DESARROLLADOR</button>
-                </div>
-            </section>
+                <section class="panel">
+                    <h2 class="panel-title">GESTIÓN DE USUARIOS</h2>
+                    <div class="panel-controls">
+                        <input type="email" id="input-email" placeholder="usuario@tesseract.com" class="input-field" style="min-width:200px;">
+                        <button id="btn-activate-premium" class="btn-primary">PREMIUM 30D</button>
+                        <button id="btn-ban-user" class="btn-danger">BANEAR</button>
+                        <button id="btn-unban-user" class="btn-secondary">DESBANEAR</button>
+                        <input type="password" id="new-password-input" placeholder="Nueva pass*+" class="input-field" style="min-width:140px;flex:none;">
+                        <button id="btn-change-password" class="btn-primary" style="background:#f59e0b;">CAMBIAR PASS</button>
+                    </div>
+                    <div class="user-list">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>OFICINA</th>
+                                    <th>EMAIL</th>
+                                    <th>ESTADO</th>
+                                    <th>LOGINS</th>
+                                    <th>LIKES</th>
+                                    <th>FOLLOWS</th>
+                                    <th>A-RESP</th>
+                                    <th>MAIL</th>
+                                    <th>ACCIÓN</th>
+                                    <th>PLAN</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="user-table-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
 
-            <!-- Create Office -->
-            <section class="panel" id="create-office-section" style="border-color:#f59e0b;">
-                <h2 class="panel-title" style="color:#f59e0b;">CREAR OFICINA</h2>
-                <div class="panel-controls">
-                    <input type="text" id="new-office-name" placeholder="Nombre de oficina (ej: Lima, Bogotá)" class="input-field">
-                    <button id="btn-create-office" class="btn-primary" style="background:#f59e0b;">CREAR OFICINA</button>
-                </div>
-            </section>
+            <!-- ═══ TAB: OFICINAS ═══ -->
+            <div id="tabOffices" class="tab-content">
+                <section class="panel">
+                    <h2 class="panel-title">OFICINAS REGISTRADAS</h2>
+                    <div id="offices-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;padding:4px 0;"></div>
+                </section>
+                <section class="panel">
+                    <h2 class="panel-title">CREAR OFICINA</h2>
+                    <div class="panel-controls">
+                        <input type="text" id="new-office-name" placeholder="Nombre de oficina" class="input-field">
+                        <button id="btn-create-office" class="btn-primary">CREAR OFICINA</button>
+                    </div>
+                </section>
+            </div>
 
-            <!-- Storage Debug (solo admin maestro) -->
-            <section class="panel" id="storage-debug-section" style="border-color:#ef4444;display:none;">
-                <h2 class="panel-title" style="color:#ef4444;">STORAGE DEBUG</h2>
-                <p style="font-size:11px;color:#8888a0;margin-bottom:12px;">Inspecciona todas las claves de chrome.storage.local para depurar por qué las métricas pueden mostrar 0.</p>
-                <div class="panel-controls">
-                    <button id="btn-dump-storage" class="btn-primary" style="background:#ef4444;">DUMP STORAGE</button>
-                    <button id="btn-test-write" class="btn-primary" style="background:#f59e0b;margin-left:8px;">TEST WRITE</button>
-                    <button id="btn-clear-debug" class="btn-secondary" style="margin-left:8px;">LIMPIAR</button>
-                </div>
-                <div id="storage-debug-container" style="background:#000;border:1px solid #333350;border-radius:6px;padding:10px;margin-top:10px;max-height:400px;overflow:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:#e0e0e0;white-space:pre-wrap;word-break:break-all;"></div>
-            </section>
+            <!-- ═══ TAB: CALENDARIO ═══ -->
+            <div id="tabCalendar" class="tab-content">
+                <section class="panel">
+                    <h2 class="panel-title">CALENDARIO DE USO DIARIO</h2>
+                    <div class="panel-controls">
+                        <select id="calendar-office-filter" class="input-field" style="max-width:200px;">
+                            <option value="all">Todas las oficinas</option>
+                        </select>
+                        <select id="calendar-days" class="input-field" style="max-width:100px;flex:none;">
+                            <option value="7">7 días</option>
+                            <option value="14">14 días</option>
+                            <option value="30" selected>30 días</option>
+                            <option value="60">60 días</option>
+                            <option value="90">90 días</option>
+                        </select>
+                        <button id="btn-load-calendar" class="btn-primary">CARGAR</button>
+                    </div>
+                    <div class="calendar-grid" id="calendar-grid">
+                        <div class="calendar-row header-row">
+                            <div class="calendar-cell date-cell">FECHA</div>
+                            <div class="calendar-cell metric-cell">LIKES</div>
+                            <div class="calendar-cell metric-cell">FOLLOWS</div>
+                            <div class="calendar-cell metric-cell">AUTO-RESP</div>
+                            <div class="calendar-cell metric-cell">MAILING</div>
+                            <div class="calendar-cell total-cell">TOTAL</div>
+                        </div>
+                        <div class="calendar-row" style="justify-content:center;padding:30px;color:#888;">
+                            Selecciona oficina y haz clic en CARGAR
+                        </div>
+                    </div>
+                </section>
+            </div>
 
-            <!-- Usage Metrics -->
-            <section class="panel">
-                <h2 class="panel-title">MÉTRICAS DE USO — BOT</h2>
-                <div class="metrics-details" style="grid-template-columns:repeat(3,1fr);">
-                    <div class="detail-card">
-                        <h3>LIKES</h3>
-                        <div class="detail-value" id="metric-likes">0</div>
-                        <p class="detail-desc">Likes dados por el bot</p>
+            <!-- ═══ TAB: ACTIVIDAD ═══ -->
+            <div id="tabActivity" class="tab-content">
+                <section class="panel">
+                    <h2 class="panel-title">REGISTRO DE ACTIVIDAD</h2>
+                    <div style="display:flex;gap:8px;margin-bottom:10px;">
+                        <button id="btnResetLog" style="background:rgba(239,68,68,0.08);border:1px solid #ef4444;color:#ef4444;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:600;">🗑 Resetear Log</button>
                     </div>
-                    <div class="detail-card">
-                        <h3>FOLLOWS</h3>
-                        <div class="detail-value" id="metric-follows">0</div>
-                        <p class="detail-desc">Follows realizados</p>
+                    <div class="log-container" id="log-container">
+                        <div class="log-entry" style="text-align:center;padding:20px;color:#888;">Cargando...</div>
                     </div>
-                    <div class="detail-card">
-                        <h3>AUTO-RESP</h3>
-                        <div class="detail-value" id="metric-auto-response">0</div>
-                        <p class="detail-desc">Auto-respuestas enviadas</p>
+                </section>
+                <section class="panel">
+                    <h2 class="panel-title">ACCIONES DE BOT EN VIVO</h2>
+                    <div class="bot-actions-container" id="bot-actions-container">
+                        <div style="text-align:center;padding:20px;color:#888;">Cargando...</div>
                     </div>
-                    <div class="detail-card">
-                        <h3>MAILING</h3>
-                        <div class="detail-value" id="metric-mailing">0</div>
-                        <p class="detail-desc">Mensajes de mailing</p>
-                    </div>
-                    <div class="detail-card">
-                        <h3>NEWSFEED</h3>
-                        <div class="detail-value" id="metric-newsfeed">0</div>
-                        <p class="detail-desc">Interacciones con newsfeed</p>
-                    </div>
-                    <div class="detail-card">
-                        <h3>SWEEPS</h3>
-                        <div class="detail-value" id="metric-sweeps">0</div>
-                        <p class="detail-desc">IDs capturados en sweeps</p>
-                    </div>
-                </div>
-                <div class="metrics-details" style="grid-template-columns:repeat(2,1fr);margin-top:8px;">
-                    <div class="detail-card" style="border-color:#4CAF50;">
-                        <h3>TOTAL IDs RECOLECTADOS</h3>
-                        <div class="detail-value" id="metric-total-ids" style="color:#4CAF50;">0</div>
-                        <p class="detail-desc">Suma de todas las categorías</p>
-                    </div>
-                    <div class="detail-card" style="border-color:#f59e0b;">
-                        <h3>ÚLTIMA ACCIÓN</h3>
-                        <div class="detail-value" id="metric-last-action" style="font-size:11px;color:#f59e0b;">—</div>
-                        <p class="detail-desc" id="metric-last-action-time"></p>
-                    </div>
-                </div>
-            </section>
+                </section>
+            </div>
 
-            <!-- Monthly Stats -->
-            <section class="panel">
-                <h2 class="panel-title">ESTADÍSTICAS MENSUALES — <span id="month-label"></span></h2>
-                <div class="metrics-details" style="grid-template-columns:repeat(5,1fr);">
-                    <div class="detail-card">
-                        <h3>LIKES</h3>
-                        <div class="detail-value" id="metric-month-likes">0</div>
-                        <p class="detail-desc">Este mes</p>
+            <!-- ═══ TAB: ADMIN ═══ -->
+            <div id="tabAdmin" class="tab-content">
+                <section class="panel">
+                    <h2 class="panel-title">GESTIÓN DE DESARROLLADORES</h2>
+                    <p style="font-size:12px;color:#888;margin-bottom:12px;">Solo el administrador maestro puede agregar desarrolladores.</p>
+                    <div class="panel-controls">
+                        <input type="email" id="input-dev-email" placeholder="nuevo@tesseract.com" class="input-field">
+                        <button id="btn-add-dev" class="btn-primary">AGREGAR DESARROLLADOR</button>
                     </div>
-                    <div class="detail-card">
-                        <h3>FOLLOWS</h3>
-                        <div class="detail-value" id="metric-month-follows">0</div>
-                        <p class="detail-desc">Este mes</p>
+                    <div id="dev-list" style="margin-top:16px;border-top:1px solid #f0f0f5;padding-top:16px;">
+                        <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px;">DESARROLLADORES ACTUALES:</div>
+                        <div id="dev-list-items" style="display:flex;flex-direction:column;gap:6px;"></div>
                     </div>
-                    <div class="detail-card">
-                        <h3>AUTO-RESP</h3>
-                        <div class="detail-value" id="metric-month-auto-response">0</div>
-                        <p class="detail-desc">Este mes</p>
+                </section>
+                <section class="panel">
+                    <h2 class="panel-title">STORAGE DEBUG</h2>
+                    <p style="font-size:12px;color:#888;margin-bottom:12px;">Inspecciona chrome.storage.local para depurar métricas.</p>
+                    <div class="panel-controls">
+                        <button id="btn-dump-storage" class="btn-danger">DUMP STORAGE</button>
+                        <button id="btn-test-write" class="btn-primary" style="background:#f59e0b;">TEST WRITE</button>
+                        <button id="btn-clear-debug" class="btn-secondary">LIMPIAR</button>
                     </div>
-                    <div class="detail-card">
-                        <h3>MAILING</h3>
-                        <div class="detail-value" id="metric-month-mailing">0</div>
-                        <p class="detail-desc">Este mes</p>
-                    </div>
-                    <div class="detail-card">
-                        <h3>SWEEPS</h3>
-                        <div class="detail-value" id="metric-month-sweeps">0</div>
-                        <p class="detail-desc">IDs capturados</p>
-                    </div>
-                </div>
-            </section>
+                    <div id="storage-debug-container">Haz clic en DUMP STORAGE</div>
+                </section>
+            </div>
 
-            <!-- Calendario de Métricas Diarias -->
-            <section class="panel" style="border-color:#10b981;">
-                <h2 class="panel-title" style="color:#10b981;">CALENDARIO DE USO DIARIO — OFICINA</h2>
-                <div class="panel-controls" style="margin-bottom:16px;">
-                    <select id="calendar-office-filter" class="input-field" style="width:200px;">
-                        <option value="all">Todas las oficinas</option>
-                    </select>
-                    <select id="calendar-days" class="input-field" style="width:120px;margin-left:8px;">
-                        <option value="7">7 días</option>
-                        <option value="14">14 días</option>
-                        <option value="30" selected>30 días</option>
-                        <option value="60">60 días</option>
-                        <option value="90">90 días</option>
-                    </select>
-                    <button id="btn-load-calendar" class="btn-primary" style="background:#10b981;margin-left:8px;">CARGAR</button>
-                </div>
-                <div class="calendar-grid" id="calendar-grid">
-                    <div class="calendar-row header-row">
-                        <div class="calendar-cell date-cell">FECHA</div>
-                        <div class="calendar-cell metric-cell">LIKES</div>
-                        <div class="calendar-cell metric-cell">FOLLOWS</div>
-                        <div class="calendar-cell metric-cell">AUTO-RESP</div>
-                        <div class="calendar-cell metric-cell">MAILING</div>
-                        <div class="calendar-cell total-cell">TOTAL</div>
-                    </div>
-                    <div class="calendar-row" style="justify-content:center;padding:30px;color:#555;">
-                        Selecciona oficina y haz clic en CARGAR
-                    </div>
-                </div>
-            </section>
-
-            <!-- Activity Log Simple -->
-            <section class="panel" style="border-color:#06b6d4;">
-                <h2 class="panel-title" style="color:#06b6d4;">REGISTRO DE ACTIVIDAD</h2>
-                <div style="display:flex;gap:8px;margin-bottom:8px;">
-                    <button id="btnResetLog" style="background:rgba(239,68,68,0.15);border:1px solid #ef4444;color:#ef4444;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:10px;">🗑 Resetear Log</button>
-                </div>
-                <div class="log-container" id="log-container">
-                    <div class="log-entry" style="text-align:center;padding:20px;color:#666;">
-                        Cargando...
-                    </div>
-                </div>
-            </section>
         </main>
     </div>
 

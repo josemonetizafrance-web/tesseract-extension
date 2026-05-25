@@ -5,8 +5,50 @@ let currentToken = '';
 let currentAdminEmail = '';
 let userOffice = '';
 let isOfficeAdmin = false;
+let isMasterAdmin = false;
 let metricsErrorCount = 0;
 let refreshIntervalId = null;
+
+// ── Tab switching ──
+function initTabs() {
+  document.querySelectorAll('.tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var tabName = this.dataset.tab;
+      document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+      document.querySelectorAll('.tab-content').forEach(function (c) { c.classList.remove('active'); });
+      this.classList.add('active');
+      var tabEl = document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
+      if (tabEl) tabEl.classList.add('active');
+      var office = isOfficeAdmin && !isMasterAdmin ? userOffice : document.getElementById('office-filter').value;
+      if (tabName === 'dashboard') loadUserStatus(office);
+      if (tabName === 'users') loadUserList(office);
+      if (tabName === 'activity') loadActivityLog(office);
+      if (tabName === 'offices') { loadOffices(); loadOfficesList(); }
+    });
+  });
+}
+
+// ── Cursor Tesseract ──
+function initCursorTesseract() {
+  var el = document.getElementById('cursor-tesseract');
+  if (!el) return;
+  var mx = window.innerWidth / 2, my = window.innerHeight / 2;
+  var cx = mx, cy = my;
+
+  document.addEventListener('mousemove', function (e) {
+    mx = e.clientX;
+    my = e.clientY;
+  });
+
+  function tick() {
+    cx += (mx - cx) * 0.08;
+    cy += (my - cy) * 0.08;
+    el.style.left = (cx - 32) + 'px';
+    el.style.top = (cy - 32) + 'px';
+    requestAnimationFrame(tick);
+  }
+  tick();
+}
 
 function apiFetch(endpoint, options = {}) {
   const method = options.method || 'GET';
@@ -68,17 +110,17 @@ async function initAdminPanel() {
     currentAdminEmail = data.email;
     userOffice = data.office;
     isOfficeAdmin = data.isOfficeAdmin;
-    const isMasterAdmin = data.isDeveloper === true || data.isAdmin === true;
+    isMasterAdmin = data.isDeveloper === true || data.isAdmin === true;
     
     document.getElementById('admin-email').textContent = data.email + (userOffice ? ` — ${userOffice}` : '');
 
     // --- Office admin: vista restringida a su oficina ---
     if (isOfficeAdmin && !isMasterAdmin) {
-      // Ocultar secciones globales
-      document.getElementById('create-office-section').style.display = 'none';
-      document.getElementById('dev-section').style.display = 'none';
-      document.getElementById('storage-debug-section').style.display = 'none';
-      document.getElementById('offices-section').style.display = 'none';
+      // Ocultar tabs de oficinas y admin
+      const officeTab = document.querySelector('.tab-btn[data-tab="offices"]');
+      if (officeTab) officeTab.style.display = 'none';
+      const adminTab = document.querySelector('.tab-btn[data-tab="admin"]');
+      if (adminTab) adminTab.style.display = 'none';
 
       // Ocultar filtro de oficinas (solo ve la suya)
       document.getElementById('office-filter').style.display = 'none';
@@ -95,10 +137,8 @@ async function initAdminPanel() {
         typeSelect.innerHTML = '<option value="operador">Operador</option>';
         typeSelect.value = 'operador';
       }
-      document.getElementById('create-user-section').style.display = 'block';
 
       // Gestión de usuarios: mostrar con título de oficina
-      document.getElementById('user-management-section').style.display = 'block';
       const userTitle = document.querySelector('#user-management-section .panel-title');
       if (userTitle) userTitle.textContent = `GESTIÓN DE OPERADORES — ${userOffice}`;
 
@@ -110,11 +150,9 @@ async function initAdminPanel() {
       }
     } else {
       // Admin maestro / global: vista completa
-      document.getElementById('create-user-section').style.display = 'block';
-      document.getElementById('user-management-section').style.display = 'block';
-      document.getElementById('dev-section').style.display = isMasterAdmin ? 'block' : 'none';
-      if (isMasterAdmin) {
-        document.getElementById('storage-debug-section').style.display = 'block';
+      if (!isMasterAdmin) {
+        const adminTab = document.querySelector('.tab-btn[data-tab="admin"]');
+        if (adminTab) adminTab.style.display = 'none';
       }
     }
 
@@ -129,12 +167,13 @@ async function initAdminPanel() {
         await loadMetrics(office);
         await loadUserList(office);
         await loadActivityLog(office);
+        await loadUserStatus(office);
       });
     }
 
     document.getElementById('btn-refresh').addEventListener('click', () => { 
       const office = isOfficeAdmin && !isMasterAdmin ? userOffice : document.getElementById('office-filter').value;
-      loadMetrics(office); loadUserList(office); loadActivityLog(office); 
+      loadMetrics(office); loadUserList(office); loadActivityLog(office); loadUserStatus(office);
     });
     document.getElementById('btn-logout').addEventListener('click', async () => {
       await chrome.storage.local.clear();
@@ -155,15 +194,26 @@ async function initAdminPanel() {
     document.getElementById('btn-load-calendar').addEventListener('click', loadCalendar);
     document.getElementById('btnResetLog').addEventListener('click', resetActivityLog);
 
+    initTabs();
+    initCursorTesseract();
+
     const initialOffice = isOfficeAdmin && !isMasterAdmin ? userOffice : 'all';
     await loadMetrics(initialOffice);
     await loadUserList(initialOffice);
+    await loadDeveloperList();
     await loadActivityLog(initialOffice);
+    await loadBotActions();
+    await loadUserStatus(initialOffice);
     if (refreshIntervalId) clearInterval(refreshIntervalId);
     refreshIntervalId = setInterval(() => { 
       const office = isOfficeAdmin && !isMasterAdmin ? userOffice : document.getElementById('office-filter').value;
-      loadMetrics(office); loadActivityLog(office); 
+      loadMetrics(office); loadActivityLog(office); loadBotActions(); loadUserStatus(office);
     }, 5000);
+
+    apiFetch('/api/tess/admin/heartbeat', { method: 'POST' }).catch(function(){});
+    setInterval(function() {
+      apiFetch('/api/tess/admin/heartbeat', { method: 'POST' }).catch(function(){});
+    }, 120000);
 
   } catch (e) {
     console.error('[ADMIN] initAdminPanel Error:', e);
@@ -219,9 +269,9 @@ async function loadOfficesList() {
       btn.addEventListener('click', () => {
         const office = btn.dataset.office;
         document.getElementById('office-filter').value = office;
-        const userSection = document.getElementById('user-management-section');
-        if (userSection) userSection.style.display = 'block';
-        document.getElementById('btn-refresh').click();
+        // Switch to Users tab
+        const usersTabBtn = document.querySelector('.tab-btn[data-tab="users"]');
+        if (usersTabBtn) usersTabBtn.click();
         setTimeout(() => {
           document.querySelector('.user-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 500);
@@ -241,30 +291,48 @@ async function loadMetrics(office = 'all') {
     document.getElementById('metric-premium-users').textContent = data.users?.premium || 0;
     document.getElementById('metric-developer-users').textContent = data.users?.developers || 0;
     document.getElementById('metric-today-sessions').textContent = data.users?.active || 0;
-    document.getElementById('metric-likes').textContent = data.today?.likes || 0;
-    document.getElementById('metric-follows').textContent = data.today?.follows || 0;
-    document.getElementById('metric-auto-response').textContent = data.today?.auto_response || 0;
-    document.getElementById('metric-mailing').textContent = data.today?.mailing || 0;
-    document.getElementById('metric-sweeps').textContent = data.today?.sweeps || 0;
-    document.getElementById('metric-total-ids').textContent = data.today?.ids_captured || 0;
-    const month = new Date().toISOString().slice(0, 7);
-    document.getElementById('month-label').textContent = month;
-    document.getElementById('metric-month-likes').textContent = data.month?.likes || 0;
-    document.getElementById('metric-month-follows').textContent = data.month?.follows || 0;
-    document.getElementById('metric-month-auto-response').textContent = data.month?.auto_response || 0;
-    document.getElementById('metric-month-mailing').textContent = data.month?.mailing || 0;
-    document.getElementById('metric-month-sweeps').textContent = data.month?.sweeps || 0;
-    document.getElementById('metric-month-sweeps').textContent = data.month?.sweeps || 0;
   } catch (e) {
     metricsErrorCount++;
     if (metricsErrorCount <= 3) console.error('[ADMIN] loadMetrics:', e);
   }
 }
 
-async function loadUserList(office = 'all') {
+async function loadUserStatus(office) {
   try {
     const query = office && office !== 'all' ? `?office=${encodeURIComponent(office)}` : '';
     const data = await apiFetch(`/api/tess/admin/users${query}`);
+    if (!data?.users) return;
+    const grid = document.getElementById('user-status-grid');
+    if (!grid) return;
+
+    const now = Date.now();
+    const FIVE_MIN = 300000;
+    let html = '';
+    data.users.forEach(function (u) {
+      const lastAct = u.last_activity ? new Date(u.last_activity).getTime() : 0;
+      const isOnline = (now - lastAct) < FIVE_MIN;
+      const statusColor = isOnline ? '#22c55e' : '#ef4444';
+      const statusText = isOnline ? 'CONECTADO' : 'OFFLINE';
+      const officeLabel = u.office || '—';
+      const emailParts = u.email.split('@');
+      const displayName = emailParts[0];
+
+      html += '<div class="status-card">';
+      html += '<div style="font-size:10px;color:#888;margin-bottom:4px;">' + officeLabel + '</div>';
+      html += '<div style="font-size:12px;font-weight:700;color:#1a1a2e;margin-bottom:8px;word-break:break-all;">' + displayName + '</div>';
+      html += '<button class="status-btn" style="width:100%;padding:8px 0;border:none;border-radius:6px;background:' + statusColor + ';color:#fff;cursor:default;font-weight:700;font-size:10px;letter-spacing:0.5px;" disabled>' + statusText + '</button>';
+      html += '</div>';
+    });
+    grid.innerHTML = html || '<div style="color:#888;text-align:center;padding:20px;">Sin usuarios</div>';
+  } catch (e) {
+    console.error('[ADMIN] loadUserStatus:', e);
+  }
+}
+
+async function loadUserList(office = 'all') {
+  try {
+    const query = office && office !== 'all' ? `?office=${encodeURIComponent(office)}` : '';
+    const data = await apiFetch(`/api/tess/admin/users-with-metrics${query}`);
     if (!data?.users) {
       console.warn('[ADMIN] No se recibieron usuarios del servidor');
       return;
@@ -273,60 +341,65 @@ async function loadUserList(office = 'all') {
     tbody.innerHTML = '';
 
     if (!data.users.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="empty-msg">Sin usuarios</td></tr>';
-      console.log('[ADMIN] Usuarios cargados: 0');
+      tbody.innerHTML = '<tr><td colspan="11" class="empty-msg">Sin usuarios</td></tr>';
       return;
     }
 
-    console.log('[ADMIN] Usuarios cargados:', data.users.length);
-    data.users.forEach(u => {
-      const isMaster = u.is_developer === 1 || u.is_developer === true;
-      let statusText = u.role, statusClass = 'status-demo';
+    data.users.forEach(function (u) {
+      var isMaster = u.is_developer === 1 || u.is_developer === true;
+      var statusText = u.role, statusClass = 'status-demo';
       if (isMaster || u.is_developer) { statusText = 'DESARROLLADOR'; statusClass = 'status-premium'; }
       else if (u.role === 'premium') { statusText = 'PREMIUM'; statusClass = 'status-premium'; }
       else if (u.is_banned) { statusText = 'BANEADO'; statusClass = 'status-banned'; }
       else if (u.role === 'expired') { statusText = 'EXPIRADO'; statusClass = 'status-expired'; }
 
-      const officeLabel = u.office || '—';
-      const activeLabel = (u.is_banned || u.role === 'expired') ? 'INACTIVO' : 'ACTIVO';
-      const activeColor = (u.is_banned || u.role === 'expired') ? '#ef4444' : '#22c55e';
+      var officeLabel = u.office || '—';
+      var activeLabel = (u.is_banned || u.role === 'expired') ? 'INACTIVO' : 'ACTIVO';
+      var activeColor = (u.is_banned || u.role === 'expired') ? '#ef4444' : '#22c55e';
+      var m = u.metrics_today || {};
+      var likes = m.likes || 0;
+      var follows = m.follows || 0;
+      var autoResp = m.auto_response || 0;
+      var mailing = m.mailing || 0;
 
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td><span style="color:#f59e0b;">${officeLabel}</span><br><small style="color:${activeColor};">${activeLabel}</small></td>
-        <td>${u.email}</td>
-        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-        <td>••••••••</td>
-        <td>${u.login_count || 0}</td>
-        <td>${u.last_login ? new Date(u.last_login).toLocaleString() : 'Nunca'}</td>
-        <td>${!isMaster ? `<button class="action-btn premium btn-premium" data-email="${u.email}">PREMIUM</button>` : ''}</td>
-        <td><input type="text" class="input-field plan-input" data-email="${u.email}" placeholder="plan..." style="width:80px;padding:4px 6px;font-size:10px;">
-            <button class="action-btn premium btn-set-plan" data-email="${u.email}" style="padding:4px 8px;">SET</button></td>
-        <td>${!isMaster ? `<button class="action-btn btn-danger btn-delete-user" data-email="${u.email}" style="padding:4px 8px;font-size:10px;">✕</button>` : ''}</td>`;
+      var row = document.createElement('tr');
+      row.innerHTML =
+        '<td><span style="color:#f59e0b;font-weight:600;">' + officeLabel + '</span><br><small style="color:' + activeColor + ';font-size:9px;">' + activeLabel + '</small></td>' +
+        '<td style="font-weight:500;">' + u.email + '</td>' +
+        '<td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td>' +
+        '<td>' + (u.login_count || 0) + '</td>' +
+        '<td><span class="metric-badge likes">' + likes + '</span></td>' +
+        '<td><span class="metric-badge follows">' + follows + '</span></td>' +
+        '<td><span class="metric-badge auto-resp">' + autoResp + '</span></td>' +
+        '<td><span class="metric-badge mailing">' + mailing + '</span></td>' +
+        '<td>' + (!isMaster ? '<button class="action-btn premium btn-premium" data-email="' + u.email + '">PREMIUM</button>' : '') + '</td>' +
+        '<td><input type="text" class="input-field plan-input" data-email="' + u.email + '" placeholder="plan..." style="width:70px;padding:4px 8px;font-size:10px;min-width:0;">' +
+            '<button class="action-btn btn-set-plan" data-email="' + u.email + '" style="padding:4px 8px;margin-left:4px;">SET</button></td>' +
+        '<td>' + (!isMaster ? '<button class="action-btn btn-danger btn-delete-user" data-email="' + u.email + '" style="padding:4px 8px;">✕</button>' : '') + '</td>';
       tbody.appendChild(row);
     });
 
-    tbody.addEventListener('click', async (e) => {
-      const target = e.target.closest('button');
+    tbody.addEventListener('click', async function (e) {
+      var target = e.target.closest('button');
       if (!target) return;
-      const email = target.dataset.email;
+      var email = target.dataset.email;
       if (!email) return;
       if (target.classList.contains('btn-premium')) {
         await apiFetch('/api/tess/admin/premium', { method: 'POST', body: { email } });
         await loadMetrics(isOfficeAdmin && !isMasterAdmin ? userOffice : 'all'); await loadUserList(isOfficeAdmin && !isMasterAdmin ? userOffice : 'all');
       }
       if (target.classList.contains('btn-set-plan')) {
-        const plan = target.closest('tr').querySelector('.plan-input').value.trim().toLowerCase();
+        var plan = target.closest('tr').querySelector('.plan-input').value.trim().toLowerCase();
         if (!plan) return;
         await apiFetch('/api/tess/admin/set-plan', { method: 'POST', body: { email, plan } });
         await loadUserList(isOfficeAdmin && !isMasterAdmin ? userOffice : 'all');
       }
       if (target.classList.contains('btn-delete-user')) {
-        if (!confirm(`¿Eliminar usuario ${email}?`)) return;
+        if (!confirm('¿Eliminar usuario ' + email + '?')) return;
         try {
-          await apiFetch(`/api/tess/admin/users/${encodeURIComponent(email)}`, { method: 'DELETE' });
+          await apiFetch('/api/tess/admin/users/' + encodeURIComponent(email), { method: 'DELETE' });
           await loadUserList(isOfficeAdmin && !isMasterAdmin ? userOffice : 'all');
-        } catch (e) { alert('Error: ' + e.message); }
+        } catch (err) { alert('Error: ' + err.message); }
       }
     });
   } catch (e) { console.error('[ADMIN] loadUserList:', e); }
@@ -367,6 +440,44 @@ async function loadActivityLog(office = 'all') {
     container.innerHTML = html;
   } catch (e) { 
     const container = document.getElementById('log-container');
+    if (container) container.innerHTML = '<div style="padding:20px;color:#ef4444;">Error: ' + e.message + '</div>';
+  }
+}
+
+async function loadBotActions() {
+  try {
+    const container = document.getElementById('bot-actions-container');
+    if (!container) return;
+    const data = await apiFetch('/api/tess/admin/bot-actions?limit=50');
+    container.innerHTML = '';
+    if (!data?.actions?.length) {
+      container.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">Sin acciones de bot</div>';
+      return;
+    }
+    let html = '<div style="display:grid;grid-template-columns:100px 1fr 120px;gap:4px;font-size:10px;color:#7c3aed;padding:6px 8px;border-bottom:1px solid #e0e0e8;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;"><span>USUARIO</span><span>ACCIÓN</span><span>HORA</span></div>';
+    data.actions.forEach(function (a) {
+      var ts = a.created_at ? new Date(a.created_at) : new Date();
+      var timeStr = ts.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      var email = a.email || '—';
+      var action = a.action || '';
+      var detail = a.action_type || '';
+      var actionLabel = action;
+      if (action === 'LFP' || action === 'L+F+P' || action === 'LFP_UNIFICADO') actionLabel = '🔄 L+F+P';
+      else if (action === 'SALUDOS') actionLabel = '👋 SALUDOS';
+      else if (action === 'CARTAS') actionLabel = '📨 CARTAS';
+      else if (action === 'MAILING') actionLabel = '📬 MAILING';
+      else if (action === 'AUTO_ANSWER') actionLabel = '🤖 AUTO-RESP';
+      else if (action === 'PERIODIC_SYNC') actionLabel = '⏳ SYNC';
+      else if (action === 'BLACKLIST') actionLabel = '🚫 BLACKLIST';
+      html += '<div style="display:grid;grid-template-columns:100px 1fr 120px;gap:4px;padding:8px;border-bottom:1px solid #f0f0f5;font-size:11px;color:#555;align-items:center;">';
+      html += '<span style="color:#1a1a2e;font-weight:500;">' + email.split('@')[0] + '</span>';
+      html += '<div><span style="color:#7c3aed;font-weight:600;">' + actionLabel + '</span>' + (detail ? ' <span style="color:#888;font-size:10px;">' + detail + '</span>' : '') + '</div>';
+      html += '<span style="color:#aaa;font-size:10px;">' + timeStr + '</span>';
+      html += '</div>';
+    });
+    container.innerHTML = html;
+  } catch (e) {
+    var container = document.getElementById('bot-actions-container');
     if (container) container.innerHTML = '<div style="padding:20px;color:#ef4444;">Error: ' + e.message + '</div>';
   }
 }
@@ -437,7 +548,37 @@ async function addDeveloper() {
     await apiFetch('/api/tess/admin/developer', { method: 'POST', body: { email, action: 'add' } });
     document.getElementById('input-dev-email').value = '';
     await loadUserList(isOfficeAdmin && !isMasterAdmin ? userOffice : 'all');
+    await loadDeveloperList();
   } catch (e) { alert(e.message); }
+}
+
+async function removeDeveloper(email) {
+  if (!confirm('¿Eliminar desarrollador ' + email + '?')) return;
+  try {
+    await apiFetch('/api/tess/admin/developer', { method: 'POST', body: { email, action: 'remove' } });
+    await loadUserList(isOfficeAdmin && !isMasterAdmin ? userOffice : 'all');
+    await loadDeveloperList();
+  } catch (e) { alert(e.message); }
+}
+
+async function loadDeveloperList() {
+  const container = document.getElementById('dev-list-items');
+  if (!container) return;
+  try {
+    const data = await apiFetch('/api/tess/admin/users-with-metrics');
+    const devs = (data.users || []).filter(function (u) { return u.is_developer === 1 || u.is_developer === true; });
+    if (!devs.length) { container.innerHTML = '<div style="color:#aaa;font-size:11px;">No hay desarrolladores</div>'; return; }
+    container.innerHTML = devs.map(function (u) {
+      var isMaster = u.email === 'adminchevy@tesseract.com';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f8f8fc;border-radius:8px;border:1px solid #f0f0f5;">' +
+        '<span style="font-size:12px;font-weight:500;color:#1a1a2e;">' + u.email + '</span>' +
+        '<button class="action-btn btn-danger btn-remove-dev" data-email="' + u.email + '" style="padding:4px 12px;font-size:11px;' + (isMaster ? 'opacity:0.4;cursor:not-allowed;' : '') + '" ' + (isMaster ? 'disabled' : '') + '>✕ ELIMINAR</button>' +
+        '</div>';
+    }).join('');
+    container.querySelectorAll('.btn-remove-dev').forEach(function (btn) {
+      btn.addEventListener('click', function () { removeDeveloper(btn.dataset.email); });
+    });
+  } catch (e) { container.innerHTML = '<div style="color:#ef4444;font-size:11px;">Error: ' + e.message + '</div>'; }
 }
 
 async function testWriteToStorage() {
