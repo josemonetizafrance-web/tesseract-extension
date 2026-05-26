@@ -1885,14 +1885,7 @@ function scanAllOutgoingMessages() {
       msg.classList.add('tess-checked-outgoing');
       const text = (msg.textContent || '').trim();
       if (!text || text.length < 3) continue;
-      const hash = 'out-' + text.substring(0, 80);
-      if (_processedTexts.has(hash)) continue;
-      _processedTexts.add(hash);
-      if (_processedTexts.size > 50) {
-        const first = _processedTexts.values().next().value;
-        _processedTexts.delete(first);
-      }
-      // Inyectar 🎭 directamente sin depender de isOutgoingMessage()
+      // Inyectar 🎭 siempre que el mensaje no tenga ya el botón (chat re-renders pierden el DOM)
       directInjectCaptureButton(msg, text);
       return;
     }
