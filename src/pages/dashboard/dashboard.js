@@ -231,6 +231,7 @@
       { key: 'last_contact', label: '\u00daltimo Contacto', editable: false },
       { key: 'preferred_template', label: 'Plantilla Preferida', editable: true, type: 'select', options: ['default','romantica','amistad','negocios','calida','divertida'] },
       { key: 'quick_notes', label: 'Notas R\u00e1pidas', editable: true },
+      { key: 'voice_style', label: 'Estilo del Operador', editable: true },
       { key: 'priority', label: 'Prioridad', editable: true, type: 'select', options: ['Alta','Media','Baja'] }
     ];
 
@@ -321,6 +322,135 @@
     });
   }
 
+  // ====== CRIBS OVERLAY: historial por cliente en tarjetas individuales ======
+  function openCribsTable() {
+    var overlay = document.getElementById('cribs-overlay');
+    var body = document.getElementById('cribs-overlay-body');
+    if (!overlay || !body) return;
+
+    overlay.classList.add('show');
+    body.innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;grid-column:1/-1;">Cargando historial...</div>';
+
+    // Fetch cribs + notes en paralelo
+    Promise.all([
+      cribsApi('/api/tess/cribs').then(function (r) { return r.json(); }),
+      cribsApi('/api/tess/notes').then(function (r) { return r.json(); }).catch(function () { return { notes: [] }; })
+    ]).then(function (results) {
+      var cribs = (results[0].cribs || []);
+      var notes = (results[1].notes || []);
+
+      if (!cribs.length) {
+        body.innerHTML = '<div style="text-align:center;padding:40px;color:#555570;font-size:12px;grid-column:1/-1;">No hay registros en CRIBS. Agrega un ID arriba.</div>';
+        return;
+      }
+
+      // Indexar notas por client_id
+        var notesByClient = {};
+        notes.forEach(function (n) {
+          var cid = n.client_id || '';
+          if (!notesByClient[cid]) notesByClient[cid] = [];
+          notesByClient[cid].push(n);
+        });
+
+        var html = '';
+        cribs.forEach(function (entry) {
+        var pid = entry.profile_id || '';
+        var clientNotes = notesByClient[pid] || [];
+
+        var prioClass = '', prioLabel = entry.priority || '';
+        if (prioLabel === 'Alta') prioClass = 'prio-alta';
+        else if (prioLabel === 'Media') prioClass = 'prio-media';
+        else if (prioLabel === 'Baja') prioClass = 'prio-baja';
+
+        var statusClass = '', statusLabel = entry.status || 'Nuevo';
+        if (statusLabel === 'VIP') statusClass = 'status-vip';
+        else if (statusLabel === 'Activo') statusClass = 'status-activo';
+        else if (statusLabel === 'Nuevo') statusClass = 'status-nuevo';
+        else if (statusLabel === 'Fr\u00edo') statusClass = 'status-frio';
+        else if (statusLabel === 'Inactivo') statusClass = 'status-inactivo';
+
+        var lastContact = entry.last_contact ? new Date(entry.last_contact).toLocaleDateString() : '—';
+        var ageStr = entry.age ? entry.age + ' a\u00f1os' : '—';
+        var countryStr = entry.country || '—';
+        var cityStr = entry.city || '';
+        var locStr = cityStr ? cityStr + (countryStr !== '—' ? ', ' + countryStr : '') : countryStr;
+
+        html += '<div class="crib-client-card">';
+
+        // Header: nombre + ID + badges
+        html += '<div class="cc-header">';
+        html += '<span class="cc-name">' + escapeHtml(entry.profile_name || 'Sin nombre') + '</span>';
+        html += '<span class="cc-id">#' + escapeHtml(pid) + '</span>';
+        if (prioLabel) html += '<span class="cc-priority ' + prioClass + '">' + escapeHtml(prioLabel) + '</span>';
+        if (statusLabel) html += '<span class="cc-status ' + statusClass + '">' + escapeHtml(statusLabel) + '</span>';
+        html += '</div>';
+
+        // Details grid
+        html += '<div class="cc-details">';
+        html += '<div><span class="label">Edad:</span> <span class="cc-value">' + ageStr + '</span></div>';
+        html += '<div><span class="label">Ubicaci\u00f3n:</span> <span class="cc-value">' + escapeHtml(locStr) + '</span></div>';
+        if (entry.interests) html += '<div style="grid-column:1/-1;"><span class="label">Intereses:</span> <span class="cc-value">' + escapeHtml(entry.interests) + '</span></div>';
+        if (entry.work) html += '<div><span class="label">Trabajo:</span> <span class="cc-value">' + escapeHtml(entry.work) + '</span></div>';
+        if (entry.education) html += '<div><span class="label">Educaci\u00f3n:</span> <span class="cc-value">' + escapeHtml(entry.education) + '</span></div>';
+        if (entry.traits) html += '<div style="grid-column:1/-1;"><span class="label">Rasgos:</span> <span class="cc-value">' + escapeHtml(entry.traits) + '</span></div>';
+        if (entry.looking_for) html += '<div style="grid-column:1/-1;"><span class="label">Busca:</span> <span class="cc-value">' + escapeHtml(entry.looking_for) + '</span></div>';
+        if (entry.movie_genres) html += '<div><span class="label">Cine:</span> <span class="cc-value">' + escapeHtml(entry.movie_genres) + '</span></div>';
+        if (entry.music_genres) html += '<div><span class="label">M\u00fasica:</span> <span class="cc-value">' + escapeHtml(entry.music_genres) + '</span></div>';
+        if (entry.languages) html += '<div><span class="label">Idiomas:</span> <span class="cc-value">' + escapeHtml(entry.languages) + '</span></div>';
+        if (entry.goal) html += '<div><span class="label">Objetivo:</span> <span class="cc-value">' + escapeHtml(entry.goal) + '</span></div>';
+        if (entry.preferred_template) html += '<div><span class="label">Plantilla:</span> <span class="cc-value">' + escapeHtml(entry.preferred_template) + '</span></div>';
+        html += '</div>';
+
+        // Último contacto
+        html += '<div class="cc-last-contact">\u00daltimo contacto: ' + lastContact + '</div>';
+
+        // Quick notes
+        if (entry.quick_notes) {
+          html += '<div class="cc-quick-notes">\u{1F4DD} ' + escapeHtml(entry.quick_notes) + '</div>';
+        }
+
+        // Estilo del operador capturado
+        if (entry.voice_style) {
+          var styleLines = entry.voice_style.split('\n').length;
+          html += '<div class="cc-voice-style" style="margin-top:6px;padding:6px 8px;background:rgba(139,92,246,0.1);border-left:2px solid #8b5cf6;border-radius:4px;font-size:10px;line-height:1.4;">\u{1F3AD} <strong>Estilo (' + styleLines + ' capturas):</strong> ' + escapeHtml(entry.voice_style.replace(/\n/g, ' | ')) + '</div>';
+        }
+
+        // Notas del sistema de notas
+        if (clientNotes.length > 0) {
+          html += '<div class="cc-notes-title">\u{1F4CB} Notas (' + clientNotes.length + ')</div>';
+          clientNotes.slice(0, 5).forEach(function (note) {
+            var dateStr = note.created_at ? new Date(note.created_at).toLocaleDateString() : '';
+            html += '<div class="cc-note"><strong>' + escapeHtml(dateStr) + '</strong> — ' + escapeHtml(note.note_text || '') + '</div>';
+          });
+          if (clientNotes.length > 5) {
+            html += '<div style="font-size:9px;color:#888;">... y ' + (clientNotes.length - 5) + ' nota(s) m\u00e1s</div>';
+          }
+        } else {
+          html += '<div class="cc-empty">Sin notas registradas</div>';
+        }
+
+        // Actions
+        html += '<div class="cc-actions">';
+        html += '<button class="btn-chat" data-profile-id="' + escapeHtml(pid) + '">\uD83D\uDCAC Abrir Chat</button>';
+        html += '</div>';
+
+        html += '</div>'; // end card
+      });
+
+      body.innerHTML = html;
+
+      // Attach chat buttons
+      body.querySelectorAll('.btn-chat').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var pid = this.dataset.profileId;
+          if (pid) window._cribChat(pid);
+        });
+      });
+    }).catch(function () {
+      body.innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;font-size:12px;grid-column:1/-1;">Error al cargar datos. Verifica la conexi\u00f3n.</div>';
+    });
+  }
+
   window._cribSort = function (field) {
     if (cribSortField === field) cribSortDir *= -1;
     else { cribSortField = field; cribSortDir = 1; }
@@ -342,7 +472,13 @@
   };
 
   window._cribChat = function (profileId) {
-    chrome.tabs.create({ url: 'https://talkytimes.com/profile/' + profileId, active: true });
+    chrome.storage.local.get('tess_operator_id', function (data) {
+      if (data.tess_operator_id) {
+        chrome.tabs.create({ url: 'https://talkytimes.com/chat/' + data.tess_operator_id + '_' + profileId, active: true });
+      } else {
+        chrome.tabs.create({ url: 'https://talkytimes.com/member/' + profileId, active: true });
+      }
+    });
   };
 
   window._cribDelete = function (id) {
@@ -429,7 +565,18 @@
     });
 
     document.getElementById('btn-crib-open-table').addEventListener('click', function () {
-      renderCribs();
+      openCribsTable();
+    });
+
+    // Cerrar overlay
+    document.getElementById('btn-cribs-overlay-close').addEventListener('click', function () {
+      document.getElementById('cribs-overlay').classList.remove('show');
+    });
+    document.getElementById('cribs-overlay').addEventListener('click', function (e) {
+      if (e.target === this) this.classList.remove('show');
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') document.getElementById('cribs-overlay').classList.remove('show');
     });
 
     document.getElementById('crib-search').addEventListener('input', function () {
@@ -577,7 +724,7 @@
         timeEl.style.color = '#ef4444';
       }
 
-      if (authData.isAdmin || authData.isDeveloper) {
+      if (authData.isAdmin || authData.isDeveloper || authData.isOfficeAdmin) {
         document.getElementById('btn-admin').style.display = 'inline-block';
       }
     } catch (e) {

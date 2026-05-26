@@ -5,10 +5,14 @@ const ALLOWED_DOMAIN = 'talkytimes.com';
 
 let isAuthenticated = false;
 let eaterActive = false;
-let eaterRefreshCount = 0;
-let eaterSuggestions = [];
+let clonacionActiva = true;
+let eaterResponse = '';
 let isUsingAI = false;
-
+let _processedTexts = new Set();
+// Response timer por conversación
+let _responseTimers = new Map(); // clientName -> { timerId, startTime }
+const RESPONSE_ALERT_SECONDS = 90;
+const TIMER_DISPLAY_SECONDS = 120;
 // Blacklist - contactos protegidos
 let blacklist = [];
 
@@ -187,12 +191,40 @@ let saludosActive = false;
 let cartasActive = false;
 let lastGeneratedMessage = '';
 let isEnglishMode = false;
-let translateLangIndex = 0;
+let selectedLangCode = 'en';
 const translateLanguages = [
   { code: 'en', label: 'EN', name: 'English' },
-  { code: 'fr', label: 'FR', name: 'French' },
-  { code: 'pt', label: 'PT', name: 'Portuguese' }
+  { code: 'fr', label: 'FR', name: 'Français' },
+  { code: 'pt', label: 'PT', name: 'Português' },
+  { code: 'de', label: 'DE', name: 'Deutsch' },
+  { code: 'it', label: 'IT', name: 'Italiano' },
+  { code: 'nl', label: 'NL', name: 'Nederlands' },
+  { code: 'es', label: 'ES', name: 'Español' }
 ];
+let clientDetectedLang = null; // null = no detectado, 'en'/'fr'/'pt'/'es'
+
+function detectLanguage(text) {
+  if (!text) return null;
+  var t = text.toLowerCase().trim();
+  var words = t.split(/\s+/).filter(function(w) { return w.length > 2; });
+  var scores = { en: 0, es: 0, fr: 0, pt: 0 };
+  var dicts = {
+    en: ['the','you','and','for','are','but','not','was','have','has','had','your','with','from','they','this','that','she','her','what','all','can'],
+    es: ['que','las','los','por','para','con','del','como','mas','pero','esta','este','esto','muy','todo','bien','cuando','si','solo','cada'],
+    fr: ['les','des','que','pas','pour','dans','avec','vous','elle','ils','sur','nous','plus','tout','mais','fait','faire'],
+    pt: ['que','para','com','dos','das','mais','como','muito','isso','esta','este','aqui','tudo','bem','sua','seu','voce','ela']
+  };
+  for (var wi = 0; wi < words.length; wi++) {
+    for (var lang in dicts) {
+      if (dicts[lang].indexOf(words[wi]) !== -1) scores[lang]++;
+    }
+  }
+  // Ignorar si predomina español (las sugerencias ya están en español)
+  if (scores.en > scores.es && scores.en >= 1) return 'en';
+  if (scores.fr > scores.es && scores.fr >= 1) return 'fr';
+  if (scores.pt > scores.es && scores.pt >= 1) return 'pt';
+  return null;
+}
 
 let saludoMessages = [
   'Hola, ¿cómo estás? Espero que tengas un lindo día.',
@@ -252,7 +284,6 @@ async function initTesseract() {
   // Crear panel PRIMERO (fuera de try para garantizar que siempre se ejecute)
   try {
     createMainPanel();
-    createEaterBar();
     initIcebreakers();
     createSaludosModal();
     createCartasModal();
@@ -356,18 +387,18 @@ function createMainPanel() {
 .tess-header button{background:rgba(0,0,0,0.6);border:1px solid #8b5cf6;color:#8b5cf6;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;margin-left:5px;transition:all 0.3s;}
 .tess-header button:hover{background:#7c3aed;color:#fff;box-shadow:0 0 15px #8b5cf6;}
 .tess-header button.active-tab{background:#8b5cf6;color:#000;}
-.profile-badge{display:none;padding:4px 14px;background:rgba(15,15,30,0.9);border-bottom:1px solid rgba(139,92,246,0.15);font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:1px;color:#8888a0;align-items:center;gap:10px;position:sticky;top:56px;z-index:9;}
+#tesseract-main-panel .profile-badge{display:none;padding:4px 14px;background:rgba(15,15,30,0.9);border-bottom:1px solid rgba(139,92,246,0.15);font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:1px;color:#8888a0;align-items:center;gap:10px;position:sticky;top:56px;z-index:9;}
 .profile-badge .pb-name{color:#e0e0e0;font-weight:bold;letter-spacing:0.5px;}
 .profile-badge .pb-id{color:#8b5cf6;font-size:10px;}
 
 /* PESTAÑAS */
-.tab-nav{display:flex;background:#0a0a0a;border-bottom:2px solid #8b5cf6;}
-.tab-btn{flex:1;padding:10px 6px;background:rgba(30,27,75,0.5);border:none;border-right:1px solid #8b5cf6;color:#e0e0e0;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;transition:all 0.3s;}
-.tab-btn:last-child{border-right:none;}
-.tab-btn:hover{background:rgba(139,92,246,0.2);}
-.tab-btn.active{background:#8b5cf6;color:#fff;font-weight:bold;}
-.tab-content{display:none;padding:14px;background:linear-gradient(180deg,#0a0a0a,#0a0a0f);}
-.tab-content.active{display:block;}
+#tesseract-main-panel .tab-nav{display:flex;background:#0a0a0a;border-bottom:2px solid #8b5cf6;}
+#tesseract-main-panel .tab-btn{flex:1;padding:10px 6px;background:rgba(30,27,75,0.5);border:none;border-right:1px solid #8b5cf6;color:#e0e0e0;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;transition:all 0.3s;}
+#tesseract-main-panel .tab-btn:last-child{border-right:none;}
+#tesseract-main-panel .tab-btn:hover{background:rgba(139,92,246,0.2);}
+#tesseract-main-panel .tab-btn.active{background:#8b5cf6;color:#fff;font-weight:bold;}
+#tesseract-main-panel .tab-content{display:none;padding:14px;background:linear-gradient(180deg,#0a0a0a,#0a0a0f);}
+#tesseract-main-panel .tab-content.active{display:block;}
 
 .tess-box::-webkit-scrollbar{width:6px;}
 .tess-box::-webkit-scrollbar-track{background:#0a0a0a;}
@@ -420,15 +451,8 @@ function createMainPanel() {
 .eater-btn{width:100%;padding:12px;border:1px solid #8b5cf6;border-radius:6px;background:linear-gradient(180deg,rgba(139,92,246,0.3),rgba(30,27,75,0.7));color:#e0e0e0;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;transition:all 0.3s;}
 .eater-btn.on{background:#8b5cf6;color:#000;box-shadow:0 0 30px #8b5cf6;animation:eater-glow 2s infinite;}
 @keyframes eater-glow{0%,100%{box-shadow:0 0 10px #8b5cf6;}50%{box-shadow:0 0 30px #8b5cf6,0 0 60px #8b5cf6;}}
-.eater-sugs-hdr{background:#1e1b4b;padding:8px 10px;font-size:10px;letter-spacing:1px;display:flex;justify-content:space-between;align-items:center;color:#e0e0e0;}
-.eater-sugs-list{max-height:160px;overflow-y:auto;}
-.eater-row{padding:8px 8px;border-bottom:1px solid rgba(139,92,246,0.1);font-size:11px;cursor:pointer;color:#e0e0e0;display:flex;justify-content:space-between;align-items:center;transition:all 0.2s;}
-.eater-row:hover{background:rgba(139,92,246,0.2);}
-.eater-row .sn{color:#ffffff;font-weight:bold;margin-right:4px;}
-.eater-row .sc{font-size:9px;color:#666;margin-left:5px;display:none;}
-.eater-row:hover .sc{display:inline;}
-.eater-row .tr-btn{padding:4px 8px;border:1px solid #8b5cf6;border-radius:3px;background:rgba(0,0,0,0.5);color:#e0e0e0;cursor:pointer;font-size:9px;margin-left:5px;}
-.eater-row .tr-btn:hover{background:#7c3aed;color:#fff;}
+.eater-textarea{width:100%;height:80px;background:#000;border:1px solid #8b5cf6;border-radius:6px;color:#e0e0e0;font-family:'Segoe UI',sans-serif;font-size:12px;padding:10px;resize:vertical;box-sizing:border-box;line-height:1.4;outline:none;}
+.eater-textarea:focus{border-color:#a78bfa;box-shadow:0 0 10px rgba(139,92,246,0.3);}
 .logout-link{margin-top:10px;font-size:10px;letter-spacing:2px;color:#8b5cf6;cursor:pointer;text-align:center;text-decoration:underline;}
 .logout-link:hover{color:#ffffff;}
 
@@ -458,10 +482,70 @@ function createMainPanel() {
 .st-bar button{background:rgba(30,27,75,0.7);border:1px solid #8b5cf6;color:#e0e0e0;padding:4px 8px;border-radius:4px;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:7px;}
 .st-bar button:hover{background:#7c3aed;color:#fff;}
 </style>
+<style>
+/* TESSERACT LIGHT THEME OVERRIDE */
+#tesseract-main-panel{font-family:'Segoe UI',system-ui,sans-serif !important;}
+.tess-box{background:#fff !important;border-color:#d0d0d8 !important;box-shadow:0 4px 24px rgba(0,0,0,0.1) !important;color:#1a1a2e !important;}
+.tess-header{background:linear-gradient(135deg,#7c3aed,#6d28d9) !important;text-shadow:none !important;}
+.tab-nav{background:#f4f4f8 !important;border-bottom:2px solid #e0e0e8 !important;}
+.tab-btn{background:transparent !important;border-color:#e0e0e8 !important;color:#888 !important;font-family:'Segoe UI',sans-serif !important;}
+.tab-btn:hover{background:rgba(124,58,237,0.06) !important;color:#7c3aed !important;}
+.tab-btn.active{background:#7c3aed !important;color:#fff !important;}
+.tab-content{background:#fafafc !important;}
+.auth-icon{filter:none !important;}
+.auth-brand{background:none !important;-webkit-text-fill-color:#7c3aed !important;color:#7c3aed !important;}
+.inp-lbl{color:#555 !important;}
+.t-input{background:#f8f8fc !important;border-color:#e0e0e8 !important;color:#1a1a2e !important;font-family:'Segoe UI',sans-serif !important;}
+.t-input:focus{border-color:#7c3aed !important;box-shadow:0 0 0 3px rgba(124,58,237,0.1) !important;}
+.t-input::placeholder{color:#aaa !important;}
+.btn-auth{background:#7c3aed !important;color:#fff !important;border:none !important;font-family:'Segoe UI',sans-serif !important;}
+.btn-auth:hover{background:#6d28d9 !important;box-shadow:0 4px 12px rgba(124,58,237,0.3) !important;}
+.net-bar{background:#f4f4f8 !important;border-color:#e0e0e8 !important;color:#555 !important;}
+.user-bar{background:#f4f4f8 !important;border-color:#e0e0e8 !important;color:#555 !important;}
+.bot-subnav{background:#f4f4f8 !important;border-color:#e0e0e8 !important;}
+.bot-subbtn{background:transparent !important;border-color:#e0e0e8 !important;color:#888 !important;font-family:'Segoe UI',sans-serif !important;}
+.bot-subbtn:hover{background:rgba(124,58,237,0.06) !important;color:#7c3aed !important;}
+.bot-subbtn.active{background:#7c3aed !important;color:#fff !important;}
+.bot-subpanel{background:#fff !important;}
+.mod-card{background:#f4f4f8 !important;border-color:#e0e0e8 !important;}
+.mod-card h4{color:#555 !important;}
+.profile-badge{background:#f4f4f8 !important;border-color:#e0e0e8 !important;color:#555 !important;}
+.profile-badge .pb-name{color:#1a1a2e !important;}
+.profile-badge .pb-id{color:#7c3aed !important;}
+#manualProfileName,#manualProfileId{background:#f8f8fc !important;border-color:#e0e0e8 !important;color:#1a1a2e !important;}
+#btnSetProfile{background:#7c3aed !important;}
+.st-bar{background:#f4f4f8 !important;border-color:#e0e0e8 !important;}
+.st-bar button{background:#fff !important;border-color:#d0d0d8 !important;color:#555 !important;font-family:'Segoe UI',sans-serif !important;}
+.st-bar button:hover{background:#7c3aed !important;color:#fff !important;}
+.auth-sub{color:#888 !important;}
+.auth-err{border-color:#ef4444 !important;color:#dc2626 !important;}
+.tess-header button{background:rgba(255,255,255,0.15) !important;border-color:rgba(255,255,255,0.3) !important;color:#fff !important;}
+.tess-header button:hover{background:rgba(255,255,255,0.3) !important;}
+.tess-header button.active-tab{background:#fff !important;color:#7c3aed !important;}
+.tess-box::-webkit-scrollbar-track{background:#f4f4f8 !important;}
+.tess-box::-webkit-scrollbar-thumb{background:#d0d0d8 !important;}
+/* Per-window accent colors */
+.bot-subpanel.visible[id="botsubLikefollow"]{border-top:3px solid #ec4899 !important;}
+.bot-subpanel.visible[id="botsubEater"]{border-top:3px solid #f59e0b !important;}
+.bot-subpanel.visible[id="botsubIcebreakers"]{border-top:3px solid #10b981 !important;}
+.bot-subpanel.visible[id="botsubPhotos"]{border-top:3px solid #f59e0b !important;}
+.bot-subpanel.visible[id="botsubSaludos"]{border-top:3px solid #10b981 !important;}
+.bot-subpanel.visible[id="botsubCartas"]{border-top:3px solid #3b82f6 !important;}
+.bot-subpanel.visible[id="botsubScraping"]{border-top:3px solid #ef4444 !important;}
+.bot-subpanel.visible[id="botsubMailing"]{border-top:3px solid #8b5cf6 !important;}
+.bot-subpanel.visible[id="botsubAutoAnswer"]{border-top:3px solid #06b6d4 !important;}
+.bot-subpanel.visible[id="botsubStar"]{border-top:3px solid #7c3aed !important;}
+/* Tab-content accent colors */
+#tabMain.tab-content{border-left:3px solid #7c3aed !important;}
+#tabStar.tab-content{border-left:3px solid #f59e0b !important;}
+#tabAA.tab-content{border-left:3px solid #06b6d4 !important;}
+#tabMailing.tab-content{border-left:3px solid #8b5cf6 !important;}
+#tabBlacklist.tab-content{border-left:3px solid #ef4444 !important;}
+</style>
 <div id="tess-mini-icon">🤖</div>
 <div class="tess-box">
 <div class="tess-resize se"></div><div class="tess-resize sw"></div><div class="tess-resize ne"></div><div class="tess-resize nw"></div>
-<div class="tess-header"><span>🤖 TESSERACT</span><div><button id="btnMin" title="Minimizar">_</button><button id="btnClose" title="Cerrar">×</button></div></div>
+<div class="tess-header"><span>🤖 TESSERACT</span><div><button id="btnZoomOut" title="Reducir">-</button><span id="zoomLevel" style="color:#fff;font-size:11px;min-width:28px;text-align:center;display:inline-block;">1.0</span><button id="btnZoomIn" title="Ampliar">+</button><button id="btnMin" title="Minimizar">_</button><button id="btnClose" title="Cerrar">x</button></div></div>
 
 <!-- PERFIL ACTIVO -->
 <div class="profile-badge" id="profileBadge"><span>🎯 <span class="pb-name" id="profileName">—</span></span><span class="pb-id" id="profileId">ID: —</span> <input id="manualProfileName" placeholder="Name" style="width:60px;background:#0a0a0f;border:1px solid #333350;color:#e0e0e0;font-size:8px;padding:2px 4px;border-radius:2px;"> <input id="manualProfileId" placeholder="ID" style="width:60px;background:#0a0a0f;border:1px solid #333350;color:#e0e0e0;font-size:8px;padding:2px 4px;border-radius:2px;"> <button id="btnSetProfile" style="background:#8b5cf6;border:none;color:#fff;font-size:8px;padding:2px 6px;border-radius:2px;cursor:pointer;">SET</button></div>
@@ -523,11 +607,25 @@ function createMainPanel() {
 <div class="bot-subpanel" id="botsubEater" data-z="1">
 <button class="win-close" data-close="botsubEater">×</button>
 <div class="eater-box">
-<h4>🧠 EATER (Click = Copiar al chat)</h4>
+<h4>🧠 EATER — <span id="eaterClientName" style="font-size:9px;"></span></h4>
 <button class="eater-btn" id="btnEaterToggle">🧠 EATER: OFF</button>
-<div class="eater-sugs" id="eaterSuggestions">
-<div class="eater-sugs-hdr"><span>🎯 SUGERENCIAS PARA EL CLIENTE</span><span id="eaterClientName" style="font-size:7px;"></span></div>
-<div class="eater-sugs-list" id="eaterSugList"></div>
+<div class="eater-sugs" id="eaterSuggestions" style="margin-top:8px;">
+<div style="margin-bottom:6px;font-size:10px;color:#888;letter-spacing:1px;">📝 RESPUESTA GENERADA</div>
+<textarea id="eaterResponseArea" class="eater-textarea">Esperando mensaje...</textarea>
+<button id="btnStopClone" style="width:100%;padding:6px;margin-top:4px;border:1px solid #ef4444;border-radius:6px;background:rgba(239,68,68,0.15);color:#ef4444;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:1px;">⏹ CLONACIÓN: ACTIVA</button>
+<button id="btnCopyEaterResponse" style="width:100%;padding:8px;margin-top:6px;border:1px solid #8b5cf6;border-radius:6px;background:rgba(30,27,75,0.5);color:#e0e0e0;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:1px;">📋 COPIAR AL CHAT</button>
+<div style="display:flex;gap:6px;margin-top:6px;">
+<button id="btnRefreshEater2" style="flex:1;padding:8px;border:1px solid #8b5cf6;border-radius:6px;background:rgba(139,92,246,0.2);color:#e0e0e0;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:1px;">🔄 REGENERAR</button>
+<select id="btnTranslate2" style="flex:1;padding:8px;border:1px solid #2196F3;border-radius:6px;background:rgba(33,150,243,0.2);color:#e0e0e0;cursor:pointer;font-family:'Segoe UI Emoji','Apple Color Emoji','Orbitron',sans-serif;font-size:8px;letter-spacing:1px;outline:none;appearance:auto;">
+<option value="en">🇬🇧 EN</option>
+<option value="fr">🇫🇷 FR</option>
+<option value="pt">🇵🇹 PT</option>
+<option value="de">🇩🇪 DE</option>
+<option value="it">🇮🇹 IT</option>
+<option value="nl">🇳🇱 NL</option>
+<option value="es">🇪🇸 ES</option>
+</select>
+</div>
 </div>
 </div>
 </div>
@@ -596,6 +694,8 @@ function createMainPanel() {
     <div class="mod-card"><h4>💬 Mensaje</h4><div class="st" id="mlMsgPreview" style="font-size:8px;">—</div></div>
   </div>
   <button class="btn-auth" id="btnOpenMLConfig" style="margin-top:8px;">⚙ CONFIGURAR SMART MAILING</button>
+  <button class="btn-auth" id="btnScrapeML" style="margin-top:4px;background:#7c3aed;">🔍 RASTREAR CONTACTOS</button>
+  <div id="mlContactList" style="margin-top:8px;max-height:200px;overflow-y:auto;border:1px solid #e0e0e8;border-radius:6px;background:#fafafc;display:none;"></div>
 </div>
 </div>
 
@@ -616,36 +716,6 @@ function createMainPanel() {
 </div></div>`;
   document.body.appendChild(p);
   console.log('[TESSERACT] ✅ Panel principal creado');
-}
-
-// ============ EATER BAR FLOTANTE ============
-function createEaterBar() {
-  if (document.getElementById('eaterFloatBar')) return;
-  const b = document.createElement('div');
-  b.id = 'eaterFloatBar';
-  b.innerHTML = `
-<style>
-#eaterFloatBar{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:999998;display:none;}
-.ef-in{background:#0a0a0a;border:2px solid #8b5cf6;border-radius:12px;padding:10px 20px;box-shadow:0 0 30px rgba(139,92,246,0.5);display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;cursor:move;position:relative;min-width:200px;}
-.ef-drag{cursor:move;font-size:12px;color:#8b5cf6;user-select:none;padding:0 4px;}
-.ef-resize{position:absolute;width:12px;height:12px;z-index:20;}.ef-resize.se{bottom:-6px;right:-6px;cursor:se-resize;}.ef-resize.sw{bottom:-6px;left:-6px;cursor:sw-resize;}
-.ef-in span{color:#e0e0e0;font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:1px;}
-.ef-in button{padding:6px 12px;border:1px solid #8b5cf6;border-radius:6px;background:rgba(30,27,75,0.5);color:#e0e0e0;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:1px;transition:all 0.3s;}
-.ef-in button:hover{background:#7c3aed;color:#fff;}
-.ef-in button.emerg{background:#8b5cf6;animation:eflash 1s infinite;color:#000;}
-.ef-in button.tr{background:rgba(33,150,243,0.5);border-color:#2196F3;}
-@keyframes eflash{0%,100%{box-shadow:0 0 5px #8b5cf6}50%{box-shadow:0 0 20px #8b5cf6}}
-</style>
-<div class="ef-in" id="eaterDragHandle">
-<span class="ef-drag">⣿</span>
-<span>🧠 EATER</span>
-<button id="eq1">💬 SUG 1</button>
-<button id="eq2">💬 SUG 2</button>
-<button class="emerg" id="eq5">🚨 EMERG</button>
-<button class="tr" id="btnTranslate">🌐 EN</button>
-<button class="cfg" id="btnRefreshEater" style="background:rgba(30,27,75,0.7);border-color:#8b5cf6;">🔄 FRASES</button>
-</div>`;
-  document.body.appendChild(b);
 }
 
 // ============ MODALES ============
@@ -702,23 +772,23 @@ function setupAllEvents() {
   document.getElementById('encryptKey').addEventListener('keypress', e => { if(e.key==='Enter') doLogin(); });
   
   // Pestañas
-document.querySelectorAll('.tab-btn').forEach(btn => {
+  var mainPanel = document.getElementById('tesseract-main-panel');
+  mainPanel.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', function() {
       const clickedTab = this.dataset.tab;
-      // Toggle: si ya está activa, volver a BOT
       if (clickedTab === currentTab && currentTab !== 'main') {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        mainPanel.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        mainPanel.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         currentTab = 'main';
-        document.querySelector('[data-tab="main"]').classList.add('active');
+        mainPanel.querySelector('[data-tab="main"]').classList.add('active');
         document.getElementById('tabMain').classList.add('active');
         return;
       }
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      mainPanel.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       this.classList.add('active');
       currentTab = clickedTab;
       const tabMap = { main: 'Main', star: 'Star', aa: 'AA', mailing: 'Mailing', blacklist: 'Blacklist' };
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      mainPanel.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       document.getElementById('tab' + (tabMap[currentTab] || 'Main')).classList.add('active');
       if (currentTab === 'star') renderStarIds();
       if (currentTab === 'aa') updateAATabUI();
@@ -757,11 +827,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   
   // Eater
   document.getElementById('btnEaterToggle').addEventListener('click', toggleEater);
-  document.getElementById('eq1').addEventListener('click', () => copySugToChat(0));
-  document.getElementById('eq2').addEventListener('click', () => copySugToChat(1));
-  document.getElementById('eq5').addEventListener('click', () => copyToChatInput('🚨 Disculpa, no puedo continuar esta conversación. Que tengas buen día.'));
-  document.getElementById('btnTranslate').addEventListener('click', translateLastMessage);
-  document.getElementById('btnRefreshEater').addEventListener('click', refreshEaterSuggestions);
+  document.getElementById('btnStopClone').addEventListener('click', toggleClonacion);
+  document.getElementById('btnCopyEaterResponse').addEventListener('click', copyEaterResponseToChat);
+  document.getElementById('btnRefreshEater2').addEventListener('click', refreshEaterSuggestions);
+  document.getElementById('btnTranslate2').addEventListener('change', function () {
+    selectedLangCode = this.value;
+    translateEaterResponse();
+  });
   
   // Panel
   function toggleMin(e) {
@@ -782,6 +854,23 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     toggleMin(e);
   });
   document.getElementById('btnClose').addEventListener('click', () => document.getElementById('tesseract-main-panel').style.display = 'none');
+
+  // Zoom (envuelto en try/catch para no bloquear la inicialización)
+  try {
+    var currentZoom = 1.0;
+    window._tessApplyZoom = function (z) {
+      currentZoom = Math.max(0.5, Math.min(2.0, z));
+      var box = document.querySelector('#tesseract-main-panel .tess-box');
+      if (box) box.style.zoom = currentZoom;
+      var zl = document.getElementById('zoomLevel');
+      if (zl) zl.textContent = currentZoom.toFixed(1);
+      chrome.storage.local.set({ tess_zoom: currentZoom });
+    };
+    document.getElementById('btnZoomIn').addEventListener('click', function () { window._tessApplyZoom(currentZoom + 0.1); });
+    document.getElementById('btnZoomOut').addEventListener('click', function () { window._tessApplyZoom(currentZoom - 0.1); });
+    chrome.storage.local.get('tess_zoom', function (d) { if (d.tess_zoom) window._tessApplyZoom(d.tess_zoom); });
+  } catch (e) { console.warn('[ZOOM] Error:', e.message); }
+
   document.getElementById('btnLogout').addEventListener('click', doLogout);
   document.getElementById('btnAdminPanel').addEventListener('click', async () => {
     try {
@@ -836,6 +925,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   document.getElementById('btnOpenMLConfig').addEventListener('click', () => {
     if (typeof openMLPanel === 'function') openMLPanel();
   });
+  document.getElementById('btnScrapeML').addEventListener('click', () => {
+    updateMLContactList();
+  });
   
   // Blacklist
   document.getElementById('btnBlAdd').addEventListener('click', () => {
@@ -857,34 +949,28 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   renderBlacklistTab();
 
   // Eater suggestions
-  document.getElementById('eaterSugList').addEventListener('click', (e) => {
-    const trBtn = e.target.closest('.tr-btn');
-    const row = e.target.closest('.eater-row');
-    if (trBtn && row) {
-      const text = trBtn.dataset.sugText || row.querySelector('.sug-text')?.textContent || '';
-      if (text) {
-        const tl = translateLanguages[translateLangIndex];
-        translateText(text, tl.code, tl.name).then(t => copyToChatInput(t));
-      }
-      return;
-    }
-    if (row) {
-      const text = row.dataset.sugText || row.querySelector('.sug-text')?.textContent || '';
-      if (text) {
+  // ===== EATER textarea: seleccionar texto lo copia al chat =====
+  document.getElementById('eaterResponseArea').addEventListener('mouseup', function() {
+    const sel = this.selectionStart !== this.selectionEnd;
+    if (sel) {
+      const text = this.value.substring(this.selectionStart, this.selectionEnd);
+      if (text && text !== 'Esperando mensaje...') {
         copyToChatInput(text);
-        row.style.background = 'rgba(76,175,80,0.4)';
-        setTimeout(() => row.style.background = '', 600);
+        this.style.borderColor = '#4CAF50';
+        setTimeout(() => this.style.borderColor = '#8b5cf6', 600);
+        this.selectionStart = this.selectionEnd;
       }
     }
   });
   
   makeDraggable('tesseract-main-panel', '.tess-header');
-  makeDraggable('eaterFloatBar', '#eaterDragHandle');
-  
+
   document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.shiftKey && e.key === 'E') { e.preventDefault(); if(isAuthenticated) toggleEater(); }
     if (e.ctrlKey && e.shiftKey && e.key === 'S') { e.preventDefault(); currentTab = 'star'; renderStarIds(); }
   });
+  
+  // Inicializar audio en primer gesto del usuario
   
   console.log('[TESSERACT] ✅ Eventos configurados');
 }
@@ -984,7 +1070,6 @@ function doLogout() {
   likesActive = followsActive = saludosActive = cartasActive = eaterActive = false;
   document.getElementById('loginScreen').style.display = 'block';
   document.getElementById('mainScreen').style.display = 'none';
-  document.getElementById('eaterFloatBar').style.display = 'none';
   document.getElementById('eaterSuggestions').style.display = 'none';
   saveAllStates();
 }
@@ -1258,6 +1343,7 @@ async function doSaludosSweep(list) {
     const activeContact = contacts.find(c => {
       if (c.offsetParent === null || isPinnedOrSaved(c)) return false;
       const cid = extractId(c);
+      if (cid && isBlacklisted(cid)) return false;
       return !cid || !processedIds.has(cid);
     });
     if (!activeContact) break;
@@ -1344,6 +1430,7 @@ async function doCartasSweep(list) {
     const activeContact = contacts.find(c => {
       if (c.offsetParent === null || isPinnedOrSaved(c)) return false;
       const cid = extractId(c);
+      if (cid && isBlacklisted(cid)) return false;
       return !cid || !processedIds.has(cid);
     });
     if (!activeContact) break;
@@ -1457,20 +1544,48 @@ function renderStarIds() {
 // ============ EATER ============
 function toggleEater() {
   eaterActive = !eaterActive;
-  const btn = document.getElementById('btnEaterToggle');
   btn.textContent = '🧠 EATER: ' + (eaterActive ? 'ON' : 'OFF');
   btn.className = 'eater-btn' + (eaterActive ? ' on' : '');
-  document.getElementById('eaterFloatBar').style.display = eaterActive ? 'block' : 'none';
   document.getElementById('eaterSuggestions').style.display = eaterActive ? 'block' : 'none';
-  saveAllStates();
+  if (eaterActive) { _processedTexts.clear(); setTimeout(scanAllIncomingMessages, 500); }
 }
 
-function copySugToChat(index) {
-  const sug = eaterSuggestions[index];
-  if (!sug) return;
-  copyToChatInput(sug);
-  const eq = document.getElementById('eq' + (index + 1));
-  if (eq) { eq.style.background = 'rgba(76,175,80,0.4)'; setTimeout(() => eq.style.background = '', 600); }
+function showTessToast(msg, type) {
+  var el = document.createElement('div');
+  el.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:999999;padding:10px 16px;border-radius:8px;font-size:12px;font-family:Segoe UI,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,0.5);transition:opacity 0.3s;' +
+    (type === 'success' ? 'background:#166534;border:1px solid #22c55e;color:#bbf7d0;' :
+     type === 'warning' ? 'background:#713f12;border:1px solid #f59e0b;color:#fde68a;' :
+     'background:#7f1d1d;border:1px solid #ef4444;color:#fecaca;');
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function() { el.style.opacity = '0'; setTimeout(function() { el.remove(); }, 300); }, 3000);
+}
+
+function toggleClonacion() {
+  clonacionActiva = !clonacionActiva;
+  var btn = document.getElementById('btnStopClone');
+  if (!btn) return;
+  if (clonacionActiva) {
+    btn.innerHTML = '⏹ CLONACIÓN: ACTIVA';
+    btn.style.borderColor = '#ef4444';
+    btn.style.background = 'rgba(239,68,68,0.15)';
+    btn.style.color = '#ef4444';
+    showTessToast('🎭 Captura de estilo ACTIVADA', 'success');
+  } else {
+    btn.innerHTML = '▶ CLONACIÓN: DETENIDA';
+    btn.style.borderColor = '#22c55e';
+    btn.style.background = 'rgba(34,197,94,0.15)';
+    btn.style.color = '#22c55e';
+    showTessToast('⏸ Captura de estilo DETENIDA', 'warning');
+  }
+}
+
+function copyEaterResponseToChat() {
+  const area = document.getElementById('eaterResponseArea');
+  if (!area || !area.value || area.value === 'Esperando mensaje...') return;
+  copyToChatInput(area.value);
+  area.style.borderColor = '#4CAF50';
+  setTimeout(() => area.style.borderColor = '#8b5cf6', 600);
 }
 
 function copyToChatInput(text) {
@@ -1485,37 +1600,182 @@ function copyToChatInput(text) {
   input.focus();
   try { input.dispatchEvent(new Event('input', { bubbles: true })); } catch(e) {}
   try { input.dispatchEvent(new Event('keyup', { bubbles: true })); } catch(e) {}
+  // Al copiar al chat, detener el timer de respuesta pendiente
+  stopResponseTimer();
 }
 
-function sendChatMessage() {
-  const input = findChatInput();
-  if (!input) return false;
-  input.focus();
-  
-  const hasNewlines = (input.value || input.textContent || '').includes('\n');
-  
-  // Buscar botón de envío primero (más confiable para multilínea)
-  const chatArea = input.closest('[class*="chat"], [class*="message"], form') || document.body;
-  const sendBtn = chatArea.querySelector('button[type="submit"], button[class*="send"], button[aria-label*="enviar"], button[aria-label*="send"], [class*="send-btn"], [class*="btn-send"], button[class*="chat-send"]');
-  
-  if (sendBtn && !sendBtn.disabled) {
-    try { sendBtn.click(); } catch(e) {}
-    return true;
+// ============ RESPONSE TIMER (alerta tasa de respuesta) ============
+function findConversationItem(clientName) {
+  const items = document.querySelectorAll('[class*="dialog-item-content"], [class*="dialog-item"], [class*="conversation-item"]');
+  for (const item of items) {
+    const nameEl = item.querySelector('.dialog-item__name, [class*="name"]:not([class*="wrapper"]):not([class*="row"])');
+    if (nameEl && nameEl.textContent.trim() === clientName) return item;
   }
-  
-  // Fallback: Enter key (solo si no tiene saltos de línea)
-  if (!hasNewlines) {
-    try {
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, code: 'Enter', which: 13, bubbles: true, cancelable: true }));
-      input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', keyCode: 13, code: 'Enter', which: 13, bubbles: true, cancelable: true }));
-      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, code: 'Enter', which: 13, bubbles: true, cancelable: true }));
-      if (input.tagName === 'TEXTAREA') {
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+  return null;
+}
+
+function createTimerElement() {
+  const el = document.createElement('span');
+  el.className = 'tess-resp-timer';
+  Object.assign(el.style, {
+    fontSize: '10px',
+    color: '#f59e0b',
+    fontFamily: "'Orbitron',sans-serif",
+    letterSpacing: '1px',
+    marginLeft: '6px',
+    display: 'inline-block'
+  });
+  return el;
+}
+
+function insertTimerInItem(convEl, timerDisplay) {
+  const nameArea = convEl.querySelector('.dialog-item__name-wrapper, .dialog-item__name-row, [class*="name-wrapper"], [class*="name-row"]');
+  if (nameArea) {
+    nameArea.appendChild(timerDisplay);
+  } else {
+    convEl.appendChild(timerDisplay);
+  }
+}
+
+function startResponseTimer(convEl, clientName, afterEl) {
+  if (!convEl || !clientName) return;
+
+  // Si ya hay un timer para este cliente, lo reiniciamos
+  stopResponseTimer(clientName);
+
+  const startTime = Date.now();
+  let _alertTriggered = false;
+
+  const tick = () => {
+    const elapsed = (Date.now() - startTime) / 1000;
+    const remaining = Math.max(0, TIMER_DISPLAY_SECONDS - elapsed);
+    const mins = Math.floor(remaining / 60);
+    const secs = Math.floor(remaining % 60);
+    const text = '⏱ ' + mins + ':' + (secs < 10 ? '0' : '') + secs;
+    const color = remaining < 30 ? '#ef4444' : '#f59e0b';
+
+    // Buscar el conversation item actual en el DOM (Vue lo reemplaza)
+    const item = findConversationItem(clientName);
+    if (item) {
+      let td = item.querySelector('.tess-resp-timer');
+      if (!td) {
+        td = createTimerElement();
+        insertTimerInItem(item, td);
       }
-    } catch(e) {}
+      td.textContent = text;
+      td.style.color = color;
+    }
+
+    // Alerta flotante a los 90 segundos
+    if (elapsed >= RESPONSE_ALERT_SECONDS && !_alertTriggered) {
+      _alertTriggered = true;
+      showResponseAlert(clientName);
+    }
+
+    // Si llega a 0, detener
+    if (remaining <= 0) {
+      clearInterval(timerId);
+    }
+  };
+
+  const timerId = setInterval(tick, 1000);
+  tick();
+
+  _responseTimers.set(clientName, { timerId, startTime });
+}
+
+function stopResponseTimer(clientName) {
+  if (clientName) {
+    const entry = _responseTimers.get(clientName);
+    if (entry) {
+      clearInterval(entry.timerId);
+      // Remover timer display del DOM si existe
+      const items = document.querySelectorAll('[class*="dialog-item-content"], [class*="dialog-item"], [class*="conversation-item"]');
+      for (const item of items) {
+        const td = item.querySelector('.tess-resp-timer');
+        if (td) td.remove();
+      }
+      _responseTimers.delete(clientName);
+    }
+    return;
   }
+  // Si no se especifica cliente, detener todos
+  for (const [name, entry] of _responseTimers) {
+    clearInterval(entry.timerId);
+  }
+  // Remover todos los timer display del DOM
+  document.querySelectorAll('.tess-resp-timer').forEach(el => el.remove());
+  _responseTimers.clear();
+}
+
+function showResponseAlert(clientName) {
+  // Eliminar alerta previa
+  const oldAlert = document.getElementById('tessRespAlert');
+  if (oldAlert) oldAlert.remove();
   
-  return true;
+  const alert = document.createElement('div');
+  alert.id = 'tessRespAlert';
+  alert.style.cursor = 'pointer';
+  alert.addEventListener('click', () => {
+    // Navegar a la conversación del cliente
+    const items = document.querySelectorAll('[class*="dialog-item-content"]');
+    for (const item of items) {
+      const nameEl = item.querySelector('.dialog-item__name, [class*="name"]');
+      if (nameEl && nameEl.textContent.trim() === clientName) {
+        item.click();
+        break;
+      }
+    }
+    alert.remove();
+  });
+  alert.innerHTML = `
+<style>
+#tessRespAlert{position:fixed;top:80px;right:20px;z-index:999999;}
+.tess-alert-box{background:#0a0a0a;border:2px solid #ef4444;border-radius:12px;padding:16px 20px;box-shadow:0 0 30px rgba(239,68,68,0.5);min-width:260px;animation:tessAlertIn 0.3s ease-out;}
+@keyframes tessAlertIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+.tess-alert-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.tess-alert-hdr span{font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:2px;color:#ef4444;}
+.tess-alert-body{font-size:12px;color:#e0e0e0;font-family:'Segoe UI',sans-serif;line-height:1.4;}
+.tess-alert-close{position:absolute;top:6px;right:10px;cursor:pointer;color:#666;font-size:16px;font-family:sans-serif;background:none;border:none;z-index:2;}
+.tess-alert-close:hover{color:#ef4444;}
+</style>
+<div class="tess-alert-box">
+<button class="tess-alert-close" onclick="event.stopPropagation();this.closest('#tessRespAlert').remove()">×</button>
+<div class="tess-alert-hdr">
+<span>⚠ RESPUESTA PENDIENTE</span>
+</div>
+<div class="tess-alert-body">
+<b style="color:#f59e0b;">${clientName}</b> te escribió hace más de ${RESPONSE_ALERT_SECONDS / 60} min y aún no respondes.<br>
+<small style="color:#666;">Click para ir a la conversación</small>
+</div>
+</div>`;
+  document.body.appendChild(alert);
+  
+  // Auto-cerrar después de 8 segundos
+  setTimeout(() => {
+    const a = document.getElementById('tessRespAlert');
+    if (a) a.remove();
+  }, 8000);
+}
+
+function checkForSentMessages() {
+  const sentSelectors = [
+    '[class*="message-sent"]', '[class*="my-message"]', '[class*="own"]',
+    '[class*="bubble-right"]', '[class*="msg--sent"]', '[class*="message--own"]',
+    '[class*="right-bubble"]', '.text-message.own', '[class*="msg my"]',
+    '[data-test-id*="msg--sent"]'
+  ];
+  for (const sel of sentSelectors) {
+    const sent = document.querySelectorAll(sel + ':not(.tess-checked-sent)');
+    if (sent.length > 0) {
+      // Marcar como revisados y detener timer
+      for (const el of sent) {
+        el.classList.add('tess-checked-sent');
+      }
+      stopResponseTimer();
+      return;
+    }
+  }
 }
 
 function isPinnedOrSaved(contactEl) {
@@ -1525,11 +1785,13 @@ function isPinnedOrSaved(contactEl) {
   return false;
 }
 
-// ============ CHAT WATCHER ============
+// ============ CHAT WATCHER — solo para inyectar íconos manuales ============
 let chatWatcherObserver = null;
+let msgPollInterval = null;
 
 function startChatWatcher() {
   if (chatWatcherObserver) chatWatcherObserver.disconnect();
+  if (msgPollInterval) clearInterval(msgPollInterval);
   
   chatWatcherObserver = new MutationObserver((mutations) => {
     if (!eaterActive || !isAuthenticated) return;
@@ -1542,9 +1804,128 @@ function startChatWatcher() {
     }
   });
   
-  // Observar solo el contenedor de chat, no todo el body
-  const chatContainer = document.querySelector('[class*="chat"], [class*="message"], [class*="conversation"]') || document.body;
+  const chatContainer = document.querySelector('[class*="chat"], [class*="message"], [class*="conversation"], [class*="dialog"], [class*="conversation-list"], [class*="msg-area"]') || document.body;
   chatWatcherObserver.observe(chatContainer, { childList: true, subtree: true, characterData: true });
+  
+  msgPollInterval = setInterval(() => {
+    if (!eaterActive || !isAuthenticated) return;
+    scanAllIncomingMessages();
+    scanAllOutgoingMessages();
+  }, 2000);
+  
+  // Tambien detectar mensajes enviados para detener timer
+  setInterval(() => {
+    if (_responseTimers.size === 0) return;
+    checkForSentMessages();
+  }, 2000);
+  
+  document.addEventListener('click', (e) => {
+    if (!eaterActive || !isAuthenticated) return;
+    const convItem = e.target.closest('[class*="conversation"], [class*="contact-item"], [class*="user-item"], [class*="dialog-item"], [class*="chat-item"], [class*="thread"]');
+    if (convItem) {
+      _processedTexts.clear();
+      setTimeout(scanAllIncomingMessages, 800);
+    }
+  }, true);
+}
+
+function scanAllIncomingMessages() {
+  const selectors = [
+    '[class*="message-in"]', '[class*="message-received"]', '[class*="incoming"]',
+    '[class*="other-message"]', '[class*="contact-message"]', '[class*="msg-other"]',
+    '[class*="bubble-other"]', '[class*="dialog-item"]:not([class*="own"])',
+    '[class*="chat-message"]:not([class*="sent"])', 'div[class*="message"]:not([class*="my"])',
+    '[class*="msg"]:not([class*="my"])', '[class*="message"]:not([class*="self"])',
+    '[class*="conv-msg"]:not([class*="own"])', '[class*="bubble"]:not([class*="right"])',
+    '[class*="left-bubble"]', '[class*="replies"] [class*="msg"]',
+    '[class*="conversacion"] [class*="texto"]', '[class*="chat-content"] [class*="other"]',
+    '[data-test-uid] [class*="text"]:not([class*="my"])',
+    // TalkyTimes específico
+    '.text-message'
+  ];
+  
+  for (const sel of selectors) {
+    const messages = document.querySelectorAll(sel);
+    if (messages.length === 0) continue;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      // Saltar mensajes salientes (manejados por scanAllOutgoingMessages)
+      if (msg.classList.contains('tess-checked-outgoing')) continue;
+      if (msg.matches && msg.matches('[class*="my-text-message"], [class*="my-message"], [class*="own"], [class*="sent"]')) continue;
+      // Also check if any ancestor is outgoing (Vue wraps the bubble)
+      if (msg.closest && msg.closest('[class*="my-text-message"], [class*="my-message"], [class*="own"]')) continue;
+      const text = (msg.textContent || '').trim();
+      if (!text || text.length < 3) continue;
+      const hash = text.substring(0, 80);
+      if (_processedTexts.has(hash)) continue;
+      if (eaterResponse && (text === eaterResponse || text.startsWith(eaterResponse.substring(0, 40)))) continue;
+      _processedTexts.add(hash);
+      if (_processedTexts.size > 30) {
+        const first = _processedTexts.values().next().value;
+        _processedTexts.delete(first);
+      }
+      injectEaterTrigger(msg, text);
+      return;
+    }
+  }
+}
+
+function scanAllOutgoingMessages() {
+  const sentSelectors = [
+    '[class*="message-sent"]', '[class*="my-text-message"]', '[class*="my-message"]', '[class*="own"]',
+    '[class*="bubble-right"]', '[class*="msg--sent"]', '[class*="message--own"]',
+    '[class*="right-bubble"]', '.text-message.own', '[class*="msg my"]',
+    '[data-test-id*="msg--sent"]'
+  ];
+  for (const sel of sentSelectors) {
+    const messages = document.querySelectorAll(sel + ':not(.tess-checked-outgoing)');
+    if (messages.length === 0) continue;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      msg.classList.add('tess-checked-outgoing');
+      const text = (msg.textContent || '').trim();
+      if (!text || text.length < 3) continue;
+      const hash = 'out-' + text.substring(0, 80);
+      if (_processedTexts.has(hash)) continue;
+      _processedTexts.add(hash);
+      if (_processedTexts.size > 50) {
+        const first = _processedTexts.values().next().value;
+        _processedTexts.delete(first);
+      }
+      // Inyectar 🎭 directamente sin depender de isOutgoingMessage()
+      directInjectCaptureButton(msg, text);
+      return;
+    }
+  }
+}
+
+function directInjectCaptureButton(msgEl, messageText) {
+  if (msgEl.querySelector('.tess-capture-trigger')) return;
+  var clientName = 'Cliente';
+  var nameEl = msgEl.querySelector('[class*="name"], [class*="sender"], [class*="author"]');
+  if (nameEl && nameEl.textContent.trim()) clientName = nameEl.textContent.trim();
+  var trigger = document.createElement('span');
+  trigger.className = 'tess-capture-trigger';
+  trigger.textContent = '🎭';
+  trigger.title = 'Capturar estilo del operador para este perfil';
+  Object.assign(trigger.style, {
+    cursor: 'pointer',
+    fontSize: '14px',
+    marginLeft: '4px',
+    display: 'inline-block',
+    opacity: '0.5',
+    transition: 'opacity 0.2s',
+    verticalAlign: 'middle'
+  });
+  trigger.onmouseenter = function () { this.style.opacity = '1'; };
+  trigger.onmouseleave = function () { this.style.opacity = '0.5'; };
+  var msgText = messageText || msgEl.textContent || '';
+  trigger.onclick = function (e) {
+    e.stopPropagation();
+    captureOperatorStyle(msgText.trim());
+  };
+  var contentEl = msgEl.querySelector('.content, [class*="content"], p') || msgEl;
+  contentEl.appendChild(trigger);
 }
 
 function checkForIncomingMessages(node) {
@@ -1552,48 +1933,179 @@ function checkForIncomingMessages(node) {
     '[class*="message-in"]', '[class*="message-received"]', '[class*="incoming"]',
     '[class*="other-message"]', '[class*="contact-message"]', '[class*="msg-other"]',
     '[class*="bubble-other"]', '[class*="dialog-item"]:not([class*="own"])',
-    '[class*="chat-message"]:not([class*="sent"])', 'div[class*="message"]:not([class*="my"])'
+    '[class*="chat-message"]:not([class*="sent"])', 'div[class*="message"]:not([class*="my"])',
+    '[class*="msg"]:not([class*="my"])', '[class*="message"]:not([class*="self"])',
+    '[class*="conv-msg"]:not([class*="own"])', '[class*="bubble"]:not([class*="right"])',
+    '[class*="left-bubble"]', '[class*="replies"] [class*="msg"]',
+    '[class*="conversacion"] [class*="texto"]', '[class*="chat-content"] [class*="other"]',
+    '.text-message'
   ];
   
-  for (const sel of selectors) {
-    if (node.matches && node.matches(sel)) { analyzeMessage(node); return; }
-  }
-  
-  for (const sel of selectors) {
-    const messages = node.querySelectorAll(sel);
-    if (messages.length > 0) { messages.forEach(msg => analyzeMessage(msg)); return; }
+  const nodes = node.nodeType === 1 ? [node, ...node.querySelectorAll('*')] : [];
+  for (const el of nodes) {
+    if (el.nodeType !== 1) continue;
+    // Saltar mensajes salientes
+    if (el.classList.contains('tess-checked-outgoing')) continue;
+    if (el.matches && el.matches('[class*="my-text-message"], [class*="my-message"], [class*="own"]')) continue;
+    for (const sel of selectors) {
+      if (!el.matches || !el.matches(sel)) continue;
+      const text = (el.textContent || '').trim();
+      if (!text || text.length < 3) continue;
+      const hash = text.substring(0, 80);
+      if (_processedTexts.has(hash)) continue;
+      if (eaterResponse && (text === eaterResponse || text.startsWith(eaterResponse.substring(0, 40)))) continue;
+      _processedTexts.add(hash);
+      if (_processedTexts.size > 30) {
+        const first = _processedTexts.values().next().value;
+        _processedTexts.delete(first);
+      }
+      injectEaterTrigger(el, text);
+      return;
+    }
   }
 }
 
-function analyzeMessage(msgEl) {
+function isOutgoingMessage(el) {
+  const outgoingClasses = ['own', 'sent', 'outgoing', 'self', 'my-text-message', 'my-message', 'right', 'msg--outgoing', 'message--sent', 'msg--right', 'bubble--right'];
+  let current = el;
+  while (current && current !== document.body) {
+    const cls = typeof current.className === 'string' ? current.className : '';
+    for (const oc of outgoingClasses) {
+      if (cls.includes(oc)) return true;
+    }
+    // También verificar data attributes
+    if (current.getAttribute && current.getAttribute('data-test-id')?.includes('msg--sent')) return true;
+    current = current.parentElement;
+  }
+  return false;
+}
+
+function injectEaterTrigger(msgEl, messageText) {
+  if (msgEl.querySelector('.tess-eater-trigger, .tess-capture-trigger')) return;
+  // Mensajes salientes: ni procesar ni inyectar nada aquí
+  if (msgEl.classList.contains('tess-checked-outgoing') || isOutgoingMessage(msgEl)) return;
+  
+  // Detectar nombre del cliente
   const nameSelectors = ['[class*="name"]', '[class*="sender"]', '[class*="author"]', '[class*="username"]', '[class*="contact-name"]'];
   let clientName = 'Cliente';
   for (const sel of nameSelectors) {
     const nameEl = msgEl.querySelector(sel);
     if (nameEl && nameEl.textContent.trim()) { clientName = nameEl.textContent.trim(); break; }
   }
+  if (clientName && clientName !== currentClientName) currentClientName = clientName;
   
-  if (clientName !== currentClientName) {
-    currentClientName = clientName;
-    analyzeClientProfile(clientName);
-  } else {
-    analyzeClientProfile(clientName);
+  const trigger = document.createElement('span');
+  trigger.className = 'tess-eater-trigger';
+  trigger.textContent = '🤖';
+  trigger.title = 'Generar respuesta con IA - ' + clientName;
+  Object.assign(trigger.style, {
+    cursor: 'pointer',
+    fontSize: '14px',
+    marginLeft: '4px',
+    display: 'inline-block',
+    opacity: '0.5',
+    transition: 'opacity 0.2s',
+    verticalAlign: 'middle'
+  });
+  trigger.onmouseenter = () => trigger.style.opacity = '1';
+  trigger.onmouseleave = () => trigger.style.opacity = '0.5';
+  
+  const msgText = messageText || msgEl.textContent || '';
+  trigger.onclick = (e) => {
+    e.stopPropagation();
+    generateFromMessage(msgText.trim());
+  };
+  
+  const contentEl = msgEl.querySelector('.content, [class*="content"], p') || msgEl;
+  contentEl.appendChild(trigger);
+
+  // Iniciar timer de respuesta — buscar el conversation item de la lista
+  let convEl = msgEl.closest('[class*="dialog-item-content"], [class*="dialog-item"], [class*="conversation-item"]');
+  if (!convEl && clientName) {
+    // Si el mensaje está en la vista de chat, buscar el item en la lista por nombre
+    const items = document.querySelectorAll('[class*="dialog-item-content"], [class*="dialog-item"], [class*="conversation-item"]');
+    for (const item of items) {
+      const nameEl = item.querySelector('.dialog-item__name, [class*="name"]:not([class*="wrapper"]):not([class*="row"])');
+      if (nameEl && nameEl.textContent.trim() === clientName) {
+        convEl = item;
+        break;
+      }
+    }
+  }
+  if (convEl) startResponseTimer(convEl, clientName, trigger);
+}
+
+async function captureOperatorStyle(text) {
+  // Obtener ID del CLIENTE (NO del operador)
+  var rawId = '';
+  // 1. Si _lastCribsPid está seteado, verificar que NO sea el operador
+  if (window._lastCribsPid) {
+    var isOperator = window._cribsChatIds && window._cribsChatIds[0] && String(window._cribsChatIds[0]).replace(/^0+/, '') === String(window._lastCribsPid).replace(/^0+/, '');
+    if (!isOperator) rawId = window._lastCribsPid;
+  }
+  // 2. Fallback: _cribsChatIds[1] (el segundo ID siempre es el cliente)
+  if (!rawId && window._cribsChatIds && window._cribsChatIds.length > 1) {
+    rawId = String(window._cribsChatIds[1]).replace(/^0+/, '');
+  }
+  // 3. Fallback: parsear URL directamente
+  if (!rawId) {
+    var chatM = location.href.match(/\/chat\/(\d{6,15})_(\d{6,15})/);
+    if (chatM) rawId = chatM[2].replace(/^0+/, '');
+  }
+  if (!rawId) {
+    showTessToast('⚠ No hay perfil detectado para capturar estilo', 'warning');
+    return;
+  }
+  await cribLoadOrRefresh(false);
+  var entry = cribFindEntry(rawId);
+  if (!entry || !entry._id) {
+    showTessToast('⚠ Perfil no encontrado en CRIBS. Agrégalo desde el dashboard.', 'warning');
+    return;
+  }
+  var existing = entry.voice_style || '';
+  var lines = existing ? existing.split('\n').filter(function (l) { return l.trim(); }) : [];
+  lines.push(text.trim());
+  if (lines.length > 50) lines = lines.slice(-50);
+  var newStyle = lines.join('\n');
+  var headers = { 'Content-Type': 'application/json' };
+  if (_tessJwtCache) headers['Authorization'] = 'Bearer ' + _tessJwtCache;
+  try {
+    var res = await fetch(TESSERACT_API + '/api/tess/cribs/' + entry._id + '/bulk', {
+      method: 'PUT',
+      headers: headers,
+      body: JSON.stringify({ voice_style: newStyle })
+    });
+    if (res.ok) {
+      entry.voice_style = newStyle;
+      // Actualizar overlay y cache local del entry correcto
+      if (cribsOverlayData && cribsOverlayData._id === entry._id) {
+        cribsOverlayData.voice_style = newStyle;
+      }
+      if (cribsOverlayData && cribsOverlayData._id !== entry._id) {
+        cribsOverlayData = entry;
+      }
+      if (cribsOverlayData) renderCribsOverlay(cribsOverlayData);
+      showTessToast('🎭 Estilo capturado (' + lines.length + '/50)', 'success');
+    } else {
+      var errText = await res.text().catch(function () { return 'Unknown error'; });
+      console.log('[CAPTURE] Bulk PUT error:', res.status, errText);
+      showTessToast('⚠ Error al guardar estilo (' + res.status + ')', 'error');
+    }
+  } catch (e) {
+    console.log('[CAPTURE] Error de red:', e.message);
+    showTessToast('⚠ Error de conexión al guardar estilo', 'error');
   }
 }
 
-let eaterProfileTimer = null;
-let lastAnalyzedName = '';
-
-function analyzeClientProfile(clientName) {
-  if (!clientName || !isAuthenticated || !eaterActive) return;
-  if (clientName === lastAnalyzedName) return;
-  lastAnalyzedName = clientName;
+function generateFromMessage(msgText) {
+  if (!msgText || msgText.length < 3) return;
   
-  if (eaterProfileTimer) clearTimeout(eaterProfileTimer);
-  eaterProfileTimer = setTimeout(() => {
+  const clientName = currentClientName || 'Cliente';
+  
+  // Extraer perfil si no lo tenemos
+  if (!window._lastClientProfile) {
     const profileEl = document.querySelector('[class*="profile-detail"], [class*="user-profile"], [class*="member-info"], [class*="contact-info"]') || document.body;
-    
-    const profile = {
+    window._lastClientProfile = {
       name: clientName,
       interests: extractInterests(profileEl),
       location: extractLocation(profileEl),
@@ -1602,9 +2114,29 @@ function analyzeClientProfile(clientName) {
       hasPhoto: checkPhoto(profileEl),
       hobbies: extractHobbies(profileEl)
     };
-    
-    generateSuggestions(clientName, profile);
-  }, 800);
+  }
+  
+  const area = document.getElementById('eaterResponseArea');
+  if (area) { area.value = '🤖 Generando...'; area.style.color = '#888'; }
+
+  const btn2 = document.getElementById('btnRefreshEater2');
+  if (btn2) btn2.textContent = '🤖 IA...';
+  
+  const profile = window._lastClientProfile || { name: clientName, interests: [], location: null, bio: '', age: null, hasPhoto: false, hobbies: null };
+  
+  generateWithAI(clientName, profile, msgText).then(response => {
+    eaterResponse = response || generateLocalResponse(clientName, profile);
+    if (eaterResponse) _processedTexts.add(eaterResponse.substring(0, 80));
+    isUsingAI = !!response;
+    if (btn2) btn2.textContent = isUsingAI ? '🤖 IA' : '🔄 FRASES';
+    displaySuggestions(clientName);
+  }).catch(() => {
+    eaterResponse = generateLocalResponse(clientName, profile);
+    if (eaterResponse) _processedTexts.add(eaterResponse.substring(0, 80));
+    isUsingAI = false;
+    if (btn2) btn2.textContent = '🔄 FRASES';
+    displaySuggestions(clientName);
+  });
 }
 
 function checkPhoto(el) {
@@ -1643,6 +2175,12 @@ function extractBio(el) {
   return (bioEl && bioEl.textContent.trim().length > 10) ? bioEl.textContent.trim() : '';
 }
 
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
+}
+
 function extractAge(el) {
   const text = el.textContent || '';
   const m = text.match(/(\d{2})\s*(?:años|years|age|edad)/i);
@@ -1658,50 +2196,64 @@ function extractHobbies(el) {
   return h.length > 0 ? h : null;
 }
 
-let generateTimer = null;
-
-function generateSuggestions(name, profile) {
-  const btn = document.getElementById('btnRefreshEater');
-  if (generateTimer) clearTimeout(generateTimer);
-  
-  generateTimer = setTimeout(() => {
-    btn.textContent = '🤖 IA...';
-    
-    generateWithAI(name, profile).then(aiSuggestions => {
-      if (aiSuggestions && aiSuggestions.length > 0) {
-        isUsingAI = true;
-        btn.textContent = '🤖 IA';
-        eaterSuggestions = aiSuggestions;
-      } else {
-        isUsingAI = false;
-        btn.textContent = '🔄 FRASES';
-        generateLocalSuggestions(name, profile);
-      }
-      displaySuggestions(name, profile);
-    }).catch(() => {
-      isUsingAI = false;
-      btn.textContent = '🔄 FRASES';
-      generateLocalSuggestions(name, profile);
-      displaySuggestions(name, profile);
-    });
-  }, 500);
-}
-
-async function generateWithAI(name, profile) {
+async function generateWithAI(name, profile, accumulatedMsg) {
   try {
     const stored = await chrome.storage.local.get(['tess_jwt']);
     const token = stored.tess_jwt;
     
-    const randomSeed = Math.floor(Math.random() * 10000);
-    const prompt = `Genera 3 frases push-pull ÚNICAS y VARIADAS para iniciar conversación en app de citas.
-Cada frase: 4-8 palabras. Estilo: directo, misterioso, provocativo.
-NUNCA repitas: "me gustas", "curioso", "conversar", "hola", "hola".
-Ejemplos distintos: "Tu sonrisa me intrigue", "Algo me dice que vales la pena", "¿Y si esta vez sí?", "Tengo corazonada contigo", "No puedo dejar de pensar...", "¿responderás?".
+    if (!accumulatedMsg || accumulatedMsg.trim().length < 3) {
+      return generateLocalResponse(name, profile);
+    }
+    
+    const langHint = clientDetectedLang && clientDetectedLang !== 'es' ? ' El cliente escribe en ' + clientDetectedLang + '. Responde en ese mismo idioma.' : '';
+    
+    const isMultiple = accumulatedMsg.includes(' | ');
+    const contextNote = isMultiple
+      ? 'El cliente ha enviado VARIOS mensajes seguidos. Toma en cuenta TODOS para generar una respuesta coherente.'
+      : '';
+    
+    // Detectar nivel de confianza por el tono del cliente
+    var confianza = 'nueva';
+    if (/\b(amor|cariño|bebé|mi vida|corazón|querido)\b/i.test(accumulatedMsg)) confianza = 'alta';
+    else if (/\b(gracias|encanta|gusta|divertido|interesante|bonito|lindo)\b/i.test(accumulatedMsg)) confianza = 'media';
+    var confianzaHint = confianza === 'alta' ? 'YA tienen confianza — puedes ser más natural, cálido y cercano. Responde como alguien con quien ya hay química.' :
+      confianza === 'media' ? 'HAY buena vibra — sé cálido pero sin exagerar la confianza. Sigue el tono positivo.' :
+      'apenas se están conociendo — sé respetuoso, sin apodos, sin posesión. Construye rapport natural.';
 
-Semilla aleatoria #${randomSeed} - genera combinaciones TOTALMENTE DIFERENTES.
-Responde SOLO las 3 frases, una por línea, nada más.`;
+    // Inyectar estilo capturado del operador para este cliente
+    var styleInjection = '';
+    var cribsEntry = cribFindEntry(window._lastCribsPid);
+    if (cribsEntry && cribsEntry.voice_style) {
+      var examples = cribsEntry.voice_style.split('\n')
+        .filter(function (l) { return l.trim().length > 5; })
+        .map(function (l) { return '• "' + l.trim() + '"'; })
+        .join('\n');
+      console.log('[EATER AI] Estilo cargado para perfil', window._lastCribsPid, '—', cribsEntry.voice_style.split('\n').length, 'líneas');
+      if (examples) {
+        styleInjection = 'El operador escribe a este cliente con este estilo propio (ejemplos de mensajes reales enviados):\n' +
+          examples + '\n\nDebes imitar EXACTAMENTE ese estilo: tono, nivel de formalidad, tipo de vocabulario, uso de emojis, longitud de frases y forma de expresarse. Sé coherente con su manera de escribir.\n\n';
+      }
+    } else {
+      console.log('[EATER AI] Sin estilo capturado para perfil', window._lastCribsPid);
+    }
 
-    console.log('[EATER AI] Llamando a IA con seed:', randomSeed);
+    const prompt = 'Último mensaje del cliente:\n\n"' + accumulatedMsg.substring(0, 500) + '"\n\n' +
+      contextNote +
+      'Nivel de confianza: ' + confianza + '. ' + confianzaHint + '\n\n' +
+      styleInjection +
+      'Escribe UNA respuesta natural, variada, como en una conversación real. Reglas ESTRICTAS:\n' +
+      '- NO empieces con "Me alegra que...", "Qué bien que...", "Me gusta que..." ni variantes. Es repetitivo.\n' +
+      '- NO saludes ("Hola", "Hey", "Qué tal", "Buenas") a menos que el cliente haya saludado en su mensaje.\n' +
+      '- NO preguntes la hora, fecha, día, ni "¿en qué piensas?", "¿qué haces?".\n' +
+      '- NO uses frases hechas, halagos vacíos, ni estructura de "Me _____ que tú _____".\n' +
+      '- Si el cliente usa palabras de cariño (amor, bebé, cariño, querido, etc.), responde con EL MISMO nivel de afecto, reflejando su tono.\n' +
+      '- Si el cliente pide número de celular, correo electrónico o cambiar a otra página, NIÉGATE de forma coherente y sin dudar, inventando una excusa creíble (ej: "me robaron el celular y estoy esperando el reemplazo", "mi correo está teniendo problemas", "esta página es más segura para hablar"). No des esperanzas falsas pero tampoco cierres la puerta del todo.\n' +
+      'Varía tu forma de iniciar: a veces responde directo, a veces con una observación, a veces con una pregunta genuina sobre lo que dijo. ' +
+      'Sigue el tono del cliente: si es directo, sé directo; si bromea, sigue su humor; si es profundo, conéctate en ese nivel. ' +
+      'Habla como si estuvieras respondiendo un mensaje de WhatsApp, no redactando una carta. ' +
+      'Sé concreto, máximo 280 caracteres. Responde SOLO el texto de mi respuesta.' + langHint;
+
+    console.log('[EATER AI] Llamando a IA con mensaje del cliente');
     
     const response = await fetch(`${TESSERACT_API}/api/chatgpt/chat`, {
       method: 'POST',
@@ -1711,25 +2263,29 @@ Responde SOLO las 3 frases, una por línea, nada más.`;
       },
       body: JSON.stringify({
         messages: [
-          { role: 'system', content: 'Eres un experto en dating coaching. Generas frases push-pull únicas, cortas (4-8 palabras), directas, sin repetir patrones. Siempre distintas.' },
+          {
+            role: 'system',
+            content: 'Eres un hombre real de 30-45 años, conversas como una persona normal en WhatsApp. Reglas OBLIGATORIAS: 1) NUNCA empieces con "Me alegra que...", "Qué bien que...", "Me gusta que..." ni ninguna estructura parecida. Varía siempre tu forma de empezar. 2) Habla como en una conversación real, no como coach, terapeuta, poeta ni redactor publicitario. 3) NUNCA preguntes la hora, fecha, qué hacía a una hora específica, ni "¿en qué piensas?". 4) Cada respuesta debe reaccionar a algo CONCRETO que el cliente dijo. 5) Sigue el tono del cliente: si bromea, sigue el humor; si es directo, sé directo; si es cariñoso, responde con calidez natural. 6) Siempre en español. Nunca revelas que eres IA. 7) No uses apodos ("mi vida", "amor", "bebé") a menos que el cliente los haya usado primero. 8) No incluyas redes sociales ni contacto externo. 9) Si la persona está mal, escucha sin presionar. 10) Máximo 280 caracteres. Sé variado, concreto y auténtico. 11) NO saludes ("Hola", "Hey", "Qué tal", "Buenas") a menos que el cliente haya saludado en su mensaje. 12) Si el cliente usa palabras de cariño (amor, bebé, cariño, querido, etc.), responde con el mismo nivel de afecto reflejando su tono. 13) Si el cliente pide número de celular, correo o cambiar a otra página, niégate de forma coherente y sin dudar con una excusa creíble (ej: "me robaron el celular", "mi correo no está funcionando", "esta página es más segura"), sin dar esperanzas falsas pero sin cerrar la puerta del todo. 14) Si el usuario te da ejemplos del estilo del operador para este cliente, imítalos fielmente en tu respuesta. El operador habla así con esta persona, tú debes sonar igual.'
+          },
           { role: 'user', content: prompt }
         ],
         model: 'gpt-3.5-turbo',
-        max_tokens: 80
+        max_tokens: 150
       })
     });
     
     console.log('[EATER AI] Response status:', response.status);
-    if (!response.ok) return null;
-    
     const data = await response.json();
     console.log('[EATER AI] Response data:', data);
+    if (!response.ok) {
+      console.warn('[EATER AI] Error del servidor:', JSON.stringify(data));
+      return null;
+    }
     
     if (data.choices && data.choices[0]?.message?.content) {
-      const text = data.choices[0].message.content;
-      const lines = text.split('\n').filter(l => l.trim().length > 3 && l.trim().length < 50);
-      console.log('[EATER AI] Frases generadas:', lines);
-      return lines.slice(0, 3);
+      const text = data.choices[0].message.content.trim();
+      console.log('[EATER AI] Respuesta generada:', text);
+      return text;
     }
     return null;
   } catch (e) {
@@ -1738,7 +2294,7 @@ Responde SOLO las 3 frases, una por línea, nada más.`;
   }
 }
 
-function generateLocalSuggestions(name, profile) {
+function generateLocalResponse(name, profile) {
   const { interests, location, hobbies } = profile;
   const hasRealInterests = interests && interests.length > 0;
   const hasRealHobbies = hobbies && hobbies.length > 0;
@@ -1749,59 +2305,48 @@ function generateLocalSuggestions(name, profile) {
     'Tu perfil me tiene curioso... ¿serás interesante?',
     'Tengo una corazonada sobre ti...',
     'Algo me dice que deberíamos conversar...',
-    'No puedo dejar de pensar en tu sonrisa...',
-    '¿Y si esta vez sí funciona? 🤔',
-    'Me atraes... pero quiero saber si eres tú quien dice algo.',
-    'Veo tu perfil y pienso "ella/él podría ser"...',
-    'Mi instinto me dice que vales la pena...',
-    '¿Qué tal sinos llevamos mejor de lo esperado?',
+    'No puedo dejar de pensar en ti...',
+    '¿Y si esta vez sí funciona?',
+    'Me atraes... y quiero saber más de ti.',
+    'Veo tu perfil y pienso que podrías ser especial...',
+    'Algo en ti me llama la atención...',
+    'Oye, ¿qué tal si nos conocemos mejor?',
     location && hasRealLocation ? `Vivo cerca de ${location}, ¿y tú?` : null,
-    interests && hasRealInterests ? `Veo que te gusta ${interests[0]}... interesante!` : null,
-    hobbies && hasRealHobbies ? `También pratico ${hobbies[0]}!` : null,
+    interests && hasRealInterests ? `Veo que te gusta ${interests[0]}... a mí también!` : null,
+    hobbies && hasRealHobbies ? `${hobbies[0]}! Yo también hago eso :D` : null,
   ].filter(s => s);
   
-  // Mezclar y tomar 3 aleatorias
   const shuffled = [...candidates].sort(() => Math.random() - 0.5);
-  eaterSuggestions = shuffled.slice(0, 3);
+  return shuffled[0] || 'Cuéntame más de ti...';
 }
 
 function displaySuggestions(name) {
   const cnEl = document.getElementById('eaterClientName');
   if (cnEl) cnEl.textContent = name;
   
-  const sugListEl = document.getElementById('eaterSugList');
-  if (!sugListEl) return;
+  const area = document.getElementById('eaterResponseArea');
+  if (!area) return;
   
-  const maxShow = 2;
-  const displaySug = eaterSuggestions.slice(0, maxShow);
+  if (eaterResponse) {
+    area.value = eaterResponse;
+    area.style.color = '#e0e0e0';
+  }
   
-  sugListEl.innerHTML = displaySug.map((s, i) => `
-    <div class="eater-row" data-sug-text="${s.replace(/"/g, '&quot;')}">
-      <div style="flex:1;word-break:break-word;">
-        <span class="sn">${i+1}.</span>
-        <span class="sug-text" style="font-size:11px;line-height:1.3;">${s.length > 60 ? s.substring(0,60)+'...' : s}</span>
-      </div>
-      <button class="tr-btn" data-action="translate" data-sug-text="${s.replace(/"/g, '&quot;')}" title="Traducir a ${translateLanguages[translateLangIndex].name}">${translateLanguages[translateLangIndex].label}</button>
-    </div>
-  `).join('');
-  
-  // Actualizar botones eq1, eq2 de la barra flotante
-  const eq1 = document.getElementById('eq1');
-  const eq2 = document.getElementById('eq2');
-  if (eq1) eq1.textContent = '\uD83D\uDCAC ' + (eaterSuggestions[0]?.substring(0, 18) || 'SUG 1') + '...';
-  if (eq2) eq2.textContent = '\uD83D\uDCAC ' + (eaterSuggestions[1]?.substring(0, 18) || 'SUG 2') + '...';
-}
-
-function selectEaterSuggestion(text) {
-  const chatInput = document.getElementById('messageInput') || document.getElementById('chatInput');
-  if (chatInput) {
-    chatInput.value = text;
-    chatInput.focus();
+  // Auto-traducir al idioma detectado del cliente (si no es español)
+  if (clientDetectedLang && clientDetectedLang !== 'es') {
+    const sel = document.getElementById('btnTranslate2');
+    if (sel && sel.querySelector('option[value="' + clientDetectedLang + '"]')) {
+      sel.value = clientDetectedLang;
+      selectedLangCode = clientDetectedLang;
+    }
+    translateEaterResponse();
   }
 }
 
 async function translateEaterText(text) {
-  const targetLang = translateLanguages[translateLangIndex];
+  var code = selectedLangCode;
+  if (code === 'es') { copyToChatInput(text); return; }
+  var targetLang = translateLanguages.find(function (l) { return l.code === code; }) || translateLanguages[0];
   try {
     const stored = await chrome.storage.local.get(['tess_jwt']);
     const token = stored.tess_jwt;
@@ -1817,7 +2362,7 @@ async function translateEaterText(text) {
     
     if (res.ok) {
       const data = await res.json();
-      const translated = data.success?.data?.translations?.[0]?.text || data.translatedText;
+      const translated = data.data?.translations?.[0]?.text || data.translatedText;
       if (translated) {
         copyToChatInput(translated);
         console.log('[TRANSLATE] ES → ' + targetLang.name + ':', translated.substring(0, 50));
@@ -1828,9 +2373,52 @@ async function translateEaterText(text) {
   }
 }
 
+async function translateEaterResponse() {
+  const area = document.getElementById('eaterResponseArea');
+  if (!area || !area.value || area.value === 'Esperando mensaje...') return;
+
+  var code = selectedLangCode;
+  if (code === 'es') return;
+  var targetLang = translateLanguages.find(function (l) { return l.code === code; }) || translateLanguages[0];
+
+  // Siempre traducir desde el texto original en español
+  var sourceText = window._eaterOriginalResponse || area.value;
+  if (!sourceText || sourceText === 'Esperando mensaje...') return;
+
+  try {
+    const stored = await chrome.storage.local.get(['tess_jwt']);
+    const token = stored.tess_jwt;
+    
+    const res = await fetch(`${TESSERACT_API}/api/openai/translate`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ text: sourceText, targetLang: targetLang.code, targetName: targetLang.name })
+    });
+
+    console.log('[TRANSLATE] Solicitando traducción → ' + targetLang.name + ':', sourceText.substring(0, 50));
+    
+    if (res.ok) {
+      const data = await res.json();
+      const translated = data.data?.translations?.[0]?.text || data.translatedText;
+      console.log('[TRANSLATE] Respuesta:', translated ? translated.substring(0, 50) : 'sin traducción');
+      if (translated) {
+        area.value = translated;
+        eaterResponse = translated;
+        window._eaterTranslated = true;
+      }
+    } else {
+      console.warn('[TRANSLATE] Error HTTP:', res.status, await res.text().catch(function () { return ''; }));
+    }
+  } catch(e) {
+    console.warn('[TRANSLATE] Error:', e.message);
+  }
+}
+
 // ============ REFRESH EATER ============
 function refreshEaterSuggestions() {
-  eaterRefreshCount++;
   const clientName = currentClientName || 'Cliente';
   const profileEl = document.querySelector('[class*="profile-detail"], [class*="user-profile"], [class*="member-info"], [class*="contact-info"]') || document.body;
   const profile = {
@@ -1843,70 +2431,43 @@ function refreshEaterSuggestions() {
     hobbies: extractHobbies(profileEl)
   };
   
-  const btn = document.getElementById('btnRefreshEater');
-  if (btn) {
-    btn.textContent = '🤖 IA...';
-    btn.style.background = 'rgba(139,92,246,0.5)';
+  const area = document.getElementById('eaterResponseArea');
+  if (area) { area.value = '🤖 Generando...'; area.style.color = '#888'; }
+
+  const btn2 = document.getElementById('btnRefreshEater2');
+  if (btn2) {
+    btn2.textContent = '🤖 IA...';
+    btn2.style.background = 'rgba(139,92,246,0.5)';
   }
-  
-  generateWithAI(clientName, profile).then(aiSuggestions => {
-    if (aiSuggestions && aiSuggestions.length > 0) {
-      isUsingAI = true;
-      eaterSuggestions = aiSuggestions;
-      if (btn) {
-        btn.textContent = '🤖 IA #' + eaterRefreshCount;
-        btn.style.background = 'rgba(139,92,246,0.3)';
-      }
-    } else {
-      isUsingAI = false;
-      generateLocalSuggestions(clientName, profile);
-      if (btn) {
-        btn.textContent = '🔄 FRASES #' + eaterRefreshCount;
-        btn.style.background = 'rgba(30,27,75,0.7)';
-      }
+
+  window._eaterTranslated = false;
+  window._eaterOriginalResponse = '';
+  const currentText = eaterResponse || '';
+  generateWithAI(clientName, profile, currentText).then(response => {
+    eaterResponse = response || generateLocalResponse(clientName, profile);
+    window._eaterOriginalResponse = eaterResponse;
+    if (eaterResponse) _processedTexts.add(eaterResponse.substring(0, 80));
+    isUsingAI = !!response;
+    if (btn2) {
+      btn2.textContent = isUsingAI ? '🤖 IA' : '🔄 FRASES';
+      btn2.style.background = isUsingAI ? 'rgba(139,92,246,0.3)' : 'rgba(30,27,75,0.7)';
     }
     displaySuggestions(clientName);
   }).catch(() => {
+    eaterResponse = generateLocalResponse(clientName, profile);
+    window._eaterOriginalResponse = eaterResponse;
+    if (eaterResponse) _processedTexts.add(eaterResponse.substring(0, 80));
     isUsingAI = false;
-    generateLocalSuggestions(clientName, profile);
-    if (btn) {
-      btn.textContent = '🔄 FRASES #' + eaterRefreshCount;
-      btn.style.background = 'rgba(30,27,75,0.7)';
-    }
+    if (btn2) { btn2.textContent = '🔄 FRASES'; btn2.style.background = 'rgba(30,27,75,0.7)'; }
     displaySuggestions(clientName);
   });
 }
 
 // ============ TRADUCCIÓN (ES → EN / FR / PT) ============
-function translateLastMessage() {
-  // Ciclar entre idiomas: EN → FR → PT → EN...
-  translateLangIndex = (translateLangIndex + 1) % translateLanguages.length;
-  const targetLang = translateLanguages[translateLangIndex];
-  
-  const btn = document.getElementById('btnTranslate');
-  btn.textContent = '🌐 ' + targetLang.label + '...';
-  
-  // Traducir la última sugerencia del Eater o el texto del input de chat
-  const textToTranslate = lastGeneratedMessage || (findChatInput()?.value || '');
-  if (!textToTranslate) {
-    btn.textContent = '🌐 ' + targetLang.label;
-    return;
-  }
-  
-  translateText(textToTranslate, targetLang.code, targetLang.name).then(t => {
-    copyToChatInput(t);
-    lastGeneratedMessage = t;
-    btn.textContent = '🌐 ' + targetLang.label;
-    console.log('[TRANSLATE] ES → ' + targetLang.name + ':', t.substring(0, 50));
-  }).catch(() => {
-    btn.textContent = '🌐 ' + targetLang.label;
-  });
-}
-
 async function translateText(text, targetCode, targetName) {
-  const tl = translateLanguages[translateLangIndex];
-  const code = targetCode || tl.code;
-  const name = targetName || tl.name;
+  var defaultLang = translateLanguages.find(function (l) { return l.code === selectedLangCode; }) || translateLanguages[0];
+  const code = targetCode || defaultLang.code;
+  const name = targetName || defaultLang.name;
   try {
     const token = await new Promise(r => chrome.storage.local.get('tess_jwt', d => r(d.tess_jwt)));
     const headers = { 'Content-Type': 'application/json' };
@@ -2007,11 +2568,15 @@ function detectCurrentProfile() {
     const m = location.href.match(/\/(\d{6,15})(?:[/?#]|$)/);
     if (m) profileId = m[1];
   }
-  // 6b. Chat URL: /chat/{id1}_{id2} - ambos IDs pueden ser el contacto (pineado vs no)
+  // 6b. Chat URL: /chat/{operator_id}_{client_id}
   const chatM = location.href.match(/\/chat\/(\d{6,15})_(\d{6,15})/);
   if (chatM) {
     window._cribsChatIds = [chatM[1], chatM[2]];
-    if (!profileId) profileId = chatM[1];
+    // Guardar ID del operador para construir URLs de chat desde CRIBS
+    window._tessOperatorId = chatM[1];
+    chrome.storage.local.set({ tess_operator_id: chatM[1] });
+    // En chat, el perfil detectado es el CLIENTE (chatM[2]), no el operador
+    profileId = chatM[2];
   } else {
     window._cribsChatIds = null;
   }
@@ -2355,6 +2920,16 @@ function startPeriodicSync() {
       console.warn('[TESS] Periodic sync error (offline?):', e.message);
     }
 
+    // Heartbeat al servidor para tracking online/offline
+    chrome.storage.local.get('tess_jwt', function (data) {
+      if (data.tess_jwt) {
+        fetch(`${TESSERACT_API}/api/tess/admin/heartbeat`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + data.tess_jwt }
+        }).catch(function () {});
+      }
+    });
+
     // También guardar local como respaldo
     chrome.storage.local.set({
       tess_heartbeat: Date.now(),
@@ -2420,6 +2995,34 @@ function updateMLTabUI() {
   document.getElementById('mlQueueCountInline').textContent = stats?.lastScrapedCount ?? '--';
 }
 
+function updateMLContactList() {
+  const container = document.getElementById('mlContactList');
+  if (!container) return;
+  const scrapeFn = typeof window._scrapeActiveLimitsIds === 'function' ? window._scrapeActiveLimitsIds : null;
+  if (!scrapeFn) { container.innerHTML = '<div style="padding:12px;text-align:center;color:#888;font-size:10px;">Smart Mailing no disponible</div>'; container.style.display = 'block'; return; }
+  const contacts = scrapeFn();
+  if (!contacts || contacts.length === 0) {
+    container.innerHTML = '<div style="padding:12px;text-align:center;color:#888;font-size:10px;">Sin contactos disponibles. Asegúrate de estar en Active Limits.</div>';
+    container.style.display = 'block';
+    document.getElementById('mlQueueCountInline').textContent = '0';
+    return;
+  }
+  const typeLabels = { active: '💬 ACTIVO', recurring: '🔄 RECURRENTE', new: '🆕 NUEVO' };
+  const typeColors = { active: '#f59e0b', recurring: '#3b82f6', new: '#22c55e' };
+  let html = '<div style="font-size:9px;color:#888;padding:6px 8px;border-bottom:1px solid #e0e0e8;font-weight:600;">CONTACTOS (' + contacts.length + ')</div>';
+  contacts.forEach(function (c) {
+    var label = typeLabels[c.contactType] || '🆕 NUEVO';
+    var color = typeColors[c.contactType] || '#22c55e';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-bottom:1px solid #f0f0f5;font-size:10px;">';
+    html += '<span style="color:#1a1a2e;font-weight:500;">#' + c.id + '</span>';
+    html += '<span style="font-size:8px;padding:2px 6px;border-radius:4px;background:' + color + '20;color:' + color + ';font-weight:600;">' + label + '</span>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+  container.style.display = 'block';
+  document.getElementById('mlQueueCountInline').textContent = contacts.length;
+}
+
 // ============ STORAGE ============
 async function saveAllStates() {
   await chrome.storage.local.set({
@@ -2451,7 +3054,6 @@ const r = await chrome.storage.local.get([
       eaterActive = true;
       const btn = document.getElementById('btnEaterToggle');
       if (btn) { btn.textContent = '🧠 EATER: ON'; btn.className = 'eater-btn on'; }
-      document.getElementById('eaterFloatBar').style.display = 'block';
       document.getElementById('eaterSuggestions').style.display = 'block';
     }
     if (r.tess_ids) collectedIds = r.tess_ids;
@@ -3266,6 +3868,8 @@ function triggerScrapeAndSave(profileId) {
 
 // ── Floating Cribs Overlay: muestra datos de Cribs del perfil actual ──
 var cribsOverlayState = { visible: false, dragged: false, profileId: null };
+var cribsOverlayData = null;
+var cribsOverlayTab = 'datos';
 
 function ensureCribsElements() {
   var hasToggle = document.getElementById('tess-cribs-toggle');
@@ -3278,6 +3882,7 @@ function ensureCribsElements() {
 }
 
 function createCribsOverlay() {
+  try {
   if (document.getElementById('tess-cribs-overlay')) return;
   var css = document.createElement('style');
   css.textContent = `
@@ -3300,6 +3905,12 @@ function createCribsOverlay() {
     #tess-cribs-body .cr-value { flex:1; color:#e0e0e0; word-break:break-word; font-size:12px; }
     #tess-cribs-body .cr-empty { color:#555; font-style:italic; }
     .tess-cribs-msg { text-align:center; padding:20px; color:#666; font-size:12px; }
+    .tess-cribs-tabs { display:flex; gap:0; border-bottom:1px solid #2d2d3f; background:#1a1a24; }
+    .tess-cribs-tab { flex:1; padding:6px 8px; text-align:center; font-size:11px; cursor:pointer; color:#888; border:none; background:none; font-family:inherit; transition:all 0.2s; }
+    .tess-cribs-tab:hover { color:#e0e0e0; background:rgba(139,92,246,0.1); }
+    .tess-cribs-tab.active { color:#c4b5fd; border-bottom:2px solid #8b5cf6; background:rgba(139,92,246,0.05); }
+    .tess-cribs-style-list { padding:4px 0; max-height:320px; overflow-y:auto; }
+    .tess-cribs-style-item { padding:6px 8px; margin:2px 0; background:rgba(139,92,246,0.08); border-left:2px solid #8b5cf6; border-radius:3px; font-size:11px; line-height:1.4; color:#d0d0e0; word-break:break-word; }
   `;
   document.head.appendChild(css);
 
@@ -3312,11 +3923,19 @@ function createCribsOverlay() {
 
   var overlay = document.createElement('div');
   overlay.id = 'tess-cribs-overlay';
-  overlay.innerHTML = '<div id="tess-cribs-header"><span id="tess-cribs-title">📋 CRIBS</span><div id="tess-cribs-actions"><button id="tess-cribs-scrape" title="Extraer datos del perfil">⬇ SCRAPE</button><button id="tess-cribs-close">✕</button></div></div><div id="tess-cribs-body"><div class="tess-cribs-msg">Cargando...</div></div>';
+  overlay.innerHTML = '<div id="tess-cribs-header"><span id="tess-cribs-title">📋 CRIBS</span><div id="tess-cribs-actions"><button id="tess-cribs-scrape" title="Extraer datos del perfil">⬇ SCRAPE</button><button id="tess-cribs-close">✕</button></div></div><div class="tess-cribs-tabs"><button class="tess-cribs-tab active" data-tab="datos">📋 Datos</button><button class="tess-cribs-tab" data-tab="estilo">🎭 Estilo</button></div><div id="tess-cribs-body"><div class="tess-cribs-msg">Cargando...</div></div>';
   document.body.appendChild(overlay);
 
   document.getElementById('tess-cribs-close').addEventListener('click', function () { cribsOverlayState.visible = false; overlay.classList.remove('visible'); });
   document.getElementById('tess-cribs-scrape').addEventListener('click', function () { triggerScrapeAndSave(cribsOverlayState.profileId); });
+  overlay.querySelectorAll('.tess-cribs-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      cribsOverlayTab = this.dataset.tab;
+      overlay.querySelectorAll('.tess-cribs-tab').forEach(function (t) { t.classList.remove('active'); });
+      this.classList.add('active');
+      if (cribsOverlayData) renderCribsOverlay(cribsOverlayData);
+    });
+  });
 
   // Draggable: both toggle and overlay move together
   function makeCribsDraggable(el, fromOverlay) {
@@ -3350,14 +3969,47 @@ function createCribsOverlay() {
   }
   makeCribsDraggable(toggle, false);
   makeCribsDraggable(document.getElementById('tess-cribs-header'), true);
+  } catch (e) { console.warn('[CRIBS-OVERLAY] Error:', e.message); }
+}
+
+// Fallback: asegurar que el overlay se cree aunque falle initTesseract
+if (!document.getElementById('tess-cribs-toggle')) {
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(function () { try { createCribsOverlay(); } catch (e) {} }, 2000);
+  } else {
+    document.addEventListener('DOMContentLoaded', function () {
+      setTimeout(function () { try { createCribsOverlay(); } catch (e) {} }, 2000);
+    });
+  }
 }
 
 function renderCribsOverlay(data) {
   ensureCribsElements();
+  cribsOverlayData = data;
   var body = document.getElementById('tess-cribs-body');
   if (!body) return;
   if (!data) { body.innerHTML = '<div class="tess-cribs-msg">No hay datos en Cribs para este perfil</div>'; return; }
-  // Mismos campos que el dashboard table (crib-table-container)
+  
+  if (cribsOverlayTab === 'estilo') {
+    var styleText = data.voice_style || '';
+    if (!styleText.trim()) {
+      body.innerHTML = '<div class="tess-cribs-msg">🎭 No hay estilo capturado aún.<br>Haz click en 🎭 en un mensaje que hayas enviado a este cliente para capturar tu forma de escribir.</div>';
+      return;
+    }
+    var lines = styleText.split('\n').filter(function (l) { return l.trim(); });
+    if (lines.length === 0) {
+      body.innerHTML = '<div class="tess-cribs-msg">🎭 No hay estilo capturado aún.</div>';
+      return;
+    }
+    var html = '<div class="tess-cribs-style-list">';
+    for (var i = lines.length - 1; i >= 0; i--) {
+      html += '<div class="tess-cribs-style-item">' + escapeHtml(lines[i]) + '</div>';
+    }
+    body.innerHTML = html;
+    return;
+  }
+  
+  // Tab 'datos': campos normales (sin voice_style)
   var fields = [
     { label: 'ID Usuario', key: 'profile_id' },
     { label: 'Nombre', key: 'profile_name' },
@@ -3386,11 +4038,9 @@ function renderCribsOverlay(data) {
     var val = data[f.key];
     if (val === null || val === undefined || val === '') val = null;
     var displayVal = val !== null ? String(val) : '—';
-    // Formatear último contacto como fecha
     if (f.key === 'last_contact' && val) {
       try { displayVal = new Date(val).toLocaleDateString(); } catch (e) {}
     }
-    // Resaltar ID Usuario
     if (f.key === 'profile_id' && val) {
       displayVal = '<span style="font-weight:600;color:#c4b5fd;">' + displayVal + '</span>';
     }
