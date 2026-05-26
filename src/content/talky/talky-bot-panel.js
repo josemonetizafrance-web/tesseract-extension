@@ -1885,9 +1885,8 @@ function scanAllOutgoingMessages() {
       msg.classList.add('tess-checked-outgoing');
       const text = (msg.textContent || '').trim();
       if (!text || text.length < 3) continue;
-      // Inyectar 🎭 siempre que el mensaje no tenga ya el botón (chat re-renders pierden el DOM)
+      // Inyectar 🎭 en TODOS los mensajes salientes (chat re-renders pierden el DOM)
       directInjectCaptureButton(msg, text);
-      return;
     }
   }
 }
