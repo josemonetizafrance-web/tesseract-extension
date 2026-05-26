@@ -274,7 +274,8 @@
         } else if (f.type === 'number') {
           html += '<span class="cell-editable" contenteditable="true" data-id="' + entry._id + '" data-field="' + f.key + '" data-type="number" role="textbox">' + escapeHtml(val) + '</span>';
         } else {
-          html += '<span class="cell-editable" contenteditable="true" data-id="' + entry._id + '" data-field="' + f.key + '" role="textbox">' + escapeHtml(val) + '</span>';
+          var extraCls = f.key === 'voice_style' ? ' cell-voice' : '';
+          html += '<span class="cell-editable' + extraCls + '" contenteditable="true" data-id="' + entry._id + '" data-field="' + f.key + '" role="textbox">' + escapeHtml(val) + '</span>';
         }
         html += '</td>';
       });
