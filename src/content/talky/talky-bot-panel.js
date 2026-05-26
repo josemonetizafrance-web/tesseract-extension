@@ -1873,16 +1873,18 @@ function scanAllIncomingMessages() {
 function scanAllOutgoingMessages() {
   if (!clonacionActiva) return;
   const sentSelectors = [
-    '[class*="message-sent"]', '[class*="my-text-message"]', '[class*="my-message"]', '[class*="own"]',
-    '[class*="bubble-right"]', '[class*="msg--sent"]', '[class*="message--own"]',
-    '[class*="right-bubble"]', '.text-message.own', '[class*="msg my"]',
-    '[data-test-id*="msg--sent"]'
+    '[class*="my-text-message"]', '.text-message.own', '[class*="message-sent"]',
+    '[class*="bubble-right"]', '[data-test-id*="msg--sent"]'
   ];
+  const chatContainer = document.querySelector('[class*="messages"], [class*="chat-body"], [class*="conversation-content"], [class*="message-list"], [class*="chat-area"], [class*="msg-container"]');
+  if (!chatContainer) return;
   for (const sel of sentSelectors) {
     const messages = document.querySelectorAll(sel + ':not(.tess-checked-outgoing)');
     if (messages.length === 0) continue;
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
+      // Solo procesar si está dentro del área de mensajes del chat
+      if (!chatContainer.contains(msg)) continue;
       msg.classList.add('tess-checked-outgoing');
       const text = (msg.textContent || '').trim();
       if (!text || text.length < 3) continue;
