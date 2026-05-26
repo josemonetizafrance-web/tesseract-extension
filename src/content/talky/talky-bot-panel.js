@@ -3999,9 +3999,7 @@ function renderCribsOverlay(data) {
     }
     var html = '<div class="tess-cribs-style-list">';
     for (var i = lines.length - 1; i >= 0; i--) {
-      var num = lines.length - i;
-      html += '<div style="margin-bottom:2px;font-size:9px;color:#888;">' + num + '.</div>';
-      html += '<div class="tess-cribs-style-item" style="margin-bottom:8px;">' + escapeHtml(lines[i]) + '</div>';
+      html += '<div class="tess-cribs-style-item">' + escapeHtml(lines[i]) + '</div>';
     }
     body.innerHTML = html;
     return;
