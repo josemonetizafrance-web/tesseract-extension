@@ -1840,8 +1840,8 @@ function scanAllIncomingMessages() {
     '[class*="left-bubble"]', '[class*="replies"] [class*="msg"]',
     '[class*="conversacion"] [class*="texto"]', '[class*="chat-content"] [class*="other"]',
     '[data-test-uid] [class*="text"]:not([class*="my"])',
-    // TalkyTimes específico
-    '.text-message'
+    // TalkyTimes específico — NOTA: no usar .text-message (matchea ambos, entrantes y salientes)
+    '[class*="message"]:not([class*="my"])'
   ];
   
   for (const sel of selectors) {
@@ -1933,7 +1933,7 @@ function checkForIncomingMessages(node) {
     '[class*="conv-msg"]:not([class*="own"])', '[class*="bubble"]:not([class*="right"])',
     '[class*="left-bubble"]', '[class*="replies"] [class*="msg"]',
     '[class*="conversacion"] [class*="texto"]', '[class*="chat-content"] [class*="other"]',
-    '.text-message'
+    '[class*="message"]:not([class*="my"])'
   ];
   
   const nodes = node.nodeType === 1 ? [node, ...node.querySelectorAll('*')] : [];
