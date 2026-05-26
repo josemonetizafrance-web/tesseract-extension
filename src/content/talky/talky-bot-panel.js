@@ -1871,6 +1871,7 @@ function scanAllIncomingMessages() {
 }
 
 function scanAllOutgoingMessages() {
+  if (!clonacionActiva) return;
   const sentSelectors = [
     '[class*="message-sent"]', '[class*="my-text-message"]', '[class*="my-message"]', '[class*="own"]',
     '[class*="bubble-right"]', '[class*="msg--sent"]', '[class*="message--own"]',
@@ -2028,6 +2029,7 @@ function injectEaterTrigger(msgEl, messageText) {
 }
 
 async function captureOperatorStyle(text) {
+  if (!clonacionActiva) { showTessToast('⏸ Clonación está detenida', 'warning'); return; }
   // Obtener ID del CLIENTE (NO del operador)
   var rawId = '';
   // 1. Si _lastCribsPid está seteado, verificar que NO sea el operador
