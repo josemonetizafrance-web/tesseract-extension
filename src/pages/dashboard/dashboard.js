@@ -413,7 +413,8 @@
         // Estilo del operador capturado
         if (entry.voice_style) {
           var styleMsgs = entry.voice_style.split('\n').filter(function (l) { return l.trim(); });
-          html += '<div class="cc-voice-style" style="margin-top:6px;padding:6px 8px;background:rgba(139,92,246,0.1);border-left:2px solid #8b5cf6;border-radius:4px;font-size:10px;line-height:1.4;">\u{1F3AD} <strong>Estilo (' + styleMsgs.length + ' capturas)</strong>';
+          html += '<div class="cc-voice-style" style="margin-top:6px;border-left:2px solid #8b5cf6;border-radius:4px;font-size:10px;line-height:1.4;">\u{1F3AD} <strong>Estilo (' + styleMsgs.length + ' capturas)</strong>';
+          html += '<div style="max-height:120px;overflow-y:auto;padding:6px 8px;background:rgba(139,92,246,0.1);border-radius:0 0 4px 4px;margin-top:4px;">';
           for (var si = styleMsgs.length - 1; si >= 0; si--) {
             var snum = styleMsgs.length - si;
             html += '<div style="margin-top:4px;padding-top:4px;border-top:1px solid rgba(139,92,246,0.15);">';
@@ -421,7 +422,7 @@
             html += '<span>' + escapeHtml(styleMsgs[si]) + '</span>';
             html += '</div>';
           }
-          html += '</div>';
+          html += '</div></div>';
         }
 
         // Notas del sistema de notas
