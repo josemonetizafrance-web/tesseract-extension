@@ -109,11 +109,35 @@ function processMessageText(msgText) {
     console.log('[MAIL-CRIBS] Incoming mail from', senderName);
     injectResponseButton(observer, msgText, header, senderName);
     if (typeof showTessToast === 'function') showTessToast('📬 Carta de ' + senderName + ' detectada', 'info');
-    // Show CRIBS overlay for this contact
-    var contactId = extractProfileIdFromMail(msgText, header, false);
-    if (contactId && typeof fetchCribsForProfile === 'function') {
-      setTimeout(function () { fetchCribsForProfile(contactId); }, 500);
+    // Show CRIBS overlay for this contact — search by ID then by name
+    showCribsForIncomingMail(msgText, header, senderName);
+  }
+}
+
+function showCribsForIncomingMail(msgText, header, senderName) {
+  if (typeof fetchCribsForProfile !== 'function') return;
+  var pid = extractProfileIdFromMail(msgText, header, false);
+  if (pid) { setTimeout(function () { fetchCribsForProfile(pid); }, 500); return; }
+  // Fallback: search CRIBS cache by sender name
+  function findInCache() {
+    if (typeof _cribsLocalCache !== 'undefined' && _cribsLocalCache && _cribsLocalCache.length) {
+      for (var ci = 0; ci < _cribsLocalCache.length; ci++) {
+        if (_cribsLocalCache[ci].profile_name === senderName) {
+          var foundPid = String(_cribsLocalCache[ci].profile_id).replace(/^0+/, '');
+          console.log('[MAIL-CRIBS] Found profile by name:', senderName, '->', foundPid);
+          fetchCribsForProfile(foundPid);
+          return true;
+        }
+      }
     }
+    return false;
+  }
+  if (findInCache()) return;
+  // Load CRIBS and try again
+  if (typeof cribLoadOrRefresh === 'function') {
+    cribLoadOrRefresh(false).then(function () {
+      if (!findInCache()) console.log('[MAIL-CRIBS] Contact not in CRIBS:', senderName);
+    });
   }
 }
 
