@@ -253,17 +253,36 @@ function injectCaptureButton(observer, msgText, header) {
     if (!capturedText) { showTessToast('⚠ No se encontró texto de la carta', 'warning'); return; }
     this._processing = true;
     this.style.opacity = '0.3';
-    var profileId = extractProfileIdFromMail(msgText, header, true);
-    if (!profileId) { showTessToast('⚠ No se pudo identificar el perfil', 'warning'); this._processing = false; this.style.opacity = '0.5'; return; }
-    // Try to get profile name from avatar alt or other elements
+    // Determine the client profile (recipient for outgoing, sender for incoming)
+    var profileId = null;
     var profileName = '';
-    var avatar = header.querySelector('img[alt]:not([alt=""])');
-    if (avatar) profileName = (avatar.alt || '').trim();
-    if (!profileName) {
-      var nameEl = header.querySelector(TALK_Y.MAIL_HEADER_NAME);
-      if (nameEl) profileName = (nameEl.textContent || '').trim();
+    var senderName = (header.querySelector(TALK_Y.MAIL_HEADER_NAME) || {}).textContent || '';
+    if (senderName.trim() === TALK_Y.MAIL_OPERATOR_NAME) {
+      // Outgoing mail → capture to RECIPIENT's CRIBS entry
+      var recipientEl = document.querySelector('.send-title .name.text, [data-test-id*="send-title"] .name, .send-wrap .name');
+      if (recipientEl) profileName = (recipientEl.textContent || '').trim();
+      if (profileName && typeof _cribsLocalCache !== 'undefined' && _cribsLocalCache) {
+        for (var ci = 0; ci < _cribsLocalCache.length; ci++) {
+          if (_cribsLocalCache[ci].profile_name === profileName) {
+            profileId = String(_cribsLocalCache[ci].profile_id).replace(/^0+/, '');
+            break;
+          }
+        }
+      }
     }
-    if (profileName === TALK_Y.MAIL_OPERATOR_NAME) profileName = '';
+    if (!profileId) {
+      profileId = extractProfileIdFromMail(msgText, header, true);
+    }
+    if (!profileId) { showTessToast('⚠ No se pudo identificar el perfil', 'warning'); this._processing = false; this.style.opacity = '0.5'; return; }
+    if (!profileName) {
+      var avatar = header.querySelector('img[alt]:not([alt=""])');
+      if (avatar) profileName = (avatar.alt || '').trim();
+      if (!profileName) {
+        var nameEl = header.querySelector(TALK_Y.MAIL_HEADER_NAME);
+        if (nameEl) profileName = (nameEl.textContent || '').trim();
+      }
+      if (profileName === TALK_Y.MAIL_OPERATOR_NAME) profileName = '';
+    }
     sendLetterStyleToCribs(profileId, capturedText, profileName).then(function () {
       trigger._processing = false;
       trigger.style.opacity = '0.5';
