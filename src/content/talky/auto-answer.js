@@ -69,7 +69,7 @@ function isContactPinnedOrSavedAA(contactEl) {
   try {
     const text = contactEl.textContent.toLowerCase();
     if (text.includes('pin') || text.includes('saved') || text.includes('fijado') || text.includes('guardado')) return true;
-    if (contactEl.querySelector('[class*="pin"], [class*="saved"], [class*="star"], [class*="fixed"], [src*="pin"], [src*="star"], [data-pin], [data-saved]')) return true;
+    if (contactEl.querySelector(TALK_Y.PINNED_INDICATORS)) return true;
     return false;
   } catch (e) { return false; }
 }
@@ -88,7 +88,8 @@ const DEFAULT_AA_CONFIG = {
   maxDaily: 50,
   respondedToday: 0,
   lastResetDate: '',
-  scanSources: ['messages-active', 'contact-list'] // Para barridos de saludos
+  scanSources: ['messages-active', 'contact-list'], // Para barridos de saludos
+  weBelieve: { enabled: false, response: 'Hello! How are you?' }
 };
 
 let aaConfig = null;
@@ -99,6 +100,8 @@ let aaLastProfileId = '';
 let aaProfileCooldowns = {};
 let aaPendingSave = false;
 let aaSaveTimer = null;
+let weBelieveObserver = null;
+let weBelieveRespondedKeys = new Set();
 
 function cloneAAConfig(cfg) {
   return JSON.parse(JSON.stringify(cfg || DEFAULT_AA_CONFIG));
@@ -210,7 +213,7 @@ function _extractIdFromTextAA(text) {
 function getIdsFromActiveLimitsDOM() {
   const ids = new Set();
   try {
-    const allAnchors = document.querySelectorAll('a[href]');
+    const allAnchors = document.querySelectorAll(TALK_Y.ALL_LINKS);
     allAnchors.forEach(a => {
       const href = a.href || a.getAttribute('href') || '';
       const match = href.match(/\/(\d{6,15})(?:[/?#]|$)/);
@@ -230,10 +233,10 @@ function getIdsFromActiveLimitsDOM() {
 function getIdsFromMessagesActiveDOM() {
   const ids = new Set();
   try {
-    const msgAreas = document.querySelectorAll('[class*="message"], [class*="conversation"], [class*="inbox"], [class*="mailbox"]');
+    const msgAreas = document.querySelectorAll(TALK_Y.MESSAGE_AREAS);
     for (const area of msgAreas) {
       if (isContactPinnedOrSavedAA(area)) continue;
-      const links = area.querySelectorAll('a[href]');
+      const links = area.querySelectorAll(TALK_Y.ALL_LINKS);
       for (const link of links) {
         const href = link.href || '';
         const match = href.match(/\/(\d{6,15})(?:[/?#]|$)/);
@@ -249,7 +252,7 @@ function getIdsFromMessagesActiveDOM() {
 function getIdsFromAllContactsDOM() {
   const ids = new Set();
   try {
-    const allLinks = document.querySelectorAll('a[href]');
+    const allLinks = document.querySelectorAll(TALK_Y.ALL_LINKS);
     for (const link of allLinks) {
       const parent = link.closest('[class*="contact"], [class*="member"], [class*="profile"], [class*="item"]');
       if (parent && isContactPinnedOrSavedAA(parent)) continue;
@@ -358,8 +361,8 @@ function getProfileContext(profileId) {
     const el = document.querySelector(sel);
     if (el) {
       const bio = el.querySelector('[class*="bio"], [class*="about"], [class*="description"]');
-      const name = el.querySelector('[class*="name"], [class*="title"]');
-      const loc = el.querySelector('[class*="location"], [class*="city"]');
+      const name = el.querySelector(TALK_Y.PROFILE_NAME);
+      const loc = el.querySelector(TALK_Y.PROFILE_LOCATION);
 
       if (name) context += ' Nombre: ' + (name.textContent || '').trim();
       if (bio) context += ' Bio: ' + (bio.textContent || '').trim();
@@ -410,7 +413,7 @@ function getCurrentChatProfileId() {
 function findProfileLink(profileId) {
   // Intentar enlaces directos
   try {
-    const allLinks = document.querySelectorAll('a[href]');
+    const allLinks = document.querySelectorAll(TALK_Y.ALL_LINKS);
     for (const link of allLinks) {
       const href = link.href || '';
       if (href.includes(profileId)) return link;
@@ -421,7 +424,7 @@ function findProfileLink(profileId) {
   try {
     const elements = document.querySelectorAll(`[data-id="${profileId}"], [data-user-id="${profileId}"], [data-contact-id="${profileId}"]`);
     if (elements.length > 0) {
-      const link = elements[0].querySelector('a[href]') || elements[0];
+      const link = elements[0].querySelector(TALK_Y.ALL_LINKS) || elements[0];
       return link;
     }
   } catch (e) {}
@@ -493,7 +496,7 @@ function findSendButton() {
     const el = document.querySelector(sel);
     if (el) return el;
   }
-  const allButtons = document.querySelectorAll('button, [role="button"]');
+  const allButtons = document.querySelectorAll(TALK_Y.ALL_BUTTONS);
   for (const btn of allButtons) {
     const text = (btn.textContent || '').toLowerCase().trim();
     if (text === 'send' || text === 'enviar' || text === '\u2192' || text === '\u25b6') {
@@ -549,7 +552,7 @@ async function sendResponse(text) {
   const inputValueAfter = input.value || input.textContent || '';
   if (inputValueAfter === inputValueBefore && inputValueBefore !== '') {
     console.warn('[AA] Mensaje no se envió - input sin cambios');
-    const altBtn = document.querySelector('[class*="send"]:not(button), [class*="submit"]:not(button)');
+    const altBtn = document.querySelector(TALK_Y.SEND_BTN_ALT_FALLBACK);
     if (altBtn) altBtn.click();
     await sleep(1500);
     const inputValueAfter2 = input.value || input.textContent || '';
@@ -590,7 +593,7 @@ function startAAObserver() {
   if (aaObserver) aaObserver.disconnect();
 
   // Observar solo contenedores de notificaciones, no todo el body
-  const targetNode = document.querySelector('[class*="notification"], [class*="alert"], [class*="toast"], [class*="message-list"], [class*="inbox"]') || document.body;
+  const targetNode = document.querySelector(TALK_Y.NOTIFICATION_CONTAINER) || document.body;
   if (!targetNode) return;
 
   let debounceTimer = null;
@@ -709,7 +712,7 @@ function extractSenderFromNode(node) {
   }
 
   // Buscar en hrefs
-  const links = node.querySelectorAll('a[href]');
+  const links = node.querySelectorAll(TALK_Y.ALL_LINKS);
   for (const link of links) {
     const href = link.href || link.getAttribute('href') || '';
     const match = href.match(/\/(\d{6,15})(?:[/?#]|$)/);
@@ -738,6 +741,57 @@ function stopAAObserver() {
   }
 }
 
+// ============ WE BELIEVE SYSTEM MESSAGE DETECTION ============
+function startWeBelieveObserver() {
+  stopWeBelieveObserver();
+  const chatArea = document.querySelector(TALK_Y.PAGE_CHAT_BODY);
+  if (!chatArea) return;
+  weBelieveObserver = new MutationObserver((mutations) => {
+    if (!aaConfig || !aaConfig.weBelieve?.enabled) return;
+    for (const mutation of mutations) {
+      if (mutation.type !== 'childList') continue;
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType !== 1) continue;
+        const msgEl = node.matches(TALK_Y.SYSTEM_MSG) ? node : node.querySelector(TALK_Y.SYSTEM_MSG);
+        if (!msgEl) continue;
+        const text = (msgEl.textContent || '').trim();
+        if (!text.toLowerCase().includes((TALK_Y.SYSTEM_MSG_TEXT || 'we believe').toLowerCase())) continue;
+        const key = text.slice(0, 80);
+        if (weBelieveRespondedKeys.has(key)) continue;
+        weBelieveRespondedKeys.add(key);
+        console.log('[AA] We Believe detected, responding...');
+        sendWeBelieveResponse();
+      }
+    }
+  });
+  weBelieveObserver.observe(chatArea, { childList: true, subtree: true });
+  console.log('[AA] We Believe observer started');
+}
+
+function stopWeBelieveObserver() {
+  if (weBelieveObserver) {
+    weBelieveObserver.disconnect();
+    weBelieveObserver = null;
+  }
+}
+
+async function sendWeBelieveResponse() {
+  const input = document.querySelector(TALK_Y.CHAT_TEXTAREA) || document.querySelector(TALK_Y.CHAT_INPUT_ID) || document.querySelector(TALK_Y.ANY_TEXTAREA);
+  const sendBtn = document.querySelector(TALK_Y.SEND_BTN_CLASS) || document.querySelector(TALK_Y.SEND_BTN_ID) || document.querySelector(TALK_Y.SEND_BTN_ARIA);
+  if (!input || !sendBtn) return;
+  const text = aaConfig?.weBelieve?.response || 'Hello! 😊';
+  if (typeof sendChatMessage === 'function') {
+    sendChatMessage(text);
+    return;
+  }
+  input.value = text;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(1500 + getRandomDelay(aaConfig.delay.min, aaConfig.delay.max));
+  sendBtn.click();
+  console.log('[AA] We Believe response sent');
+}
+
 function isAActive() {
   return aaConfig && aaConfig.enabled;
 }
@@ -748,6 +802,8 @@ async function setAAState(enabled) {
   await saveAAConfig();
   if (enabled) startAAObserver();
   else stopAAObserver();
+  if (enabled && aaConfig.weBelieve?.enabled) startWeBelieveObserver();
+  else stopWeBelieveObserver();
 }
 
 function getAAConfig() {
@@ -794,11 +850,20 @@ async function updateAAScanSources(sources) {
   await saveAAConfig();
 }
 
+async function updateAAWeBelieve(config) {
+  await loadAAConfig();
+  aaConfig.weBelieve = Object.assign({}, aaConfig.weBelieve || { enabled: false, response: '' }, config);
+  await saveAAConfig();
+  if (config.enabled === true && aaConfig.enabled) startWeBelieveObserver();
+  else if (config.enabled === false) stopWeBelieveObserver();
+}
+
 // ============ Init ============
 async function initAutoAnswer() {
   await loadAAConfig();
   await initAAHistoryFromCollected();
   if (aaConfig.enabled) startAAObserver();
+  if (aaConfig.enabled && aaConfig.weBelieve?.enabled) startWeBelieveObserver();
   console.log('[AA] Module initialized, enabled:', aaConfig.enabled);
 }
 
@@ -836,4 +901,8 @@ window._updateAADelay = updateAADelay;
 window._updateAAUseAI = updateAAUseAI;
 window._updateAAMaxDaily = updateAAMaxDaily;
 window._updateAAScanSources = updateAAScanSources;
+window._addToAABlacklist = function(id) { if (id && !aaBlacklist.includes(String(id))) { aaBlacklist.push(String(id)); console.log('[AA] Added to blacklist:', id); } };
 window._setAAState = setAAState;
+window._updateAAWeBelieve = updateAAWeBelieve;
+window._startWeBelieveObserver = startWeBelieveObserver;
+window._stopWeBelieveObserver = stopWeBelieveObserver;

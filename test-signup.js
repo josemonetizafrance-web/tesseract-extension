@@ -1,6 +1,12 @@
 const http = require('http');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, 'server', '.env.test') });
 
-const data = JSON.stringify({ email: 'newuser@test.com', password: 'Test1234*+' });
+var testEmail = process.env.TEST_NEW_USER_EMAIL || 'newuser@test.com';
+var testPass = process.env.TEST_NEW_USER_PASSWORD || 'Test1234*+';
+console.log('[TEST] Signing up:', testEmail);
+
+const data = JSON.stringify({ email: testEmail, password: testPass });
 const options = {
   hostname: 'localhost',
   port: 3000,

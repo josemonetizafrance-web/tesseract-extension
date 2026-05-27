@@ -109,15 +109,9 @@ function createMailingPanel() {
     <p style="font-size:8px;color:#666;margin-top:4px;">Programa el envio de cartas por dias, semanas o meses. Se ejecutara automaticamente segun la frecuencia.</p>
   </div>
 
-  <div class="ml-grid-2">
-    <div class="ml-section">
-      <h4>PLANTILLA NUEVOS CONTACTOS</h4>
-      <textarea id="mlTemplateNew" placeholder="Mensaje para nuevos contactos...">Hola! Vi tu perfil y me pareciste interesante. ¿Te gustaría conversar?</textarea>
-    </div>
-    <div class="ml-section">
-      <h4>PLANTILLA CONTACTOS RECURRENTES</h4>
-      <textarea id="mlTemplateRecurring" placeholder="Mensaje para contactos que ya respondieron...">Hola! ¿Cómo estás? Hace tiempo que no hablamos, me encantaría retomar la conversación.</textarea>
-    </div>
+  <div class="ml-section">
+    <h4>PLANTILLA DE CARTA</h4>
+    <textarea id="mlTemplateNew" placeholder="Escribe la carta que se enviara a todos los contactos..." style="height:70px;">Hola! Vi tu perfil y me pareciste interesante. ¿Te gustaría conversar?</textarea>
   </div>
 
   <div class="ml-section">
@@ -220,8 +214,7 @@ function populateMLPanel() {
   document.getElementById('mlScheduleStart').value = cfg.scheduleStartDate || '';
   document.getElementById('mlScheduleFreq').value = cfg.scheduleFrequency || 'daily';
   document.getElementById('mlScheduleCycles').value = cfg.scheduleCycles || 30;
-  document.getElementById('mlTemplateNew').value = cfg.templatesNew || '';
-  document.getElementById('mlTemplateRecurring').value = cfg.templatesRecurring || '';
+  document.getElementById('mlTemplateNew').value = cfg.templatesNew || cfg.messageTemplate || '';
   document.getElementById('mlBlockDialogue').checked = cfg.blockActiveDialogue !== false;
   document.getElementById('mlDialogueHours').value = cfg.activeDialogueHours || 48;
   document.getElementById('mlSentTodayVal').textContent = cfg.sentToday || 0;
@@ -256,7 +249,7 @@ async function saveMLPanelConfigWrapper() {
     cfg.scheduleCycles = parseInt(document.getElementById('mlScheduleCycles').value) || 30;
     cfg.scheduleRemaining = parseInt(document.getElementById('mlScheduleCycles').value) || 30;
     cfg.templatesNew = document.getElementById('mlTemplateNew').value;
-    cfg.templatesRecurring = document.getElementById('mlTemplateRecurring').value;
+    cfg.messageTemplate = document.getElementById('mlTemplateNew').value;
     cfg.blockActiveDialogue = !!document.getElementById('mlBlockDialogue').checked;
     cfg.activeDialogueHours = parseInt(document.getElementById('mlDialogueHours').value) || 48;
 
@@ -284,7 +277,7 @@ function getDefaultMailingConfig() {
     useAI: false, useEmailSection: false, respectQuietHours: true, workingHours: { start: 8, end: 22 },
     delay: { min: 3000, max: 7000 }, skipPinned: true,
     scheduleEnabled: false, scheduleStartDate: '', scheduleFrequency: 'daily', scheduleCycles: 30, scheduleRemaining: 30,
-    templatesNew: '', templatesRecurring: '', blockActiveDialogue: true, activeDialogueHours: 48
+    templatesNew: '', blockActiveDialogue: true, activeDialogueHours: 48
   };
 }
 
@@ -345,9 +338,10 @@ async function executeMailingFromPanel() {
 
   try {
     const result = await window._executeMailingRound();
-    infoEl.textContent = 'Completado: ' + result.sent + ' enviados, ' + result.skipped + ' saltados, ' + result.blacklisted + ' blacklist' + (result.activeSkipped ? ', ' + result.activeSkipped + ' dialogo activo' : '');
+    var totalSent = typeof window._getMailingConfigDirect === 'function' ? (window._getMailingConfigDirect().sentToday || 0) : result.sent;
+    infoEl.textContent = 'Ronda completada: ' + result.sent + ' enviados ahora, ' + totalSent + ' total hoy | ' + result.skipped + ' saltados, ' + result.blacklisted + ' blacklist' + (result.activeSkipped ? ', ' + result.activeSkipped + ' dialogo activo' : '');
     infoEl.style.display = 'block';
-    document.getElementById('mlSentTodayVal').textContent = result.sent;
+    document.getElementById('mlSentTodayVal').textContent = totalSent;
   } catch (e) {
     errEl.textContent = 'Error: ' + e.message;
     errEl.style.display = 'block';

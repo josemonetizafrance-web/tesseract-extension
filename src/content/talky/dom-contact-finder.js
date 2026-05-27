@@ -40,11 +40,11 @@ function getIdsFromActiveLimits() {
 
   // Fallback: buscar cualquier contenedor que diga "ACTIVE" o "LIMITS"
   try {
-    const activeSections = document.querySelectorAll('[class*="active"], [id*="active"]');
+    const activeSections = document.querySelectorAll(TALK_Y.ACTIVE_SECTION);
     for (const section of activeSections) {
       const sectionText = (section.textContent || '').toLowerCase();
       if (sectionText.includes('active') || sectionText.includes('limit')) {
-        const links = section.querySelectorAll('a[href]');
+        const links = section.querySelectorAll(TALK_Y.ALL_LINKS);
         for (const link of links) {
           const href = link.href || '';
           const match = href.match(/\/(\d{6,15})(?:[/?#]|$)/);
@@ -59,7 +59,7 @@ function getIdsFromActiveLimits() {
   // Fallback ultimo: buscar TODOS los links con IDs numéricos de 6-15 dígitos
   if (ids.size === 0) {
     try {
-      const allLinks = document.querySelectorAll('a[href]');
+      const allLinks = document.querySelectorAll(TALK_Y.ALL_LINKS);
       for (const link of allLinks) {
         const href = link.href || '';
         const match = href.match(/\/(\d{6,15})(?:[/?#]|$)/);
@@ -107,7 +107,7 @@ function getIdsFromMessagesActive() {
   try {
     const containers = document.querySelectorAll('[class*="message"], [id*="message"], [class*="mailbox"], [class*="inbox"]');
     for (const container of containers) {
-      const links = container.querySelectorAll('a[href]');
+      const links = container.querySelectorAll(TALK_Y.ALL_LINKS);
       for (const link of links) {
         const href = link.href || '';
         const match = href.match(/\/(\d{6,15})(?:[/?#]|$)/);
@@ -119,7 +119,7 @@ function getIdsFromMessagesActive() {
   // Fallback: TODO a la página
   if (ids.size === 0) {
     try {
-      const allLinks = document.querySelectorAll('a[href]');
+      const allLinks = document.querySelectorAll(TALK_Y.ALL_LINKS);
       for (const link of allLinks) {
         const href = link.href || '';
         const match = href.match(/\/(\d{6,15})(?:[/?#]|$)/);
@@ -176,7 +176,7 @@ function getIdsFromContactList() {
 
   // Buscar IDs en elementos de lista
   try {
-    const listItems = document.querySelectorAll('[class*="contact"], [class*="member"], [class*="user-item"]');
+    const listItems = document.querySelectorAll(TALK_Y.CONTACT_ITEMS);
     for (const item of listItems) {
       const idsInItem = (item.textContent || '').match(/\b\d{6,15}\b/g);
       if (idsInItem) idsInItem.forEach(id => ids.add(id));

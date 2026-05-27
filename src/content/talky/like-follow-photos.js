@@ -79,7 +79,7 @@ function lfpIsBlocked() {
 }
 
 function lfpPhotoViewerOpen() {
-  return !!(document.querySelector('.photo-viewer') || document.querySelector('[data-test-id*="photo-view"]') || document.querySelector('[role="dialog"]') || document.querySelector('button[aria-label="Close"]') || document.querySelector('[class*="gallery"]') || document.querySelector('.modal-overlay'));
+  return !!(document.querySelector(TALK_Y.PHOTO_VIEWER));
 }
 
 function lfpFindNextPage() {
@@ -93,7 +93,7 @@ function lfpFindNextPage() {
   btn = Array.from(document.querySelectorAll('a, button')).find(function (el) { var t = el.textContent && el.textContent.trim(); return t === 'Next' || t === 'Siguiente'; });
   if (btn) return btn;
   // Fallback: buscar cualquier botón de paginación numérica
-  var allBtns = document.querySelectorAll('[data-test-id*="change-page-n"]');
+  var allBtns = document.querySelectorAll(TALK_Y.NEXT_PAGE_BTNS);
   for (var i = 0; i < allBtns.length; i++) {
     var match = allBtns[i].getAttribute('data-test-id').match(/change-page-n\s+(\d+)/);
     if (match && parseInt(match[1]) === np) return allBtns[i];
@@ -108,7 +108,7 @@ async function lfpGoBack() {
   if (window.location.href.includes('/search/all') || window.location.href.includes('/search?')) return;
   try { window.history.back(); } catch (e) {}
   for (var w = 0; w < 100 && lfpActive; w++) {
-    if (document.querySelectorAll('img.person-card__photo, img.photo-card, .person-card, [data-test-id*="person-card"]').length > 0) return;
+    if (document.querySelectorAll(TALK_Y.PERSON_CARD).length > 0) return;
     await lfpSleep(100);
   }
   // Fallback: save sweep state before hard navigation so it can resume
@@ -120,7 +120,7 @@ async function lfpGoBack() {
   } catch (e) {}
   try { window.location.href = '/search/all'; } catch (e) {}
   for (var w2 = 0; w2 < 100 && lfpActive; w2++) {
-    if (document.querySelectorAll('img.person-card__photo, img.photo-card, .person-card, [data-test-id*="person-card"]').length > 0) return;
+    if (document.querySelectorAll(TALK_Y.PERSON_CARD).length > 0) return;
     await lfpSleep(200);
   }
 }
@@ -129,7 +129,7 @@ async function lfpGoBack() {
 async function lfpDoPhotos() {
   if (!lfpActive) return;
   await lfpSleep(200);
-  var fp = document.querySelector('[data-test-id="file:media click:photo-view"]') || document.querySelector('[data-test-id*="photo-view"]') || document.querySelector('.profile-photo-wrap img') || document.querySelector('[class*="profile"] img[src*="photo"]');
+  var fp = document.querySelector(TALK_Y.PHOTO_IMAGE);
   if (!fp) return;
   try { (fp.tagName === 'A' ? fp : (fp.closest('a') || fp)).click(); } catch (e) { try { fp.click(); } catch (e2) {} }
   await lfpSleep(1200);
@@ -138,17 +138,17 @@ async function lfpDoPhotos() {
   var limit = Date.now() + 8000;
   var idx = 0;
   while (idx < 5 && lfpActive && Date.now() < limit) {
-    var btn = document.querySelector('button[data-test-id*="set-like"]') || document.querySelector('button.gallery-footer__like_narrow') || document.querySelector('button[data-test-id*="on-like"]') || document.querySelector('button[aria-label*="Like"]') || (function () { var pl = document.querySelector('p.label'); return pl && pl.closest('button'); })();
-    if (btn && !btn.getAttribute('aria-pressed') && !btn.matches('[data-type="filled"],[data-type="solid"]')) {
+    var btn = document.querySelector('button.gallery-footer__like_narrow') || document.querySelector(TALK_Y.LIKE_BTN) || document.querySelector('.gallery-footer button:not([aria-label*="Next"]):not([aria-label*="next"]):not([aria-label*="Close"]):not([aria-label*="close"])');
+    if (btn && btn.getAttribute('aria-pressed') !== 'true' && !btn.matches('[data-type="filled"],[data-type="solid"]')) {
       try { btn.click(); lfpStats.photoLikes++; } catch (e) {}
       await lfpSleep(200);
     }
     await lfpSleep(400);
     if (!lfpPhotoViewerOpen()) break;
-    var nx = document.querySelector('button[aria-label*="Next"]') || document.querySelector('button[aria-label*="next"]') || document.querySelector('button[aria-label*="Siguiente"]') || document.querySelector('button[data-test-id*="next"]');
+    var nx = document.querySelector(TALK_Y.NEXT_PHOTO_BTN);
     if (nx && !nx.disabled) { try { nx.click(); await lfpSleep(600); idx++; } catch (e) { break; } } else break;
   }
-  var cl = document.querySelector('button[aria-label="Close"]') || document.querySelector('[aria-label*="close"]');
+  var cl = document.querySelector(TALK_Y.CLOSE_BTN);
   if (cl) { try { cl.click(); } catch (e) { try { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true })); } catch (e2) {} } }
   else { try { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true })); } catch (e) {} }
   await lfpSleep(500);
@@ -164,19 +164,21 @@ async function lfpProcessOne() {
       lfpToast('\u23ED\uFE0F Bloqueado', 'info');
       return;
     }
-    if (document.querySelectorAll('button[data-test-id*="on-like"], button[data-test-id*="on-follow"]').length > 0) break;
+    if (document.querySelectorAll(TALK_Y.LIKE_FOLLOW_BTN).length > 0) break;
     var bt = Array.from(document.querySelectorAll('button, a[role="button"]')).find(function (el) { var t = (el.textContent || '') + (el.getAttribute('aria-label') || ''); return /like|follow|wink/i.test(t); });
     if (bt) break;
     await lfpSleep(150);
   }
   if (!lfpActive) return;
+  lfpStats.processed++;
+  if (typeof updateStats === 'function') updateStats();
 
   // Like
   var lb = document.querySelector('button[data-test-id*="on-like"]');
   if (lb) {
     var svg = lb.querySelector('svg');
     if ((svg && svg.id === 'HeartOutline') || lb.getAttribute('data-selected') === 'false') {
-      try { lb.scrollIntoView({ block: 'center' }); await lfpSleep(80); lb.click(); lfpStats.likes++; lfpStats.processed++; if (typeof botStats !== 'undefined') { botStats.likesGiven++; botStats.contactsProcessed++; } } catch (e) {}
+      try { lb.scrollIntoView({ block: 'center' }); await lfpSleep(80); lb.click(); lfpStats.likes++; if (typeof botStats !== 'undefined') { botStats.likesGiven++; botStats.contactsProcessed++; } } catch (e) {}
       if (typeof updateStats === 'function') updateStats();
       await lfpSleep(120);
     }
@@ -184,7 +186,7 @@ async function lfpProcessOne() {
   if (!lfpActive) return;
 
   // Follow
-  var fb = document.querySelector('button[data-test-id*="on-follow"]');
+  var fb = document.querySelector(TALK_Y.FOLLOW_BTN);
   if (fb) {
     var ft = (fb.textContent || '').toLowerCase() + (fb.getAttribute('aria-label') || '').toLowerCase();
     if (!/\b(following|siguiendo|unfollow)\b/.test(ft) && !fb.querySelector('svg[id*="Check"]')) {
@@ -250,7 +252,7 @@ executeLFP = window.executeLFP = async function () {
   if (!resumed) {
     // Recovery: if on a profile page, process it first
     if (!window.location.href.includes('/search/all') && !window.location.href.includes('/search?')) {
-      var isP = document.querySelectorAll('button[data-test-id*="on-like"], button[data-test-id*="on-follow"]').length > 0;
+      var isP = document.querySelectorAll(TALK_Y.LIKE_FOLLOW_BTN).length > 0;
       if (isP) {
         lfpToast('\uD83D\uDD04 Recuperando perfil...', 'success');
         var recId = (window.location.href.match(/\/(\d{6,15})(?:[/?#]|$)/) || [])[1];
@@ -266,7 +268,7 @@ executeLFP = window.executeLFP = async function () {
   var maxPages = 25;
 
   while (lfpActive) {
-    var hasC = document.querySelectorAll('img.person-card__photo, img.photo-card, .person-card, [data-test-id*="person-card"]').length > 0;
+    var hasC = document.querySelectorAll(TALK_Y.PERSON_CARD).length > 0;
     if (!hasC) {
       var pg = lfpFindNextPage();
       if (pg) { try { pg.click(); } catch (e) {} var nextCp = parseInt(localStorage.getItem('tessSearchPage') || '1') + 1; localStorage.setItem('tessSearchPage', String(nextCp)); await lfpSleep(1600); continue; }
@@ -283,7 +285,7 @@ executeLFP = window.executeLFP = async function () {
       var pid = imgs[ii].dataset.userId || imgs[ii].src || (imgs[ii].closest('[data-test-id*="person-card"]') ? imgs[ii].closest('[data-test-id*="person-card"]').dataset.userId : null);
       if (!pid || lfpVisited.indexOf(pid) !== -1) continue;
       var card = imgs[ii].closest('.person-card, [data-test-id*="person-card"], [data-test-id*="profile-card"]');
-      var heart = card ? card.querySelector('button[data-test-id*="like-profile"]') : null;
+      var heart = card ? card.querySelector(TALK_Y.CARD_HEART) : null;
       var svg = heart ? heart.querySelector('svg') : null;
       if (!svg || svg.id === 'HeartOutline') { toProcess = imgs[ii]; break; }
     }
@@ -334,4 +336,5 @@ function lfpUpdateUI() {
 
 lfpTogglePause = window.lfpTogglePause = function () { if (!lfpActive) return; lfpPaused = !lfpPaused; lfpUpdateUI(); if (typeof saveAllStates === 'function') saveAllStates(); };
 window.lfpActive = false;
+window._addToLFPBlacklist = function(id) { if (id && !lfpBlacklist.includes(String(id))) { lfpBlacklist.push(String(id)); console.log('[LFP] Added to blacklist:', id); } };
 window.lfpStats = lfpStats;

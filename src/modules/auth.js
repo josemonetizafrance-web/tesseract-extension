@@ -1,8 +1,9 @@
-// auth.js - TESSERACT v23.0 (Backend Integrado)
+// auth.js - TESSERACT v24.0 (Backend Integrado)
 // NOTA: Este archivo se carga como script normal (no ES module)
 // Las funciones se exponen globalmente para uso desde otros scripts
 
 var TESSERACT_API = 'https://tesseract-jblo.onrender.com';
+var _refreshLock = false;
 
 function getToken() {
   return new Promise(function (resolve) {
@@ -10,6 +11,44 @@ function getToken() {
       chrome.storage.local.get(['tess_jwt'], function (r) { resolve(r.tess_jwt || null); });
     } catch (e) { resolve(null); }
   });
+}
+
+function getRefreshToken() {
+  return new Promise(function (resolve) {
+    try {
+      chrome.storage.local.get(['tess_refresh'], function (r) { resolve(r.tess_refresh || null); });
+    } catch (e) { resolve(null); }
+  });
+}
+
+async function refreshAccessToken() {
+  if (_refreshLock) return null;
+  _refreshLock = true;
+  try {
+    var refreshToken = await getRefreshToken();
+    if (!refreshToken) return null;
+
+    var res = await fetch(TESSERACT_API + '/api/tess/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: refreshToken })
+    });
+
+    if (!res.ok) {
+      chrome.storage.local.remove(['tess_jwt', 'tess_refresh']);
+      try { chrome.runtime.sendMessage({ action: 'SESSION_EXPIRED' }); } catch (e) {}
+      return null;
+    }
+
+    var data = await res.json();
+    await chrome.storage.local.set({ tess_jwt: data.token, tess_refresh: data.refreshToken });
+    return data.token;
+  } catch (e) {
+    console.warn('[AUTH] refresh error:', e.message);
+    return null;
+  } finally {
+    _refreshLock = false;
+  }
 }
 
 async function apiFetch(path, options) {
@@ -31,14 +70,17 @@ async function apiFetch(path, options) {
     clearTimeout(timeoutId);
   }
 
-  if (res.status === 401) {
-    try {
-      var body = await res.json();
-      if (body.code === 'TOKEN_EXPIRED') {
-        await chrome.storage.local.remove('tess_jwt');
-        try { chrome.runtime.sendMessage({ action: 'SESSION_EXPIRED' }); } catch (e) {}
-      }
-    } catch (e) {}
+  if (res.status === 401 && token) {
+    var newToken = await refreshAccessToken();
+    if (newToken) {
+      headers['Authorization'] = 'Bearer ' + newToken;
+      try {
+        res = await fetch(TESSERACT_API + path, { ...options, headers: headers });
+      } catch (e) {}
+      if (res.ok) return res.json();
+    }
+    chrome.storage.local.remove(['tess_jwt', 'tess_refresh']);
+    try { chrome.runtime.sendMessage({ action: 'SESSION_EXPIRED' }); } catch (e) {}
     return null;
   }
 
@@ -93,7 +135,7 @@ async function logout() {
   try {
     chrome.runtime.sendMessage({ action: 'LOGOUT' });
   } catch (e) {}
-  window.location.href = chrome.runtime.getURL('src/pages/login/login.html');
+  window.location.href = chrome.runtime.getURL('dist/pages/login/login.html');
 }
 
 function formatTimeRemaining(ms) {

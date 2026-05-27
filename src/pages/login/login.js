@@ -19,7 +19,7 @@ function initBouncingLogo() {
     const img = document.createElement('img');
     img.src = src.src;
     img.className = 'bouncing-logo-instance';
-    img.style.cssText = 'position:fixed;z-index:0;pointer-events:none;width:120px;height:auto;opacity:0.15;will-change:left,top;';
+    img.style.cssText = 'position:fixed;z-index:0;pointer-events:none;width:120px;height:auto;opacity:0.08;will-change:left,top;';
     document.body.appendChild(img);
     const h = img.naturalHeight * (120 / img.naturalWidth) || 120;
     logos.push({ el: img, x, y, vx, vy, w: 120, h });
@@ -115,8 +115,9 @@ async function doLogin() {
     }
 
     if (data.token) {
-      await chrome.storage.local.set({
+      var items = {
         tess_jwt: data.token,
+        tess_refresh: data.refreshToken || '',
         tess_auth: true,
         tess_user: data.user.email,
         user_email: data.user.email,
@@ -126,11 +127,12 @@ async function doLogin() {
         user_office: data.user.office || null,
         isApproved: data.user.isApproved,
         subscriptionStatus: data.user.role
-      });
+      };
+      await chrome.storage.local.set(items);
       
       try { chrome.runtime.sendMessage({ action: 'LOGIN_SUCCESS', email: data.user.email }); } catch (e) {}
       
-      window.location.href = chrome.runtime.getURL('src/pages/dashboard/dashboard.html');
+      window.location.href = chrome.runtime.getURL('dist/pages/dashboard/dashboard.html');
     }
   } catch (error) {
     btnDoLogin.innerText = 'INICIAR SESIÓN';
@@ -160,7 +162,7 @@ if (document.readyState === 'loading') {
       if (res.ok) {
         const data = await res.json();
         if (data.valid) {
-          window.location.href = chrome.runtime.getURL('src/pages/dashboard/dashboard.html');
+          window.location.href = chrome.runtime.getURL('dist/pages/dashboard/dashboard.html');
         }
       }
     }

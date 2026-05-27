@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   currentToken = encodedToken ? decodeURIComponent(encodedToken) : '';
   
   if (!currentToken) {
-    window.location.href = chrome.runtime.getURL('src/pages/login/login.html');
+    window.location.href = chrome.runtime.getURL('dist/pages/login/login.html');
     return;
   }
   
@@ -131,16 +131,24 @@ async function initAdminPanel() {
         officeInput.value = userOffice;
         officeInput.disabled = true;
         officeInput.placeholder = userOffice;
+        officeInput.style.display = 'none';
       }
       const typeSelect = document.getElementById('new-user-type');
       if (typeSelect) {
         typeSelect.innerHTML = '<option value="operador">Operador</option>';
         typeSelect.value = 'operador';
+        typeSelect.style.display = 'none';
       }
+      const userTypeLabel = document.querySelector('label[for="new-user-type"]');
+      if (userTypeLabel) userTypeLabel.style.display = 'none';
 
       // Gestión de usuarios: mostrar con título de oficina
       const userTitle = document.querySelector('#user-management-section .panel-title');
       if (userTitle) userTitle.textContent = `GESTIÓN DE OPERADORES — ${userOffice}`;
+
+      // Ocultar acciones avanzadas (premium, ban, cambiar pass) para office admin
+      const actionsPanel = document.getElementById('admin-actions-panel');
+      if (actionsPanel) actionsPanel.style.display = 'none';
 
       // Calendario: ocultar filtro de oficina, usar la suya
       const calFilter = document.getElementById('calendar-office-filter');
@@ -173,11 +181,11 @@ async function initAdminPanel() {
 
     document.getElementById('btn-refresh').addEventListener('click', () => { 
       const office = isOfficeAdmin && !isMasterAdmin ? userOffice : document.getElementById('office-filter').value;
-      loadMetrics(office); loadUserList(office); loadActivityLog(office); loadUserStatus(office);
+      loadMetrics(office); loadUserList(office); loadActivityLog(office); loadBotActions(); loadUserStatus(office); loadDeveloperList();
     });
     document.getElementById('btn-logout').addEventListener('click', async () => {
       await chrome.storage.local.clear();
-      window.location.href = chrome.runtime.getURL('src/pages/login/login.html');
+      window.location.href = chrome.runtime.getURL('dist/pages/login/login.html');
     });
     document.getElementById('btn-activate-premium').addEventListener('click', activatePremium);
     document.getElementById('btn-ban-user').addEventListener('click', banUser);
@@ -225,7 +233,7 @@ async function initAdminPanel() {
         <button id="btn-error-login" style="margin-top:20px;padding:10px 20px;background:#8b5cf6;border:none;border-radius:4px;color:#fff;cursor:pointer;">IR AL LOGIN</button>
       </div>`;
     document.getElementById('btn-error-login').addEventListener('click', () => {
-      window.location.href = chrome.runtime.getURL('src/pages/login/login.html');
+      window.location.href = chrome.runtime.getURL('dist/pages/login/login.html');
     });
   }
 }
@@ -262,19 +270,21 @@ async function loadOfficesList() {
     }
     container.innerHTML = data.offices.map(o => {
       const name = o.name || o;
-      return `<button class="office-btn" data-office="${name}" style="background:rgba(245,158,11,0.15);border:1px solid #f59e0b;border-radius:6px;padding:12px 16px;text-align:center;cursor:pointer;font-family:inherit;color:#f59e0b;font-size:14px;font-weight:700;transition:all 0.2s;" onmouseover="this.style.background='rgba(245,158,11,0.3)'" onmouseout="this.style.background='rgba(245,158,11,0.15)'">${name}</button>`;
+      return '<div style="display:flex;flex-direction:column;gap:6px;background:rgba(245,158,11,0.08);border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;text-align:center;font-family:inherit;color:#f59e0b;font-size:14px;font-weight:700;">' +
+        '<span>' + name + '</span>' +
+        '<button class="btn-del-office" data-office="' + name + '" style="padding:4px 8px;background:transparent;border:1px solid #ef4444;color:#ef4444;border-radius:4px;cursor:pointer;font-size:10px;font-weight:600;">✕ ELIMINAR</button>' +
+        '</div>';
     }).join('');
 
-    container.querySelectorAll('.office-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const office = btn.dataset.office;
-        document.getElementById('office-filter').value = office;
-        // Switch to Users tab
-        const usersTabBtn = document.querySelector('.tab-btn[data-tab="users"]');
-        if (usersTabBtn) usersTabBtn.click();
-        setTimeout(() => {
-          document.querySelector('.user-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 500);
+    container.querySelectorAll('.btn-del-office').forEach(function (btn) {
+      btn.addEventListener('click', async function (e) {
+        e.stopPropagation();
+        const name = btn.dataset.office;
+        if (!confirm('¿Eliminar la oficina "' + name + '"? Los usuarios no se borrarán, solo la oficina.')) return;
+        try {
+          await apiFetch('/api/tess/admin/offices/' + encodeURIComponent(name), { method: 'DELETE' });
+          await loadOfficesList();
+        } catch (e) { alert('Error: ' + e.message); }
       });
     });
   } catch (e) { console.warn('[ADMIN] loadOfficesList:', e); }

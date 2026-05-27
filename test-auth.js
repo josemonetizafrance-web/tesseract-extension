@@ -1,8 +1,14 @@
 const { spawn } = require('child_process');
 const http = require('http');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, 'server', '.env.test') });
 
 // Ajusta esta ruta a la ubicación real del servidor en tu máquina
 const serverPath = __dirname + '/server';
+
+var testEmail = process.env.TEST_ADMIN_EMAIL || 'adminchevy@tesseract.com';
+var testPass = process.env.TEST_ADMIN_PASSWORD || 'AdminSegura2026*+';
+console.log('[TEST] Using credentials for:', testEmail);
 
 const server = spawn('node', ['server.js'], { 
   cwd: serverPath,
@@ -15,7 +21,7 @@ server.on('error', (e) => console.log('[SERVER ERROR]', e.message));
 
 setTimeout(() => {
   console.log('Making request...');
-  const data = JSON.stringify({ email: 'adminchevy@tesseract.com', password: 'AdminSegura2026*+' });
+  const data = JSON.stringify({ email: testEmail, password: testPass });
   const req = http.request({
     hostname: 'localhost',
     port: 3000,

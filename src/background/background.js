@@ -1,4 +1,4 @@
-﻿// background.js - TESSERACT v24.0 (Backend Integrado)
+// background.js - TESSERACT v24.0 (Backend Integrado)
 var TESSERACT_API = 'https://tesseract-jblo.onrender.com';
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -24,7 +24,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   } else if (message.action === 'CRIBS_REFRESH') {
     // Reenviar a todas las extension pages (dashboard)
-    chrome.runtime.sendMessage({ action: 'CRIBS_REFRESH' }, function () { if (chrome.runtime.lastError) { /* no hay páginas abiertas */ } });
+    chrome.runtime.sendMessage({ action: 'CRIBS_REFRESH' }, function () { if (chrome.runtime.lastError) { /* no hay p�ginas abiertas */ } });
     sendResponse({ success: true });
   }
   return true;
@@ -32,7 +32,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function checkAuthStatus() {
   try {
-    const data = await chrome.storage.local.get(['tess_jwt', 'user_email']);
+    const data = await chrome.storage.local.get(['tess_jwt', 'tess_refresh', 'user_email']);
     if (!data.tess_jwt) return { loggedIn: false };
 
     const res = await fetch(`${TESSERACT_API}/api/tess/auth/verify`, {
@@ -40,13 +40,25 @@ async function checkAuthStatus() {
     });
 
     if (!res.ok) {
-      if (res.status === 401) await chrome.storage.local.remove('tess_jwt');
+      if (res.status === 401 && data.tess_refresh) {
+        const refreshRes = await fetch(`${TESSERACT_API}/api/tess/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: data.tess_refresh })
+        });
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          await chrome.storage.local.set({ tess_jwt: refreshData.token, tess_refresh: refreshData.refreshToken });
+          return checkAuthStatus();
+        }
+      }
+      await chrome.storage.local.remove(['tess_jwt', 'tess_refresh']);
       return { loggedIn: false };
     }
 
     const authData = await res.json();
 
-    // Verificar si el usuario está aprobado
+    // Verificar si el usuario est� aprobado
     if (authData.isApproved === false) {
       return { loggedIn: false, needsApproval: true };
     }
@@ -87,12 +99,12 @@ async function getSubscriptionInfo() {
 
 chrome.webNavigation?.onCompleted.addListener(async (details) => {
   if (details.frameId !== 0) return;
-  const dashboardUrl = chrome.runtime.getURL('src/pages/dashboard/dashboard.html');
+  const dashboardUrl = chrome.runtime.getURL('dist/pages/dashboard/dashboard.html');
   if (details.url.includes(dashboardUrl)) {
     const auth = await checkAuthStatus();
     if (!auth.loggedIn || auth.status === 'expired' || auth.needsApproval) {
       chrome.tabs.update(details.tabId, {
-        url: chrome.runtime.getURL('src/pages/login/login.html')
+        url: chrome.runtime.getURL('dist/pages/login/login.html')
       });
     }
   }

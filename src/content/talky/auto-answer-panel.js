@@ -132,6 +132,12 @@ function createAutoAnswerPanel() {
   </div>
 
   <div class="aa-section">
+    <h4>🔄 System Message Auto-Respond</h4>
+    <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="aaWeBelieveToggle"> Responder automáticamente a mensaje "We Believe"</label>
+    <textarea id="aaWeBelieveResponse" placeholder="Mensaje de respuesta cuando aparece 'We believe people come here...'" style="margin-top:6px;">Hello! How are you?</textarea>
+  </div>
+
+  <div class="aa-section">
     <h4>📊 Estadísticas del Día</h4>
     <div class="stats-row">
       <div class="stat-mini"><span class="val" id="aaTodayResp">0</span>HOY</div>
@@ -210,6 +216,10 @@ async function loadAAPanelState() {
     if (tmplEl && config.events) tmplEl.value = config.events[ev]?.template || '';
   });
 
+  // We Believe
+  document.getElementById('aaWeBelieveToggle').checked = config.weBelieve?.enabled || false;
+  document.getElementById('aaWeBelieveResponse').value = config.weBelieve?.response || 'Hello! How are you?';
+
   // Fuentes de rastreo
   document.getElementById('aaSrcMessages').checked = !(config.scanSources || []).includes('messages-active') ? false : true;
   document.getElementById('aaSrcContactList').checked = (config.scanSources || []).includes('contact-list');
@@ -246,16 +256,21 @@ async function saveAAPanelConfig() {
     }
   }
 
+  const weBelieveEnabled = document.getElementById('aaWeBelieveToggle').checked;
+  const weBelieveResponse = document.getElementById('aaWeBelieveResponse').value;
+
   await window._updateAAConfigBulk({
     enabled: enabled,
     useAI: useAI,
     maxDaily: maxDaily,
     delay: { min: delayMin, max: delayMax },
     scanSources: scanSources,
-    events: events
+    events: events,
+    weBelieve: { enabled: weBelieveEnabled, response: weBelieveResponse }
   });
 
   await window._setAAState(enabled);
+  if (enabled) await window._updateAAWeBelieve({ enabled: weBelieveEnabled });
 
   console.log('[AA-PANEL] Config saved');
 }
@@ -279,4 +294,8 @@ function updateAATabUI() {
 
   document.getElementById('aaTodayResp').textContent = cfg.respondedToday || 0;
   document.getElementById('aaDailyLimit').textContent = cfg.maxDaily || 50;
+
+  // Sync main panel toggle switch
+  const toggle = document.getElementById('btnToggleAA');
+  if (toggle) toggle.checked = cfg.enabled || false;
 }

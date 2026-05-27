@@ -17,7 +17,7 @@
       '<p style="font-size:11px;color:#8888a0;margin-bottom:12px;text-align:center;">No has iniciado sesi\u00f3n</p>' +
       '<button class="btn btn-primary" id="btn-login">INICIAR SESI\u00d3N</button>';
     document.getElementById('btn-login').addEventListener('click', function () {
-      window.open(chrome.runtime.getURL('src/pages/login/login.html'), '_blank');
+      window.open(chrome.runtime.getURL('dist/pages/login/login.html'), '_blank');
     });
   }
 
@@ -50,11 +50,11 @@
       section.innerHTML = html;
 
       document.getElementById('btn-dashboard').addEventListener('click', function () {
-        window.open(chrome.runtime.getURL('src/pages/dashboard/dashboard.html'), '_blank');
+        window.open(chrome.runtime.getURL('dist/pages/dashboard/dashboard.html'), '_blank');
       });
       var adminBtn = document.getElementById('btn-admin');
       if (adminBtn) adminBtn.addEventListener('click', function () {
-        var url = chrome.runtime.getURL('src/pages/admin/admin.html');
+        var url = chrome.runtime.getURL('dist/pages/admin/admin.html');
         if (storedToken) url += '?token=' + encodeURIComponent(storedToken);
         window.open(url, '_blank');
       });

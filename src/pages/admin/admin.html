@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="admin.css">
 </head>
 <body>
-    <img id="cursor-tesseract" src="/assets/logo.png" alt="">
+    <img id="cursor-tesseract" src="/dist/assets/logo.png" alt="">
     <div class="admin-container">
         <header class="admin-header">
             <div class="logo">
@@ -89,9 +89,9 @@
                     </div>
                 </section>
 
-                <section class="panel">
+                <section class="panel" id="user-management-section">
                     <h2 class="panel-title">GESTIÓN DE USUARIOS</h2>
-                    <div class="panel-controls">
+                    <div id="admin-actions-panel" class="panel-controls">
                         <input type="email" id="input-email" placeholder="usuario@tesseract.com" class="input-field" style="min-width:200px;">
                         <button id="btn-activate-premium" class="btn-primary">PREMIUM 30D</button>
                         <button id="btn-ban-user" class="btn-danger">BANEAR</button>
@@ -218,6 +218,7 @@
         </main>
     </div>
 
+    <script src="/dist/modules/error-handler.js"></script>
     <script src="admin.js"></script>
 </body>
 </html>

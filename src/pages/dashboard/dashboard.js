@@ -698,9 +698,9 @@
     });
   }
 
-  chrome.storage.local.get(['tess_jwt', 'user_email'], async function (data) {
+  chrome.storage.local.get(['tess_jwt', 'tess_refresh', 'user_email'], async function (data) {
     if (!data.tess_jwt || !data.user_email) {
-      window.location.href = chrome.runtime.getURL('src/pages/login/login.html');
+      window.location.href = chrome.runtime.getURL('dist/pages/login/login.html');
       return;
     }
     currentJwt = data.tess_jwt;
@@ -710,8 +710,21 @@
         headers: { 'Authorization': 'Bearer ' + data.tess_jwt }
       });
       if (!res.ok) {
-        await chrome.storage.local.remove('tess_jwt');
-        window.location.href = chrome.runtime.getURL('src/pages/login/login.html');
+        if (res.status === 401 && data.tess_refresh) {
+          const refreshRes = await fetch(TESSERACT_API + '/api/tess/auth/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken: data.tess_refresh })
+          });
+          if (refreshRes.ok) {
+            const refreshData = await refreshRes.json();
+            await chrome.storage.local.set({ tess_jwt: refreshData.token, tess_refresh: refreshData.refreshToken });
+            window.location.reload();
+            return;
+          }
+        }
+        await chrome.storage.local.remove(['tess_jwt', 'tess_refresh']);
+        window.location.href = chrome.runtime.getURL('dist/pages/login/login.html');
         return;
       }
       const authData = await res.json();
@@ -747,14 +760,14 @@
     document.getElementById('btn-admin').addEventListener('click', function () {
       var token = data.tess_jwt;
       if (token) {
-        window.open(chrome.runtime.getURL('src/pages/admin/admin.html') + '?token=' + encodeURIComponent(token), '_blank');
+        window.open(chrome.runtime.getURL('dist/pages/admin/admin.html') + '?token=' + encodeURIComponent(token), '_blank');
       } else {
-        window.open(chrome.runtime.getURL('src/pages/admin/admin.html'), '_blank');
+        window.open(chrome.runtime.getURL('dist/pages/admin/admin.html'), '_blank');
       }
     });
     document.getElementById('btn-logout').addEventListener('click', function () {
       chrome.storage.local.clear();
-      window.location.href = chrome.runtime.getURL('src/pages/login/login.html');
+      window.location.href = chrome.runtime.getURL('dist/pages/login/login.html');
     });
 
     initNotes();
