@@ -109,36 +109,41 @@ function processMessageText(msgText) {
     console.log('[MAIL-CRIBS] Incoming mail from', senderName);
     injectResponseButton(observer, msgText, header, senderName);
     if (typeof showTessToast === 'function') showTessToast('📬 Carta de ' + senderName + ' detectada', 'info');
-    // Show CRIBS overlay for this contact — search by ID then by name
-    showCribsForIncomingMail(msgText, header, senderName);
   }
+  // Show CRIBS overlay for the CLIENT (sender for incoming, recipient for outgoing)
+  showCribsForMailContact(isMe, msgText, header, senderName);
 }
 
-function showCribsForIncomingMail(msgText, header, senderName) {
+function showCribsForMailContact(isMe, msgText, header, senderName) {
   if (typeof fetchCribsForProfile !== 'function') return;
+  // 1. Try numeric ID from DOM
   var pid = extractProfileIdFromMail(msgText, header, false);
-  if (pid) { setTimeout(function () { fetchCribsForProfile(pid); }, 500); return; }
-  // Fallback: search CRIBS cache by sender name
-  function findInCache() {
-    if (typeof _cribsLocalCache !== 'undefined' && _cribsLocalCache && _cribsLocalCache.length) {
-      for (var ci = 0; ci < _cribsLocalCache.length; ci++) {
-        if (_cribsLocalCache[ci].profile_name === senderName) {
-          var foundPid = String(_cribsLocalCache[ci].profile_id).replace(/^0+/, '');
-          console.log('[MAIL-CRIBS] Found profile by name:', senderName, '->', foundPid);
-          fetchCribsForProfile(foundPid);
-          return true;
+  if (pid) { setTimeout(function () { fetchCribsForProfile(pid); }, 300); return; }
+  // 2. For incoming: search CRIBS cache by sender name
+  if (!isMe) {
+    function findByName(name) {
+      if (typeof _cribsLocalCache !== 'undefined' && _cribsLocalCache) {
+        for (var ci = 0; ci < _cribsLocalCache.length; ci++) {
+          if (_cribsLocalCache[ci].profile_name === name) {
+            var fp = String(_cribsLocalCache[ci].profile_id).replace(/^0+/, '');
+            console.log('[MAIL-CRIBS] Found by name:', name, '->', fp);
+            fetchCribsForProfile(fp);
+            return true;
+          }
         }
       }
+      return false;
     }
-    return false;
+    if (findByName(senderName)) return;
+    if (typeof cribLoadOrRefresh === 'function') {
+      cribLoadOrRefresh(false).then(function () { if (!findByName(senderName)) console.log('[MAIL-CRIBS] Not in CRIBS:', senderName); });
+    }
+    return;
   }
-  if (findInCache()) return;
-  // Load CRIBS and try again
-  if (typeof cribLoadOrRefresh === 'function') {
-    cribLoadOrRefresh(false).then(function () {
-      if (!findInCache()) console.log('[MAIL-CRIBS] Contact not in CRIBS:', senderName);
-    });
-  }
+  // 3. For outgoing: use Eater's client ID from chat context
+  if (window._lastCribsPid) { fetchCribsForProfile(window._lastCribsPid); return; }
+  if (window._cribsChatIds && window._cribsChatIds.length > 1) { fetchCribsForProfile(window._cribsChatIds[1]); return; }
+  console.log('[MAIL-CRIBS] No client ID available for outgoing mail');
 }
 
 function findPrecedingMailHeader(msgText) {
