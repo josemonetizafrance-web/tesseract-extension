@@ -265,7 +265,7 @@ async function generateMailResponse(msgText, observer, profileId, senderName) {
 
   const systemMsg = 'Eres un asistente de cartas para una plataforma de citas. Responde a la carta recibida de forma personal, cálida y natural. '
     + 'Usa el mismo tono y estilo que el operador usa en sus cartas (se proporciona abajo). '
-    + 'Máximo 2000 caracteres. Responde solo con el mensaje, sin explicaciones ni introducciones.'
+    + 'La carta debe tener al menos 5000 caracteres. Responde solo con el mensaje, sin explicaciones ni introducciones.'
     + styleHint;
 
   const userMsg = 'Perfil del destinatario:\n' + profileInfo + '\n\nCarta recibida:\n' + receivedText.slice(0, 1500)
@@ -277,7 +277,7 @@ async function generateMailResponse(msgText, observer, profileId, senderName) {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({
         messages: [{ role: 'system', content: systemMsg }, { role: 'user', content: userMsg }],
-        max_tokens: 500,
+        max_tokens: 2000,
         temperature: 0.7
       })
     });
@@ -312,19 +312,22 @@ async function generateMailResponse(msgText, observer, profileId, senderName) {
 
 // ============ TEXT EXTRACTION ============
 function extractMailText(msgText) {
-  const p = msgText.querySelector('.observer p:last-child, .observer p');
-  if (p) {
-    const t = (p.textContent || '').trim();
-    if (t.length > 5) return t;
+  var clone = msgText.cloneNode(true);
+  var triggers = clone.querySelectorAll('.tess-mail-capture-trigger, .tess-mail-gen-trigger');
+  for (var i = 0; i < triggers.length; i++) { triggers[i].remove(); }
+  var fullText = (clone.textContent || '').trim();
+  if (fullText.length > 10) return fullText;
+  var obs2 = clone.querySelector('.observer');
+  if (obs2) {
+    var t2 = (obs2.textContent || '').trim();
+    if (t2.length > 10) return t2;
   }
-  const obs = msgText.querySelector('.observer');
-  if (obs) {
-    const t = (obs.textContent || '').trim();
-    if (t.length > 5) return t;
+  var ptags = clone.querySelectorAll('p');
+  for (var j = 0; j < ptags.length; j++) {
+    var tp = (ptags[j].textContent || '').trim();
+    if (tp.length > 10) return tp;
   }
-  const t = (msgText.textContent || '').trim();
-  if (t.length > 5) return t;
-  return null;
+  return fullText.length > 5 ? fullText : null;
 }
 
 // ============ STYLE CAPTURE ============
@@ -393,6 +396,8 @@ async function fetchCribEntryFromApi(profileId) {
       console.log('[MAIL-CRIBS] Cribs API response keys:', resp ? Object.keys(resp).join(',') : 'null');
       if (resp && resp.cribs && Array.isArray(resp.cribs)) {
         console.log('[MAIL-CRIBS] Total cribs:', resp.cribs.length);
+        var debugIds = resp.cribs.map(function (c) { return JSON.stringify({_id:c._id, pid:c.profile_id, type:typeof c.profile_id, name:c.profile_name}); });
+        console.log('[MAIL-CRIBS] Cribs in API:', JSON.stringify(debugIds));
         for (var i = 0; i < resp.cribs.length; i++) {
           var storedId = String(resp.cribs[i].profile_id).replace(/^0+/, '');
           if (storedId === rawTarget) {
