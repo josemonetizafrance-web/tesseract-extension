@@ -7,6 +7,7 @@ let mailCribsConfig = { enabled: false };
 let mailCribsObserver = null;
 let mailCribsProcessed = new Set();
 let mailCribsLetterStyleEnabled = true;
+let capturedLetterCache = new Set();
 
 const MAIL_MSG_SEL = '[data-test-id*="message-text"]';
 
@@ -212,10 +213,13 @@ function findPrecedingMailHeader(msgText) {
 function injectCaptureButton(observer, msgText, header) {
   if (observer.querySelector('.tess-mail-capture-trigger')) return;
 
+  var capturedText = extractMailText(msgText);
+  var alreadyCaptured = capturedText && capturedLetterCache.has(capturedText.trim().slice(0, 300));
+
   const trigger = document.createElement('span');
   trigger.className = 'tess-mail-capture-trigger';
-  trigger.textContent = '🎭';
-  trigger.title = 'Capturar estilo de carta';
+  trigger.textContent = alreadyCaptured ? '✅' : '🎭';
+  trigger.title = alreadyCaptured ? 'Estilo ya capturado' : 'Capturar estilo de carta';
   Object.assign(trigger.style, {
     cursor: 'pointer',
     fontSize: '14px',
@@ -230,12 +234,12 @@ function injectCaptureButton(observer, msgText, header) {
   trigger.onclick = function (e) {
     e.stopPropagation();
     if (this._processing) return;
+    if (alreadyCaptured) { showTessToast('📬 Estilo ya capturado anteriormente', 'info'); return; }
+    if (!capturedText) { showTessToast('⚠ No se encontró texto de la carta', 'warning'); return; }
     this._processing = true;
     this.style.opacity = '0.3';
     var profileId = extractProfileIdFromMail(msgText, header, true);
     if (!profileId) { showTessToast('⚠ No se pudo identificar el perfil', 'warning'); this._processing = false; this.style.opacity = '0.5'; return; }
-    var capturedText = extractMailText(msgText);
-    if (!capturedText) { showTessToast('⚠ No se encontró texto de la carta', 'warning'); this._processing = false; this.style.opacity = '0.5'; return; }
     // Try to get profile name from avatar alt or other elements
     var profileName = '';
     var avatar = header.querySelector('img[alt]:not([alt=""])');
@@ -245,11 +249,17 @@ function injectCaptureButton(observer, msgText, header) {
       if (nameEl) profileName = (nameEl.textContent || '').trim();
     }
     if (profileName === TALK_Y.MAIL_OPERATOR_NAME) profileName = '';
-    sendLetterStyleToCribs(profileId, capturedText, profileName).then(function () { trigger._processing = false; trigger.style.opacity = '0.5'; });
+    sendLetterStyleToCribs(profileId, capturedText, profileName).then(function () {
+      trigger._processing = false;
+      trigger.style.opacity = '0.5';
+      capturedLetterCache.add(capturedText.trim().slice(0, 300));
+      trigger.textContent = '✅';
+      trigger.title = 'Estilo ya capturado';
+    });
   };
 
   observer.appendChild(trigger);
-  console.log('[MAIL-CRIBS] 🎭 button added');
+  console.log('[MAIL-CRIBS] ' + (alreadyCaptured ? '✅' : '🎭') + ' button added' + (alreadyCaptured ? ' (already captured)' : ''));
 }
 
 // ============ 🤖 RESPONSE BUTTON (INCOMING) ============
