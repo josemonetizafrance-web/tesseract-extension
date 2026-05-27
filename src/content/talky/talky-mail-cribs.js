@@ -7,7 +7,22 @@ let mailCribsConfig = { enabled: false };
 let mailCribsObserver = null;
 let mailCribsProcessed = new Set();
 let mailCribsLetterStyleEnabled = true;
-let capturedLetterCache = new Set();
+let capturedLetterCache = null; // Set, null = not loaded
+
+const CAPTURED_CACHE_KEY = 'tess_captured_letters';
+
+async function loadCapturedLetterCache() {
+  try {
+    var d = await new Promise(function (r) { chrome.storage.local.get(CAPTURED_CACHE_KEY, r); });
+    capturedLetterCache = new Set(d[CAPTURED_CACHE_KEY] || []);
+  } catch (e) { capturedLetterCache = new Set(); }
+}
+
+async function saveCapturedLetterCache() {
+  try {
+    await new Promise(function (r) { chrome.storage.local.set({ [CAPTURED_CACHE_KEY]: Array.from(capturedLetterCache) }, r); });
+  } catch (e) {}
+}
 
 const MAIL_MSG_SEL = '[data-test-id*="message-text"]';
 
@@ -214,7 +229,7 @@ function injectCaptureButton(observer, msgText, header) {
   if (observer.querySelector('.tess-mail-capture-trigger')) return;
 
   var capturedText = extractMailText(msgText);
-  var alreadyCaptured = capturedText && capturedLetterCache.has(capturedText.trim().slice(0, 300));
+  var alreadyCaptured = capturedText && capturedLetterCache && capturedLetterCache.has(capturedText.trim().slice(0, 300));
 
   const trigger = document.createElement('span');
   trigger.className = 'tess-mail-capture-trigger';
@@ -252,7 +267,7 @@ function injectCaptureButton(observer, msgText, header) {
     sendLetterStyleToCribs(profileId, capturedText, profileName).then(function () {
       trigger._processing = false;
       trigger.style.opacity = '0.5';
-      capturedLetterCache.add(capturedText.trim().slice(0, 300));
+      if (capturedLetterCache) { capturedLetterCache.add(capturedText.trim().slice(0, 300)); saveCapturedLetterCache(); }
       trigger.textContent = '✅';
       trigger.title = 'Estilo ya capturado';
     });
@@ -598,7 +613,9 @@ window._captureLetterStyle = sendLetterStyleToCribs;
 (function autoInitMailCribs() {
   function init() {
     chrome.storage.local.get('tess_operator_id', function (d) { if (d.tess_operator_id) window._tessOperatorId = d.tess_operator_id; });
-    loadMailCribsConfig().then(function () { if (mailCribsConfig.enabled) startMailCribsObserver(); console.log('[MAIL-CRIBS] Auto-init, enabled:', mailCribsConfig.enabled); });
+    loadCapturedLetterCache().then(function () {
+      loadMailCribsConfig().then(function () { if (mailCribsConfig.enabled) startMailCribsObserver(); console.log('[MAIL-CRIBS] Auto-init, enabled:', mailCribsConfig.enabled); });
+    });
   }
   if (document.readyState === 'complete' || document.readyState === 'interactive') { setTimeout(init, 1000); }
   else { document.addEventListener('DOMContentLoaded', function () { setTimeout(init, 1000); }); }
