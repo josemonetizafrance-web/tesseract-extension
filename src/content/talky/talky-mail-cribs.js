@@ -173,10 +173,13 @@ function injectCaptureButton(observer, msgText, header) {
   trigger.onmouseleave = function () { this.style.opacity = '0.5'; };
   trigger.onclick = function (e) {
     e.stopPropagation();
+    if (this._processing) return;
+    this._processing = true;
+    this.style.opacity = '0.3';
     var profileId = extractProfileIdFromMail(msgText, header, true);
-    if (!profileId) { showTessToast('⚠ No se pudo identificar el perfil', 'warning'); return; }
+    if (!profileId) { showTessToast('⚠ No se pudo identificar el perfil', 'warning'); this._processing = false; this.style.opacity = '0.5'; return; }
     var capturedText = extractMailText(msgText);
-    if (!capturedText) { showTessToast('⚠ No se encontró texto de la carta', 'warning'); return; }
+    if (!capturedText) { showTessToast('⚠ No se encontró texto de la carta', 'warning'); this._processing = false; this.style.opacity = '0.5'; return; }
     // Try to get profile name from avatar alt or other elements
     var profileName = '';
     var avatar = header.querySelector('img[alt]:not([alt=""])');
@@ -186,7 +189,7 @@ function injectCaptureButton(observer, msgText, header) {
       if (nameEl) profileName = (nameEl.textContent || '').trim();
     }
     if (profileName === TALK_Y.MAIL_OPERATOR_NAME) profileName = '';
-    sendLetterStyleToCribs(profileId, capturedText, profileName);
+    sendLetterStyleToCribs(profileId, capturedText, profileName).then(function () { trigger._processing = false; trigger.style.opacity = '0.5'; });
   };
 
   observer.appendChild(trigger);
@@ -353,6 +356,7 @@ async function sendLetterStyleToCribs(profileId, text, profileName) {
   const newStyle = lines.join('\n');
   const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _tessJwtCache };
   try {
+    console.log('[MAIL-CRIBS] Saving letter_style to', entry._id, '(' + text.trim().length + ' chars)');
     const res = await fetch(TESSERACT_API + '/api/tess/cribs/' + entry._id + '/bulk', {
       method: 'PUT',
       headers: headers,
@@ -370,10 +374,15 @@ async function sendLetterStyleToCribs(profileId, text, profileName) {
         if (typeof renderCribsOverlay === 'function') renderCribsOverlay(cribsOverlayData);
       }
       console.log('[MAIL-CRIBS] Letter style saved for', profileId, '(' + lines.length + '/50)');
-      if (typeof showTessToast === 'function') showTessToast('📬 Estilo de carta capturado', 'success');
+      showTessToast('📬 Estilo de carta capturado', 'success');
+    } else {
+      var errText = await res.text().catch(function () { return 'Unknown error'; });
+      console.log('[MAIL-CRIBS] Bulk PUT error:', res.status, errText);
+      showTessToast('⚠ Error al guardar estilo (' + res.status + ')', 'error');
     }
   } catch (e) {
     console.log('[MAIL-CRIBS] Error saving letter style:', e.message);
+    showTessToast('⚠ Error de conexión al guardar', 'error');
   }
 }
 
