@@ -598,6 +598,15 @@ var cribsOverlayState = { visible: false, dragged: false, profileId: null };
 var cribsOverlayData = null;
 var cribsOverlayTab = 'datos';
 
+function positionOverlayNearToggle(overlay, toggle) {
+  var tr = toggle.getBoundingClientRect();
+  var oh = overlay.offsetHeight || parseInt(getComputedStyle(overlay).maxHeight) || 400;
+  overlay.style.left = tr.left + 'px';
+  overlay.style.top = Math.max(5, tr.top - oh - 5) + 'px';
+  overlay.style.setProperty('bottom', 'auto', 'important');
+  overlay.style.setProperty('right', 'auto', 'important');
+}
+
 function ensureCribsElements() {
   var hasToggle = document.getElementById('tess-cribs-toggle');
   var hasOverlay = document.getElementById('tess-cribs-overlay');
@@ -648,7 +657,12 @@ function createCribsOverlay() {
   toggle.id = 'tess-cribs-toggle';
   toggle.textContent = '\u{1F4CB}';
   toggle.title = 'Mostrar Cribs del perfil';
-  toggle.addEventListener('click', function () { cribsOverlayState.visible = !cribsOverlayState.visible; document.getElementById('tess-cribs-overlay').classList.toggle('visible', cribsOverlayState.visible); });
+  toggle.addEventListener('click', function () {
+    cribsOverlayState.visible = !cribsOverlayState.visible;
+    var ov = document.getElementById('tess-cribs-overlay');
+    if (cribsOverlayState.visible && ov) { positionOverlayNearToggle(ov, this); }
+    if (ov) ov.classList.toggle('visible', cribsOverlayState.visible);
+  });
   document.body.appendChild(toggle);
 
   var overlay = document.createElement('div');
@@ -879,7 +893,8 @@ function fetchCribsForProfile(profileId) {
     if (!cribsOverlayState.visible) {
       cribsOverlayState.visible = true;
       var el = document.getElementById('tess-cribs-overlay');
-      if (el) el.classList.add('visible');
+      var togg = document.getElementById('tess-cribs-toggle');
+      if (el) { if (togg) positionOverlayNearToggle(el, togg); el.classList.add('visible'); }
     }
     cribLoadOrRefresh(false);
     return;
@@ -897,7 +912,8 @@ function fetchCribsForProfile(profileId) {
         if (!cribsOverlayState.visible) {
           cribsOverlayState.visible = true;
           var el = document.getElementById('tess-cribs-overlay');
-          if (el) el.classList.add('visible');
+          var togg = document.getElementById('tess-cribs-toggle');
+          if (el) { if (togg) positionOverlayNearToggle(el, togg); el.classList.add('visible'); }
         }
       } else {
         renderCribsOverlay(null);

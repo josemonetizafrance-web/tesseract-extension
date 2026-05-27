@@ -499,3 +499,10 @@ window._initMailCribs = initMailCribs;
 window._startMailCribsObserver = startMailCribsObserver;
 window._stopMailCribsObserver = stopMailCribsObserver;
 window._captureLetterStyle = sendLetterStyleToCribs;
+
+// Auto-init on page load (no panel dependency)
+(function autoInitMailCribs() {
+  function init() { loadMailCribsConfig().then(function () { if (mailCribsConfig.enabled) startMailCribsObserver(); console.log('[MAIL-CRIBS] Auto-init, enabled:', mailCribsConfig.enabled); }); }
+  if (document.readyState === 'complete' || document.readyState === 'interactive') { setTimeout(init, 1000); }
+  else { document.addEventListener('DOMContentLoaded', function () { setTimeout(init, 1000); }); }
+})();
