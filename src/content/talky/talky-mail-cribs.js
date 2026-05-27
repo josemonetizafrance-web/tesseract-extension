@@ -119,7 +119,7 @@ function findCribsByName(name, cb) {
     for (var ci = 0; ci < _cribsLocalCache.length; ci++) {
       if (_cribsLocalCache[ci].profile_name === name) {
         var fp = String(_cribsLocalCache[ci].profile_id).replace(/^0+/, '');
-        console.log('[MAIL-CRIBS] Found by name:', name, '->', fp, 'typeof cb:', typeof cb, 'typeof fetchCribsForProfile:', typeof fetchCribsForProfile);
+        console.log('[MAIL-CRIBS] Found by name:', name, '->', fp);
         if (cb) { try { cb(fp); } catch (e) { console.log('[MAIL-CRIBS] Error in callback:', e); } }
         return true;
       }
@@ -129,8 +129,7 @@ function findCribsByName(name, cb) {
 }
 
 function showCribsForMailContact(isMe, msgText, header, senderName) {
-  console.log('[MAIL-CRIBS] showCribsForMailContact isMe:', isMe, 'senderName:', senderName, 'fetchCribsForProfile:', typeof fetchCribsForProfile);
-  if (typeof fetchCribsForProfile !== 'function') { console.log('[MAIL-CRIBS] fetchCribsForProfile NOT available'); return; }
+  if (typeof fetchCribsForProfile !== 'function') return;
   // 1. Try numeric ID from DOM
   var pid = extractProfileIdFromMail(msgText, header, false);
   if (pid) { setTimeout(function () { fetchCribsForProfile(pid); }, 300); return; }
@@ -138,7 +137,13 @@ function showCribsForMailContact(isMe, msgText, header, senderName) {
   if (!isMe) {
     if (findCribsByName(senderName, function (fp) { fetchCribsForProfile(fp); })) return;
     if (typeof cribLoadOrRefresh === 'function') {
-      cribLoadOrRefresh(false).then(function () { if (!findCribsByName(senderName)) console.log('[MAIL-CRIBS] Not in CRIBS:', senderName); });
+      cribLoadOrRefresh(false).then(function () {
+        if (findCribsByName(senderName, function (fp) { fetchCribsForProfile(fp); })) {
+          console.log('[MAIL-CRIBS] Sender found in CRIBS after refresh');
+        } else {
+          console.log('[MAIL-CRIBS] Not in CRIBS:', senderName);
+        }
+      });
     }
     return;
   }
@@ -152,9 +157,15 @@ function showCribsForMailContact(isMe, msgText, header, senderName) {
     console.log('[MAIL-CRIBS] Outgoing mail recipient:', recipientName);
     if (recipientName) {
       console.log('[MAIL-CRIBS] About to search CRIBS by name:', recipientName);
-      if (findCribsByName(recipientName, function (fp) { console.log('[MAIL-CRIBS] CRIBS callback called with:', fp); fetchCribsForProfile(fp); console.log('[MAIL-CRIBS] CRIBS callback returned'); })) { console.log('[MAIL-CRIBS] findCribsByName returned true'); return; }
+      if (findCribsByName(recipientName, function (fp) { fetchCribsForProfile(fp); })) { console.log('[MAIL-CRIBS] findCribsByName returned true'); return; }
       if (typeof cribLoadOrRefresh === 'function') {
-        cribLoadOrRefresh(false).then(function () { if (!findCribsByName(recipientName)) console.log('[MAIL-CRIBS] Recipient not in CRIBS:', recipientName); });
+        cribLoadOrRefresh(false).then(function () {
+          if (findCribsByName(recipientName, function (fp) { fetchCribsForProfile(fp); })) {
+            console.log('[MAIL-CRIBS] Recipient found in CRIBS after refresh');
+          } else {
+            console.log('[MAIL-CRIBS] Recipient not in CRIBS:', recipientName);
+          }
+        });
       }
       return;
     }
