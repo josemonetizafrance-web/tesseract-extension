@@ -484,10 +484,16 @@ function extractProfileIdFromMail(msgText, header, preferOperator) {
   var urlMatch3 = location.href.match(/\/(\d{6,15})(?:[/?#]|$)/);
   if (urlMatch3) return urlMatch3[1].replace(/^0+/, '');
   // 10. Use Eater's detected profile ID if available
-  // For outgoing (🎭): prefer operator ID from chat context
-  if (preferOperator && window._cribsChatIds && window._cribsChatIds[0]) {
-    console.log('[MAIL-CRIBS] Using operator ID:', window._cribsChatIds[0]);
-    return window._cribsChatIds[0].replace(/^0+/, '');
+  // For outgoing (🎭): prefer operator ID from chat context or storage
+  if (preferOperator) {
+    if (window._cribsChatIds && window._cribsChatIds[0]) {
+      console.log('[MAIL-CRIBS] Using operator ID from chat:', window._cribsChatIds[0]);
+      return window._cribsChatIds[0].replace(/^0+/, '');
+    }
+    if (window._tessOperatorId) {
+      console.log('[MAIL-CRIBS] Using operator ID from window:', window._tessOperatorId);
+      return String(window._tessOperatorId).replace(/^0+/, '');
+    }
   }
   if (window._lastCribsPid) return window._lastCribsPid.replace(/^0+/, '');
   if (window._cribsChatIds && window._cribsChatIds.length > 1) return window._cribsChatIds[1].replace(/^0+/, '');
@@ -512,7 +518,10 @@ window._captureLetterStyle = sendLetterStyleToCribs;
 
 // Auto-init on page load (no panel dependency)
 (function autoInitMailCribs() {
-  function init() { loadMailCribsConfig().then(function () { if (mailCribsConfig.enabled) startMailCribsObserver(); console.log('[MAIL-CRIBS] Auto-init, enabled:', mailCribsConfig.enabled); }); }
+  function init() {
+    chrome.storage.local.get('tess_operator_id', function (d) { if (d.tess_operator_id) window._tessOperatorId = d.tess_operator_id; });
+    loadMailCribsConfig().then(function () { if (mailCribsConfig.enabled) startMailCribsObserver(); console.log('[MAIL-CRIBS] Auto-init, enabled:', mailCribsConfig.enabled); });
+  }
   if (document.readyState === 'complete' || document.readyState === 'interactive') { setTimeout(init, 1000); }
   else { document.addEventListener('DOMContentLoaded', function () { setTimeout(init, 1000); }); }
 })();
