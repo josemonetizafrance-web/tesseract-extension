@@ -87,13 +87,7 @@ function processMessageText(msgText) {
   if (!senderName) { console.log('[MAIL-CRIBS] empty senderName'); return; }
   console.log('[MAIL-CRIBS] senderName:', senderName);
 
-  // Dedup key
-  const dateEl = header.querySelector(TALK_Y.MAIL_HEADER_DATE);
-  const dateTxt = dateEl ? (dateEl.textContent || '').trim() : '';
-  const itemId = senderName + '_' + dateTxt;
-  console.log('[MAIL-CRIBS] itemId:', itemId);
-  if (mailCribsProcessed.has(itemId)) { console.log('[MAIL-CRIBS] duplicate itemId'); return; }
-  mailCribsProcessed.add(itemId);
+  // Dedup by element reference only (msgText is a new DOM node each navigation)
   mailCribsProcessed.add(msgText);
   if (mailCribsProcessed.size > 200) {
     const first = Array.from(mailCribsProcessed).slice(0, 50);
