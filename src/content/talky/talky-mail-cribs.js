@@ -109,6 +109,11 @@ function processMessageText(msgText) {
     console.log('[MAIL-CRIBS] Incoming mail from', senderName);
     injectResponseButton(observer, msgText, header, senderName);
     if (typeof showTessToast === 'function') showTessToast('📬 Carta de ' + senderName + ' detectada', 'info');
+    // Show CRIBS overlay for this contact
+    var contactId = extractProfileIdFromMail(msgText, header, false);
+    if (contactId && typeof fetchCribsForProfile === 'function') {
+      setTimeout(function () { fetchCribsForProfile(contactId); }, 500);
+    }
   }
 }
 
