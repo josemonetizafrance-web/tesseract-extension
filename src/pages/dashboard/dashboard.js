@@ -37,7 +37,7 @@
     var navItem = document.querySelector('.nav-item[data-view="' + viewName + '"]');
     if (navItem) navItem.classList.add('active');
     if (viewName === 'notes') renderMyNotes();
-    if (viewName === 'cribs') renderCribs();
+    if (viewName === 'cribs') { renderCribs(); initCribsTabs(); }
   }
 
   function renderMyNotes() {
@@ -172,16 +172,30 @@
     });
   }
 
+  function initCribsTabs() {
+    document.querySelectorAll('.cribs-tab').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        document.querySelectorAll('.cribs-tab').forEach(function (t) { t.classList.remove('active'); });
+        this.classList.add('active');
+        applyCribFilters();
+      });
+    });
+  }
+
   function applyCribFilters() {
+    var activeTab = document.querySelector('.cribs-tab.active');
+    var isCartasTab = activeTab && activeTab.dataset.cribsTab === 'cartas';
     var search = (document.getElementById('crib-search').value || '').toLowerCase();
     var statusFilter = document.getElementById('crib-filter-status').value;
     var priorityFilter = document.getElementById('crib-filter-priority').value;
 
     var filtered = cribsData.filter(function (e) {
+      if (isCartasTab && !e.letter_style) return false;
       if (statusFilter && e.status !== statusFilter) return false;
       if (priorityFilter && e.priority !== priorityFilter) return false;
       if (search) {
         var text = (e.profile_id + ' ' + e.profile_name + ' ' + e.country + ' ' + e.city + ' ' + e.interests + ' ' + e.traits + ' ' + e.work + ' ' + e.marital_status + ' ' + e.movie_genres + ' ' + e.music_genres + ' ' + e.goal + ' ' + e.languages + ' ' + e.education + ' ' + e.looking_for + ' ' + e.body_type + ' ' + e.quick_notes).toLowerCase();
+        if (isCartasTab) text += ' ' + (e.letter_style || '').toLowerCase();
         if (text.indexOf(search) === -1) return false;
       }
       return true;
@@ -201,8 +215,37 @@
 
   function renderCribsTable(list) {
     var container = document.getElementById('crib-table-container');
+    var activeTab = document.querySelector('.cribs-tab.active');
+    var isCartasTab = activeTab && activeTab.dataset.cribsTab === 'cartas';
     var countEl = document.getElementById('crib-count');
     countEl.textContent = list.length + ' / ' + cribsData.length + ' registros';
+
+    if (isCartasTab) {
+      if (!list.length) {
+        container.innerHTML = '<div style="text-align:center;padding:30px;color:#555570;font-size:11px;">' +
+          (cribsData.length ? 'Ning\u00fan perfil tiene estilo de cartas capturado a\u00fan.' : 'No hay registros en CRIBS.') + '</div>';
+        return;
+      }
+      var cartasHtml = '<table class="cartas-table"><thead><tr><th>ID Usuario</th><th>Nombre</th><th>Estilo de Cartas</th><th style="width:50px;"></th></tr></thead><tbody>';
+      list.forEach(function (entry) {
+        var letterLines = (entry.letter_style || '').split('\n').filter(function (l) { return l.trim(); });
+        var contentHtml = letterLines.map(function (l) { return '<div>' + escapeHtml(l) + '</div>'; }).join('');
+        cartasHtml += '<tr>' +
+          '<td><span style="font-weight:600;color:#c4b5fd;">' + escapeHtml(entry.profile_id) + '</span></td>' +
+          '<td>' + escapeHtml(entry.profile_name || '') + '</td>' +
+          '<td><div class="cartas-content">' + contentHtml + '</div></td>' +
+          '<td><button class="btn-crib-chat" data-profile-id="' + escapeHtml(entry.profile_id) + '" title="Abrir chat">\uD83D\uDCAC</button></td>' +
+          '</tr>';
+      });
+      cartasHtml += '</tbody></table>';
+      container.innerHTML = cartasHtml;
+      // Attach chat button
+      container.addEventListener('click', function (e) {
+        var chatBtn = e.target.closest('.btn-crib-chat');
+        if (chatBtn && chatBtn.dataset.profileId) { window._cribChat(chatBtn.dataset.profileId); }
+      });
+      return;
+    }
 
     if (!list.length) {
       container.innerHTML = '<div style="text-align:center;padding:30px;color:#555570;font-size:11px;">' +

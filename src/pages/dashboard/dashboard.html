@@ -261,6 +261,13 @@
             .sidebar .nav-item { justify-content: center; padding: 12px; }
             .note-form .form-row { flex-direction: column; }
         }
+        .cribs-tab { padding:6px 14px;border:1px solid #3b3b5c;background:transparent;color:#8888aa;border-radius:6px;cursor:pointer;font-size:11px;font-family:'Inter',sans-serif;transition:all 0.2s; }
+        .cribs-tab:hover { background:rgba(196,181,253,0.1);color:#c4b5fd;border-color:#c4b5fd; }
+        .cribs-tab.active { background:rgba(196,181,253,0.15);color:#c4b5fd;border-color:#c4b5fd;font-weight:600; }
+        .cartas-table { width:100%;border-collapse:collapse;font-size:11px; }
+        .cartas-table th { text-align:left;padding:8px 10px;border-bottom:1px solid #3b3b5c;color:#8888aa;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.5px; }
+        .cartas-table td { padding:8px 10px;border-bottom:1px solid #2a2a45;color:#ccccee;vertical-align:top; }
+        .cartas-table .cartas-content { max-height:80px;overflow-y:auto;white-space:pre-wrap;font-size:10px;color:#aaaac8;line-height:1.4; }
     </style>
 </head>
 <body>
@@ -312,6 +319,11 @@
                 <div class="notes-header">
                     <h2>CRIBS</h2>
                     <button class="btn-notes" id="btn-back-dash-cribs">VOLVER AL DASHBOARD</button>
+                </div>
+
+                <div class="cribs-tabs" style="display:flex;gap:4px;margin-bottom:12px;">
+                    <button class="cribs-tab active" data-cribs-tab="all">📋 Todos</button>
+                    <button class="cribs-tab" data-cribs-tab="cartas">📬 Cartas</button>
                 </div>
 
                 <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
