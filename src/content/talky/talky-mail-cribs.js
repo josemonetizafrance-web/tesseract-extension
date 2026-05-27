@@ -173,7 +173,7 @@ function injectCaptureButton(observer, msgText, header) {
   trigger.onmouseleave = function () { this.style.opacity = '0.5'; };
   trigger.onclick = function (e) {
     e.stopPropagation();
-    var profileId = extractProfileIdFromMail(msgText, header);
+    var profileId = extractProfileIdFromMail(msgText, header, true);
     if (!profileId) { showTessToast('⚠ No se pudo identificar el perfil', 'warning'); return; }
     var capturedText = extractMailText(msgText);
     if (!capturedText) { showTessToast('⚠ No se encontró texto de la carta', 'warning'); return; }
@@ -214,7 +214,7 @@ function injectResponseButton(observer, msgText, header, senderName) {
   trigger.onmouseleave = function () { this.style.opacity = '0.5'; };
   trigger.onclick = function (e) {
     e.stopPropagation();
-    var profileId = extractProfileIdFromMail(msgText, header);
+    var profileId = extractProfileIdFromMail(msgText, header, false);
     if (!profileId) { showTessToast('⚠ No se pudo identificar el perfil', 'warning'); return; }
     this.textContent = '⏳';
     trigger.style.opacity = '1';
@@ -421,7 +421,7 @@ async function fetchCribEntryFromApi(profileId) {
 }
 
 // ============ PROFILE ID EXTRACTION ============
-function extractProfileIdFromMail(msgText, header) {
+function extractProfileIdFromMail(msgText, header, preferOperator) {
   // 1. Check data attributes on header and its children
   let id = header.getAttribute('data-id') || header.getAttribute('data-user-id') || header.getAttribute('data-profile-id') || header.getAttribute('data-member-id');
   if (id && /^\d{6,15}$/.test(id)) return id.replace(/^0+/, '');
@@ -484,6 +484,11 @@ function extractProfileIdFromMail(msgText, header) {
   var urlMatch3 = location.href.match(/\/(\d{6,15})(?:[/?#]|$)/);
   if (urlMatch3) return urlMatch3[1].replace(/^0+/, '');
   // 10. Use Eater's detected profile ID if available
+  // For outgoing (🎭): prefer operator ID from chat context
+  if (preferOperator && window._cribsChatIds && window._cribsChatIds[0]) {
+    console.log('[MAIL-CRIBS] Using operator ID:', window._cribsChatIds[0]);
+    return window._cribsChatIds[0].replace(/^0+/, '');
+  }
   if (window._lastCribsPid) return window._lastCribsPid.replace(/^0+/, '');
   if (window._cribsChatIds && window._cribsChatIds.length > 1) return window._cribsChatIds[1].replace(/^0+/, '');
   console.log('[MAIL-CRIBS] Could not extract profileId');
