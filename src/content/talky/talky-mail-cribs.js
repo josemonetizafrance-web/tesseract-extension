@@ -114,6 +114,20 @@ function processMessageText(msgText) {
   showCribsForMailContact(isMe, msgText, header, senderName);
 }
 
+function findCribsByName(name, cb) {
+  if (typeof _cribsLocalCache !== 'undefined' && _cribsLocalCache) {
+    for (var ci = 0; ci < _cribsLocalCache.length; ci++) {
+      if (_cribsLocalCache[ci].profile_name === name) {
+        var fp = String(_cribsLocalCache[ci].profile_id).replace(/^0+/, '');
+        console.log('[MAIL-CRIBS] Found by name:', name, '->', fp);
+        if (cb) cb(fp);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function showCribsForMailContact(isMe, msgText, header, senderName) {
   if (typeof fetchCribsForProfile !== 'function') return;
   // 1. Try numeric ID from DOM
@@ -121,28 +135,28 @@ function showCribsForMailContact(isMe, msgText, header, senderName) {
   if (pid) { setTimeout(function () { fetchCribsForProfile(pid); }, 300); return; }
   // 2. For incoming: search CRIBS cache by sender name
   if (!isMe) {
-    function findByName(name) {
-      if (typeof _cribsLocalCache !== 'undefined' && _cribsLocalCache) {
-        for (var ci = 0; ci < _cribsLocalCache.length; ci++) {
-          if (_cribsLocalCache[ci].profile_name === name) {
-            var fp = String(_cribsLocalCache[ci].profile_id).replace(/^0+/, '');
-            console.log('[MAIL-CRIBS] Found by name:', name, '->', fp);
-            fetchCribsForProfile(fp);
-            return true;
-          }
-        }
-      }
-      return false;
-    }
-    if (findByName(senderName)) return;
+    if (findCribsByName(senderName, function (fp) { fetchCribsForProfile(fp); })) return;
     if (typeof cribLoadOrRefresh === 'function') {
-      cribLoadOrRefresh(false).then(function () { if (!findByName(senderName)) console.log('[MAIL-CRIBS] Not in CRIBS:', senderName); });
+      cribLoadOrRefresh(false).then(function () { if (!findCribsByName(senderName)) console.log('[MAIL-CRIBS] Not in CRIBS:', senderName); });
     }
     return;
   }
-  // 3. For outgoing: use Eater's client ID from chat context
+  // 3. For outgoing: try Eater's client ID from chat context
   if (window._lastCribsPid) { fetchCribsForProfile(window._lastCribsPid); return; }
   if (window._cribsChatIds && window._cribsChatIds.length > 1) { fetchCribsForProfile(window._cribsChatIds[1]); return; }
+  // 4. For outgoing: extract recipient name from send-wrap
+  var recipientEl = document.querySelector('.send-title .name.text, [data-test-id*="send-title"] .name, .send-wrap .name');
+  if (recipientEl) {
+    var recipientName = (recipientEl.textContent || '').trim();
+    console.log('[MAIL-CRIBS] Outgoing mail recipient:', recipientName);
+    if (recipientName) {
+      if (findCribsByName(recipientName, function (fp) { fetchCribsForProfile(fp); })) return;
+      if (typeof cribLoadOrRefresh === 'function') {
+        cribLoadOrRefresh(false).then(function () { if (!findCribsByName(recipientName)) console.log('[MAIL-CRIBS] Recipient not in CRIBS:', recipientName); });
+      }
+      return;
+    }
+  }
   console.log('[MAIL-CRIBS] No client ID available for outgoing mail');
 }
 
