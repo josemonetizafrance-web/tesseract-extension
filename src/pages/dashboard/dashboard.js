@@ -468,6 +468,22 @@
           html += '</div></div>';
         }
 
+        // Estilo de cartas capturado
+        if (entry.letter_style) {
+          var letterMsgs = entry.letter_style.split('\n').filter(function (l) { return l.trim(); });
+          html += '<div class="cc-letter-style" style="margin-top:6px;border-left:2px solid #f59e0b;border-radius:4px;font-size:10px;line-height:1.4;">\u{1F4EC} <strong>Cartas (' + letterMsgs.length + ' capturas)</strong>';
+          html += '<div style="max-height:120px;overflow-y:auto;padding:6px 8px;background:rgba(245,158,11,0.1);border-radius:0 0 4px 4px;margin-top:4px;">';
+          for (var li = letterMsgs.length - 1; li >= 0; li--) {
+            var lnum = letterMsgs.length - li;
+            html += '<div style="margin-top:4px;padding-top:4px;border-top:1px solid rgba(245,158,11,0.15);display:flex;gap:4px;align-items:flex-start;">';
+            html += '<span style="color:#f59e0b;font-weight:600;font-size:9px;flex-shrink:0;">' + lnum + '.</span> ';
+            html += '<span style="flex:1;">' + escapeHtml(letterMsgs[li]) + '</span>';
+            html += '<button class="btn-del-letter-line" data-entry-id="' + entry._id + '" data-line-idx="' + li + '" title="Eliminar esta captura" style="flex-shrink:0;background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:0 2px;line-height:1;">✕</button>';
+            html += '</div>';
+          }
+          html += '</div></div>';
+        }
+
         // Notas del sistema de notas
         if (clientNotes.length > 0) {
           html += '<div class="cc-notes-title">\u{1F4CB} Notas (' + clientNotes.length + ')</div>';
@@ -497,6 +513,17 @@
         btn.addEventListener('click', function () {
           var pid = this.dataset.profileId;
           if (pid) window._cribChat(pid);
+        });
+      });
+
+      // Attach delete letter line buttons
+      body.querySelectorAll('.btn-del-letter-line').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var entryId = this.dataset.entryId;
+          var lineIdx = parseInt(this.dataset.lineIdx, 10);
+          if (!entryId || isNaN(lineIdx)) return;
+          if (!confirm('Eliminar esta captura de carta?')) return;
+          window._deleteLetterLine(entryId, lineIdx);
         });
       });
     }).catch(function () {
@@ -532,6 +559,27 @@
         chrome.tabs.create({ url: 'https://talkytimes.com/member/' + profileId, active: true });
       }
     });
+  };
+
+  window._deleteLetterLine = function (entryId, lineIdx) {
+    var entry = cribsData.find(function (e) { return e._id === entryId; });
+    if (!entry || !entry.letter_style) return;
+    var lines = entry.letter_style.split('\n').filter(function (l) { return l.trim(); });
+    if (lineIdx < 0 || lineIdx >= lines.length) return;
+    lines.splice(lineIdx, 1);
+    var newStyle = lines.join('\n');
+    cribsApi('/api/tess/cribs/' + entryId + '/bulk', {
+      method: 'PUT',
+      body: JSON.stringify({ letter_style: newStyle })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.success) {
+        entry.letter_style = newStyle;
+        openCribsTable(); // refresh overlay
+        showNotification('Captura de carta eliminada', 'success');
+      } else {
+        showNotification('Error al eliminar captura', 'error');
+      }
+    }).catch(function () { showNotification('Error de conexi\u00f3n', 'error'); });
   };
 
   window._cribDelete = function (id) {
