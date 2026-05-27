@@ -516,9 +516,12 @@ function extractProfileIdFromMail(msgText, header, preferOperator) {
     var m3 = href.match(/\/(\d{6,15})(?:[/?#]|$)/);
     if (m3) return m3[1].replace(/^0+/, '');
   }
-  // 8. Chat URL pattern: /chat/{operatorId}_{clientId}
-  const chatM = location.href.match(/\/chat\/(\d{6,15})_(\d{6,15})/);
-  if (chatM) return chatM[2].replace(/^0+/, '');
+  // 8. URL patterns with two IDs: /chat/{op}_{client} or /mails/{op}_{client} etc.
+  var pairMatch = location.href.match(/\/(?:chat|mail|mails|messages)\/(\d{6,15})_(\d{6,15})/);
+  if (pairMatch) {
+    console.log('[MAIL-CRIBS] URL pair match:', pairMatch[1], pairMatch[2]);
+    return pairMatch[2].replace(/^0+/, '');
+  }
   // 9. URL mail patterns
   var urlMatch = location.href.match(/\/mails?\/(\d{6,15})/);
   if (urlMatch) return urlMatch[1].replace(/^0+/, '');
