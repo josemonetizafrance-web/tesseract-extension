@@ -125,6 +125,8 @@ function findCribsByName(name, cb) {
 
 function showCribsForMailContact(isMe, msgText, header, senderName) {
   if (typeof fetchCribsForProfile !== 'function') return;
+  // Clear overlay to prevent stale data from previous client
+  fetchCribsForProfile(null);
   // 1. Try numeric ID from DOM
   var pid = extractProfileIdFromMail(msgText, header, false);
   if (pid) { setTimeout(function () { fetchCribsForProfile(pid); }, 300); return; }
