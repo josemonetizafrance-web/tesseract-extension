@@ -180,9 +180,9 @@ async function initAdminPanel() {
       });
     }
 
-    document.getElementById('btn-refresh').addEventListener('click', () => { 
+    document.getElementById('btn-refresh').addEventListener('click', async () => { 
       const office = isOfficeAdmin && !isMasterAdmin ? userOffice : document.getElementById('office-filter').value;
-      loadMetrics(office); loadUserList(office); loadActivityLog(office); loadBotActions(); loadUserStatus(office); loadDeveloperList();
+      await loadMetrics(office); await loadUserList(office); await loadActivityLog(office); await loadBotActions(); await loadUserStatus(office); await loadDeveloperList();
     });
     document.getElementById('btn-logout').addEventListener('click', async () => {
       await chrome.storage.local.clear();
