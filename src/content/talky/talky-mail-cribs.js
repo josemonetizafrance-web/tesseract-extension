@@ -9,7 +9,7 @@ let mailCribsProcessed = new Set();
 let mailCribsLetterStyleEnabled = true;
 let capturedLetterCache = new Set();
 
-const MAIL_MSG_SEL = '[data-test-id*="message-text"]';
+const MAIL_MSG_SEL = '[data-test-id*="mail-history-item"], [data-test-id*="message-text"]';
 
 // ============ CONFIG ============
 async function loadMailCribsConfig() {
@@ -70,9 +70,13 @@ function processMessageText(msgText) {
   if (mailCribsProcessed.has(msgText)) { console.log('[MAIL-CRIBS] processMessageText: already processed'); return; }
   console.log('[MAIL-CRIBS] processMessageText:', msgText.className);
 
-  const observer = msgText.querySelector('.observer');
-  if (!observer) { console.log('[MAIL-CRIBS] no .observer inside msgText'); return; }
-  console.log('[MAIL-CRIBS] found .observer');
+  let observer = msgText.querySelector('.observer');
+  if (!observer) {
+    console.log('[MAIL-CRIBS] no .observer inside msgText, injecting in msgText');
+    observer = msgText;
+  } else {
+    console.log('[MAIL-CRIBS] found .observer');
+  }
 
   // Find the preceding mail-header sibling to determine direction
   const header = findPrecedingMailHeader(msgText);

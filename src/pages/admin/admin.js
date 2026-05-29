@@ -24,6 +24,7 @@ function initTabs() {
       if (tabName === 'users') loadUserList(office);
       if (tabName === 'activity') loadActivityLog(office);
       if (tabName === 'offices') { loadOffices(); loadOfficesList(); }
+      if (tabName === 'calendar') loadCalendar();
     });
   });
 }

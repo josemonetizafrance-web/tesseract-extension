@@ -1088,7 +1088,10 @@ function startPeriodicSync() {
                         (collectedIds.Cartas?.length || 0);
 
     try {
-      const token = await new Promise(r => chrome.storage.local.get('tess_jwt', d => r(d.tess_jwt)));
+      const [token, userOffice] = await Promise.all([
+        new Promise(r => chrome.storage.local.get('tess_jwt', d => r(d.tess_jwt))),
+        new Promise(r => chrome.storage.local.get('user_office', d => r(d.user_office)))
+      ]);
       if (token) {
         const res = await fetch(`${TESSERACT_API}/api/tess/metrics/sync`, {
           method: 'POST',
@@ -1097,7 +1100,8 @@ function startPeriodicSync() {
             stats: botStats,
             collectedIds: collectedIds,
             action: 'PERIODIC_SYNC',
-            count: totalSweeps
+            count: totalSweeps,
+            office: userOffice || null
           })
         });
         if (res.status === 401) {
