@@ -610,7 +610,7 @@ function setupAllEvents() {
       document.getElementById('tab' + (tabMap[currentTab] || 'Main')).classList.add('active');
       if (currentTab === 'star') renderStarIds();
       if (currentTab === 'aa') updateAATabUI();
-      if (currentTab === 'mailing') updateMLTabUI();
+      if (currentTab === 'mailing') { updateMLTabUI(); startMLStatsPolling(); } else { stopMLStatsPolling(); }
       if (currentTab === 'blacklist') renderBlacklistTab();
     });
   });

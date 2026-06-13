@@ -129,6 +129,7 @@ function createAutoAnswerPanel() {
         <textarea id="aaEvGreetingTmpl" placeholder="Plantilla de saludo para barrido..."></textarea>
       </div>
     </div>
+    <button id="aaReplyBodyguardBtn" style="margin-top:8px;width:100%;padding:10px;border:2px solid #06b6d4;border-radius:8px;background:linear-gradient(135deg,#0891b2,#06b6d4);color:#fff;cursor:pointer;font-family:'Segoe UI',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.5px;transition:all 0.3s;">🛡 REPLY BODYGUARD — Generar respuestas con IA</button>
   </div>
 
   <div class="aa-section">
@@ -176,6 +177,24 @@ function createAutoAnswerPanel() {
       const errEl = document.getElementById('aaErrorMsg');
       errEl.textContent = '❌ Error al guardar: ' + (err.message || 'Error desconocido');
       errEl.style.display = 'block';
+    }
+  });
+
+  document.getElementById('aaReplyBodyguardBtn').addEventListener('click', async function() {
+    const btn = this;
+    const origText = btn.textContent;
+    btn.textContent = '⏳ GENERANDO...';
+    btn.disabled = true;
+    try {
+      await generateAllAAResponses();
+      showAASavedFeedback();
+    } catch (e) {
+      const errEl = document.getElementById('aaErrorMsg');
+      errEl.textContent = '❌ Error: ' + (e.message || 'desconocido');
+      errEl.style.display = 'block';
+    } finally {
+      btn.textContent = origText;
+      btn.disabled = false;
     }
   });
 
@@ -298,4 +317,49 @@ function updateAATabUI() {
   // Sync main panel toggle switch
   const toggle = document.getElementById('btnToggleAA');
   if (toggle) toggle.checked = cfg.enabled || false;
+}
+
+async function generateAllAAResponses() {
+  const errEl = document.getElementById('aaErrorMsg');
+  errEl.style.display = 'none';
+
+  const token = await new Promise(r => chrome.storage.local.get('tess_jwt', d => r(d.tess_jwt)));
+  if (!token) { errEl.textContent = '❌ No hay token JWT. Inicia sesión primero.'; errEl.style.display = 'block'; return; }
+
+  const events = [
+    { key: 'like', label: 'Like', prompt: 'Una mujer recibió un "Like" en una app de citas. Genera una respuesta breve, natural y coqueta para agradecer el like.' },
+    { key: 'wink', label: 'Wink', prompt: 'Una mujer recibió un "Wink/Guiño" en una app de citas. Genera una respuesta breve, juguetona y amigable.' },
+    { key: 'comment', label: 'Comment', prompt: 'Una mujer recibió un "Comment" en su perfil de una app de citas. Genera una respuesta breve y agradecida.' },
+    { key: 'gift', label: 'Gift', prompt: 'Una mujer recibió un "Gift/Regalo virtual" en una app de citas. Genera una respuesta breve, agradecida y cálida.' },
+    { key: 'greeting', label: 'Greeting', prompt: 'Una mujer quiere enviar un saludo inicial a un hombre en una app de citas. Genera un mensaje breve, amigable y natural para romper el hielo.' }
+  ];
+
+  for (const ev of events) {
+    const tmplEl = document.getElementById('aaEv' + ev.label + 'Tmpl');
+    if (!tmplEl) continue;
+    try {
+      const res = await fetch('https://tesseract-jblo.onrender.com/api/chatgpt/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: 'Eres una asistente de citas. Genera SOLO el texto de respuesta, sin explicaciones, sin comillas, sin etiquetas. Máximo 2 oraciones.' },
+            { role: 'user', content: ev.prompt }
+          ],
+          max_tokens: 100,
+          temperature: 0.8
+        })
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const text = (data.choices?.[0]?.message?.content || '').trim();
+      if (text) tmplEl.value = text;
+    } catch (e) {
+      console.warn('[AA-BODYGUARD] Error generando', ev.key, e.message);
+    }
+  }
+
+  // Save after generation
+  await saveAAPanelConfig();
+  updateAATabUI();
 }
