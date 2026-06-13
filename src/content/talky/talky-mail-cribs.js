@@ -348,22 +348,27 @@ async function generateMailResponse(msgText, observer, profileId, senderName) {
     entry.bio ? 'Bio: ' + entry.bio : ''
   ].filter(Boolean).join('\n');
 
-  const letterStyle = entry.letter_style || '';
-  var styleHint = '';
+  var styleExamples = '';
+  var letterStyle = entry.letter_style || '';
   if (letterStyle) {
     var styleLines = letterStyle.split('\n').filter(function (l) { return l.trim(); });
     if (styleLines.length > 0) {
-      styleHint = '\n\nEste es tu estilo de escritura en cartas anteriores (emula exactamente este tono, formato y manera de expresarte):\n' + styleLines.slice(-3).join('\n');
+      styleExamples = '\n\n🎯 CLONACIÓN DE IDENTIDAD — PRIORIDAD ABSOLUTA:\n' +
+        'Aquí están tus cartas anteriores a este cliente (debes clonar EXACTAMENTE este estilo):\n' +
+        styleLines.slice(-10).map(function (l) { return '• "' + l.trim() + '"'; }).join('\n') +
+        '\n\nINSTRUCCIÓN CRÍTICA: Debes imitar EXACTAMENTE: mismo tono (formal/casual/coqueto), longitud de frases, vocabulario, nivel de detalle, forma de saludar y despedirte, y personalidad general. Tu carta debe sonar como si el MISMO operador la hubiera escrito.';
     }
   }
 
-  const systemMsg = 'Eres un asistente de cartas para una plataforma de citas. Responde a la carta recibida de forma personal, cálida y natural. '
-    + 'Usa el mismo tono y estilo que el operador usa en sus cartas (se proporciona abajo). '
-    + 'La carta debe tener al menos 5000 caracteres. Responde solo con el mensaje, sin explicaciones ni introducciones.'
-    + styleHint;
+  const systemMsg = 'Eres un operador de chat real escribiendo una carta a un cliente en una plataforma de citas. ' +
+    'Tu MISIÓN PRINCIPAL es CLONAR LA IDENTIDAD del operador reflejada en las cartas anteriores que se muestran abajo.' +
+    styleExamples +
+    '\n\nLa carta debe ser natural, personal y coherente con el estilo del operador. Responde solo con el mensaje, sin explicaciones ni introducciones. La extensión debe ser similar a las cartas anteriores del operador.';
 
-  const userMsg = 'Perfil del destinatario:\n' + profileInfo + '\n\nCarta recibida:\n' + receivedText.slice(0, 1500)
-    + '\n\nGenera una respuesta personal a esta carta usando el estilo del operador.';
+  const userMsg = '🎯 CLONACIÓN DE IDENTIDAD — PRIORIDAD ABSOLUTA:\n' +
+    'Perfil del destinatario:\n' + profileInfo +
+    '\n\nCarta recibida:\n' + receivedText.slice(0, 1500) +
+    '\n\nGenera una respuesta a esta carta CLONANDO EXACTAMENTE el estilo del operador mostrado arriba. Tu respuesta debe sonar idéntica a cómo el operador le escribe a esta persona.';
 
   try {
     const res = await fetch(TESSERACT_API + '/api/chatgpt/chat', {

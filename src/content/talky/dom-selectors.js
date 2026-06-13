@@ -119,11 +119,12 @@ const TALK_Y = {
   PAGE_TITLE: 'title',
 
   // ─── LIKE / FOLLOW / PHOTO ───
-  PHOTO_VIEWER: '.photo-viewer, [data-test-id*="photo-view"], [role="dialog"], button[aria-label="Close"], [class*="gallery"], .modal-overlay',
+  PHOTO_VIEWER: '.splide[class*="gallery"], .splide--nav, .photo-viewer, [data-test-id*="photo-view"], [role="dialog"], button[aria-label="Close"], [class*="gallery"], .modal-overlay',
   PERSON_CARD: 'img.person-card__photo, img.photo-card, .person-card, [data-test-id*="person-card"]',
-  PHOTO_IMAGE: '[data-test-id="file:media click:photo-view"], [data-test-id*="photo-view"], .profile-photo-wrap img, [class*="profile"] img[src*="photo"]',
+  PHOTO_IMAGE: '[data-test-id="file:media click:photo-view"], [data-test-id*="photo-view"], [data-test-id*="gallery-slider"], .profile-photo-wrap img, [class*="profile"] img[src*="photo"]',
   LIKE_BTN: 'button[data-test-id*="set-like"], button.gallery-footer__like_narrow, button[data-test-id*="on-like"], button[aria-label*="Like"], button[class*="like"]:has(svg), button[class*="gallery"] button:has(svg[id*="Heart"]), .gallery-footer button:has(svg), button:has(svg[id*="Heart"])',
   NEXT_PHOTO_BTN: 'button[aria-label*="Next"], button[aria-label*="next"], button[aria-label*="Siguiente"], button[data-test-id*="next"]',
+  GALLERY_SLIDE: '[data-test-id="file:gallery-slider click:on-slide-index"], .splide--nav .splide__slide',
   CLOSE_BTN: 'button[aria-label="Close"], [aria-label*="close"]',
   LIKE_FOLLOW_BTN: 'button[data-test-id*="on-like"], button[data-test-id*="on-follow"]',
   FOLLOW_BTN: 'button[data-test-id*="on-follow"]',

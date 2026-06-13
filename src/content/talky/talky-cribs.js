@@ -63,8 +63,10 @@ function cribScrapeViaRouter(profileId, entryId, jwt) {
         console.log('[CRIBS] Bulk PUT exitoso');
         try { chrome.runtime.sendMessage({action: 'CRIBS_REFRESH'}); } catch (e) { console.log('[CRIBS] sendMessage error:', e.message); }
         try {
+          _cribsLocalCache = null;
+          _cribsCacheLastFetch = 0;
           var rawScrapedId = String(profileId).replace(/^0+/, '');
-          if (window._lastCribsPid === rawScrapedId) { fetchCribsForProfile(rawScrapedId); }
+          fetchCribsForProfile(rawScrapedId);
         } catch (e) { console.log('[CRIBS] overlay refresh error:', e.message); }
       }).catch(function (e) { console.log('[CRIBS] Bulk PUT network error:', e.message); });
       console.log('[CRIBS] Perfil actualizado:', name, country, age, interests, JSON.stringify(extra));
@@ -84,7 +86,7 @@ chrome.runtime.onMessage.addListener((req, sender, res) => {
     if (cat && req.clientId) {
       const registered = registerIdInStarTools(String(req.clientId), cat);
       if (registered) {
-        console.log('[STAR-TOOLS] ðŸ”— ID del bot real registrado:', req.clientId, 'â†’', cat);
+        console.log('[STAR-TOOLS] ID del bot real registrado:', req.clientId, '→', cat);
       }
     }
     res && res({ success: true });
@@ -95,6 +97,16 @@ chrome.runtime.onMessage.addListener((req, sender, res) => {
     if (!profileId) { res({ error: 'profileId required' }); return; }
     _tessJwtCache = jwt || '';
     cribScrapeViaRouter(profileId, entryId, jwt);
+    res({ success: true });
+    return true;
+  }
+  if (req.action === 'CRIBS_REFRESH') {
+    console.log('[CRIBS] REFRESH recibido, limpiando cache y recargando');
+    _cribsLocalCache = null;
+    _cribsCacheLastFetch = 0;
+    if (window._lastCribsPid) {
+      fetchCribsForProfile(window._lastCribsPid);
+    }
     res({ success: true });
     return true;
   }
@@ -619,7 +631,8 @@ function ensureCribsElements() {
 
 function createCribsOverlay() {
   try {
-  if (document.getElementById('tess-cribs-overlay')) return;
+  if (document.getElementById('tess-cribs-overlay')) { console.log('[CRIBS] Overlay already exists'); return; }
+  console.log('[CRIBS] Creating overlay elements');
   var css = document.createElement('style');
   css.textContent = `
     #tess-cribs-toggle { position:fixed !important; left:10px !important; bottom:50px !important; z-index:2147483647 !important; background:#6d28d9; color:#fff; border:none; border-radius:50%; width:44px; height:44px; font-size:20px; cursor:grab; box-shadow:0 2px 12px rgba(109,40,217,0.5); display:flex !important; align-items:center; justify-content:center; opacity:0.85; user-select:none; visibility:visible !important; }
@@ -864,6 +877,9 @@ function cribLoadOrRefresh(fetchIfStale) {
           if (resp && resp.cribs && Array.isArray(resp.cribs)) {
             _cribsLocalCache = resp.cribs;
             _cribsCacheLastFetch = Date.now();
+            console.log('[CRIBS] Cache actualizado con', resp.cribs.length, 'entradas');
+          } else {
+            console.log('[CRIBS] Respuesta sin cribs array:', JSON.stringify(resp).slice(0, 500));
           }
           resolve();
         });
@@ -896,7 +912,7 @@ function fetchCribsForProfile(profileId) {
       var togg = document.getElementById('tess-cribs-toggle');
       if (el) { if (togg) positionOverlayNearToggle(el, togg); el.classList.add('visible'); }
     }
-    cribLoadOrRefresh(false);
+    cribLoadOrRefresh(true);
     return;
   }
   if (body) body.innerHTML = '<div class="tess-cribs-msg">Cargando datos...</div>';
@@ -916,6 +932,11 @@ function fetchCribsForProfile(profileId) {
           if (el) { if (togg) positionOverlayNearToggle(el, togg); el.classList.add('visible'); }
         }
       } else {
+        console.log('[CRIBS] No se encontró entry para profileId:', profileId, '| cache length:', _cribsLocalCache ? _cribsLocalCache.length : 0);
+        if (_cribsLocalCache && _cribsLocalCache.length > 0) {
+          var sampleIds = _cribsLocalCache.slice(0, 3).map(function (c) { return c.profile_id; });
+          console.log('[CRIBS] Muestra de profile_ids en cache:', JSON.stringify(sampleIds));
+        }
         renderCribsOverlay(null);
         cribsOverlayState.profileId = null;
         _cribsHideTimer = setTimeout(function () {

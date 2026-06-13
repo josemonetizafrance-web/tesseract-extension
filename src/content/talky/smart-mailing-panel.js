@@ -22,7 +22,7 @@ function createMailingPanel() {
   m.id = 'mailingModal';
   m.innerHTML = `
 <style>
-#mailingModal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999999;display:none;width:560px;max-height:90vh;background:#0a0a0a;border:2px solid #8b5cf6;border-radius:12px;box-shadow:0 0 40px rgba(139,92,246,0.5);color:#e0e0e0;font-family:'Orbitron','Segoe UI',sans-serif;overflow:hidden;display:flex;flex-direction:column;}
+#mailingModal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999999;display:none;width:500px;max-height:85vh;background:#0a0a0a;border:2px solid #8b5cf6;border-radius:12px;box-shadow:0 0 40px rgba(139,92,246,0.5);color:#e0e0e0;font-family:'Orbitron','Segoe UI',sans-serif;overflow:hidden;display:flex;flex-direction:column;}
 .ml-hdr{background:linear-gradient(135deg,#1e1b4b,#8b5cf6,#1e1b4b);padding:12px 16px;font-weight:bold;letter-spacing:2px;display:flex;justify-content:space-between;border-bottom:2px solid #8b5cf6;color:#e0e0e0;font-size:13px;cursor:default;}
 .ml-hdr span{cursor:pointer;font-size:18px;}
 .ml-body{padding:16px;overflow-y:auto;flex:1;}
@@ -42,10 +42,6 @@ function createMailingPanel() {
 .ml-hour-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
 .ml-hour-row label{font-size:9px;}
 .ml-hour-row input{width:40px;}
-.ml-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0;}
-.ml-stat-card{text-align:center;padding:8px;background:rgba(0,0,0,0.4);border:1px solid rgba(139,92,246,0.2);border-radius:6px;}
-.ml-stat-card .val{display:block;font-size:18px;font-weight:900;color:#ffffff;text-shadow:0 0 10px #8b5cf6;}
-.ml-stat-card .lbl{font-size:7px;letter-spacing:1px;color:#888;text-transform:uppercase;}
 .ml-error{color:#dc2626;font-size:9px;margin:4px 0;padding:6px 10px;background:rgba(220,38,38,0.1);border:1px solid #dc2626;border-radius:4px;display:none;}
 .ml-info{color:#4CAF50;font-size:9px;margin:4px 0;padding:6px 10px;background:rgba(76,175,80,0.1);border:1px solid #4CAF50;border-radius:4px;display:none;}
 .ml-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -60,7 +56,6 @@ function createMailingPanel() {
 .ml-foot button.primary:hover{background:#7c3aed;color:#fff;}
 .ml-foot button.danger{background:rgba(239,68,68,0.2);border-color:#ef4444;color:#ef4444;}
 .ml-foot button.danger:hover{background:#ef4444;color:#fff;}
-.ml-blacklist-warn{font-size:8px;color:#ef4444;margin-top:4px;}
 </style>
 <div class="ml-box">
 <div class="ml-hdr"><span>MULTIMAILING</span><span id="mlCloseBtn">&times;</span></div>
@@ -123,27 +118,8 @@ function createMailingPanel() {
     <p style="font-size:8px;color:#666;margin-top:4px;">Si el contacto ha respondido recientemente, no se enviaran mas cartas automaticas.</p>
   </div>
 
-  <div class="ml-section">
-    <h4>BLACKLIST</h4>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0;">
-      <div class="ml-stat-card"><span class="val" id="mlBlacklistCount">0</span>BLOQUEADOS</div>
-      <div class="ml-stat-card"><span class="val" id="mlBlacklistStatus">--</span>ESTADO</div>
-      <div class="ml-stat-card"><span class="val" id="mlScheduleStatus">--</span>PROGRAMACION</div>
-      <div class="ml-stat-card"><span class="val" id="mlBlockStatus">--</span>BLOQUEO DIAL.</div>
-    </div>
-    <p class="ml-blacklist-warn">CONDICION PRINCIPAL: Ningun contacto en blacklist recibira mensajes.</p>
-  </div>
-
-  <div class="ml-section">
-    <h4>ESTADISTICAS</h4>
-    <div class="ml-stats">
-      <div class="ml-stat-card"><span class="val" id="mlSentTodayVal">0</span>ENVIADOS HOY</div>
-      <div class="ml-stat-card"><span class="val" id="mlDailyLimitVal">30</span>LIMITE</div>
-      <div class="ml-stat-card"><span class="val" id="mlScrapedVal">0</span>EN PAGINA</div>
-    </div>
-    <div id="mlErrorMsg" class="ml-error"></div>
-    <div id="mlInfoMsg" class="ml-info"></div>
-  </div>
+  <div id="mlErrorMsg" class="ml-error"></div>
+  <div id="mlInfoMsg" class="ml-info"></div>
 
 </div>
 <div class="ml-foot">
@@ -179,7 +155,6 @@ async function openMLPanel() {
   mlModal(true);
   mlCfgCache = await _loadMLCfg();
   populateMLPanel();
-  updateMLScrapedCount();
 }
 
 async function _loadMLCfg() {
@@ -219,12 +194,6 @@ function populateMLPanel() {
   document.getElementById('mlDialogueHours').value = cfg.activeDialogueHours || 48;
   document.getElementById('mlSentTodayVal').textContent = cfg.sentToday || 0;
   document.getElementById('mlDailyLimitVal').textContent = cfg.maxDaily || 30;
-
-  const stats = typeof window._getMailingStats === 'function' ? window._getMailingStats() : null;
-  document.getElementById('mlBlacklistCount').textContent = stats?.blacklistSize || 0;
-  document.getElementById('mlBlacklistStatus').textContent = stats?.blacklistLoaded ? 'OK' : '--';
-  document.getElementById('mlScheduleStatus').textContent = stats?.scheduleEnabled ? (stats.scheduleRemaining + '/' + stats.scheduleCycles) : '--';
-  document.getElementById('mlBlockStatus').textContent = stats?.blockActiveDialogue ? 'ACTIVO' : '--';
 
   updateMLStatusBar(cfg.enabled);
   updateExecuteButtonState();
@@ -295,13 +264,6 @@ function updateExecuteButtonState() {
   document.getElementById('mlAbortBtn').style.display = isActive ? '' : 'none';
 }
 
-async function updateMLScrapedCount() {
-  if (typeof window._scrapeActiveLimitsIds === 'function') {
-    const ids = window._scrapeActiveLimitsIds();
-    document.getElementById('mlScrapedVal').textContent = ids.length;
-  }
-}
-
 async function scrapeFromPanel() {
   const infoEl = document.getElementById('mlInfoMsg');
   const errEl = document.getElementById('mlErrorMsg');
@@ -312,7 +274,6 @@ async function scrapeFromPanel() {
       const ids = window._scrapeActiveLimitsIds();
       infoEl.textContent = 'Se encontraron ' + ids.length + ' contactos en la pagina';
       infoEl.style.display = 'block';
-      document.getElementById('mlScrapedVal').textContent = ids.length;
     }
   } catch (e) {
     errEl.textContent = 'Error al rastrear: ' + e.message;
@@ -339,9 +300,8 @@ async function executeMailingFromPanel() {
   try {
     const result = await window._executeMailingRound();
     var totalSent = typeof window._getMailingConfigDirect === 'function' ? (window._getMailingConfigDirect().sentToday || 0) : result.sent;
-    infoEl.textContent = 'Ronda completada: ' + result.sent + ' enviados ahora, ' + totalSent + ' total hoy | ' + result.skipped + ' saltados, ' + result.blacklisted + ' blacklist' + (result.activeSkipped ? ', ' + result.activeSkipped + ' dialogo activo' : '');
+    infoEl.textContent = 'Ronda completada: ' + result.sent + ' enviados ahora, ' + ('total hoy: ' + totalSent) + ' | ' + result.skipped + ' saltados, ' + result.blacklisted + ' blacklist' + (result.activeSkipped ? ', ' + result.activeSkipped + ' dialogo activo' : '');
     infoEl.style.display = 'block';
-    document.getElementById('mlSentTodayVal').textContent = totalSent;
   } catch (e) {
     errEl.textContent = 'Error: ' + e.message;
     errEl.style.display = 'block';

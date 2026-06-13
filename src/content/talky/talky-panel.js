@@ -1,5 +1,20 @@
 // TESSERACT v24.0 - Panel UI + Eventos + Auth + Init (extraído de talky-bot-panel.js)
 
+// Fallback: asegurar que _clearMessageSelection exista (definida en talky-eater.js)
+if (typeof _clearMessageSelection === 'undefined') {
+  function _clearMessageSelection() {
+    document.querySelectorAll('.tess-eater-trigger.sel').forEach(function(el) {
+      el.classList.remove('sel');
+      el.style.border = '';
+      el.style.borderRadius = '';
+      el.style.padding = '';
+      el.style.opacity = '0.5';
+    });
+    if (typeof _selectedEaterMessages !== 'undefined') _selectedEaterMessages = [];
+    if (typeof _updateEaterSelectionUI === 'function') _updateEaterSelectionUI();
+  }
+}
+
 // ============ FUNCIÓN CENTRAL: Registrar ID en Star Tools ============
 function registerIdInStarTools(id, category) {
   if (!id || !/^\d{6,15}$/.test(String(id).trim())) return false;
@@ -26,21 +41,22 @@ async function initTesseract() {
     console.error('[TESSERACT] Error en log inicial:', e);
   }
 
-  // Crear panel PRIMERO (fuera de try para garantizar que siempre se ejecute)
+  // Crear panel PRIMERO
+  try { createMainPanel(); } catch (e) { console.error('[TESSERACT] createMainPanel:', e); }
+  try { initIcebreakers(); } catch (e) { console.error('[TESSERACT] initIcebreakers:', e); }
+  try { createSaludosModal(); } catch (e) { console.error('[TESSERACT] createSaludosModal:', e); }
+  try { createCartasModal(); } catch (e) { console.error('[TESSERACT] createCartasModal:', e); }
+  try { setupAllEvents(); } catch (e) { console.error('[TESSERACT] setupAllEvents:', e); }
+  try { await loadAllStates(); } catch (e) { console.error('[TESSERACT] loadAllStates:', e); }
+  try { startChatWatcher(); } catch (e) { console.error('[TESSERACT] startChatWatcher:', e); }
+  try { startBackgroundIdCapture(); } catch (e) { console.error('[TESSERACT] startBackgroundIdCapture:', e); }
+  try { startProfileWatcher(); } catch (e) { console.error('[TESSERACT] startProfileWatcher:', e); }
+  try { createCribsOverlay(); } catch (e) { console.error('[TESSERACT] createCribsOverlay:', e); }
+  try { startPeriodicSync(); } catch (e) { console.error('[TESSERACT] startPeriodicSync:', e); }
   try {
-    createMainPanel();
-    initIcebreakers();
-    createSaludosModal();
-    createCartasModal();
-    setupAllEvents();
-    loadAllStates();
-    startChatWatcher();
-    startBackgroundIdCapture();
-    startProfileWatcher();
-    createCribsOverlay();
-  } catch (e) {
-    console.error('[TESSERACT] ❌ Error creando panel:', e);
-  }
+    var userDisplay = document.getElementById('currentUserDisplay');
+    if (userDisplay) userDisplay.textContent = currentUser;
+  } catch (e) {}
 
   // Inicializar módulos v24 (pueden fallar sin afectar el panel)
   try {
@@ -126,6 +142,7 @@ function createMainPanel() {
   
   const p = document.createElement('div');
   p.id = 'tesseract-main-panel';
+  var logoUrl = chrome.runtime.getURL('dist/assets/tesseract-logo.svg');
   p.innerHTML = `
 <style>
 @font-face { font-family: 'Orbitron'; font-style: normal; font-weight: 400; font-display: swap; src: url('https://fonts.gstatic.com/s/orbitron/v32/yMJMMIlzdpvBhQQL_SC3X9yhF25-T1sz.woff2') format('woff2'); }
@@ -158,24 +175,6 @@ function createMainPanel() {
 .tess-box::-webkit-scrollbar-track{background:#0a0a0a;}
 .tess-box::-webkit-scrollbar-thumb{background:#8b5cf6;border-radius:3px;}
 
-.auth-section{text-align:center;padding:10px;}
-.auth-icon{font-size:44px;display:block;margin-bottom:8px;filter:drop-shadow(0 0 15px #8b5cf6);}
-.auth-brand{font-size:24px;font-weight:900;letter-spacing:4px;background:linear-gradient(180deg,#8b5cf6,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:3px;}
-.auth-group{font-size:11px;letter-spacing:3px;color:#ffffff;margin-bottom:10px;text-transform:uppercase;}
-.auth-sub{font-size:10px;color:#e0e0e0;opacity:0.7;letter-spacing:1px;margin-bottom:15px;text-transform:uppercase;}
-.auth-err{color:#ffffff;font-size:11px;margin:8px 0;padding:8px;background:rgba(139,92,246,0.1);border:1px solid #ffffff;border-radius:6px;display:none;letter-spacing:1px;}
-.auth-hint{font-size:10px;color:#666;margin-top:3px;text-align:right;}
-.inp-grp{margin-bottom:10px;text-align:left;}
-.inp-lbl{display:block;font-size:11px;letter-spacing:2px;color:#e0e0e0;margin-bottom:4px;text-transform:uppercase;}
-.t-input{width:100%;padding:10px;background:#000;border:1px solid #8b5cf6;border-radius:6px;color:#e0e0e0;font-family:'Share Tech Mono',monospace;font-size:14px;letter-spacing:1px;box-sizing:border-box;}
-.t-input:focus{outline:none;border-color:#8b5cf6;box-shadow:0 0 15px rgba(139,92,246,0.5);}
-.t-input::placeholder{color:#444;}
-.btn-auth{width:100%;padding:12px;border:1px solid #8b5cf6;border-radius:8px;background:linear-gradient(180deg,#1e1b4b,#0a0a0f);color:#e0e0e0;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:15px;font-weight:900;letter-spacing:3px;text-transform:uppercase;transition:all 0.3s;margin-top:10px;}
-.btn-auth:hover{background:linear-gradient(180deg,#8b5cf6,#6d28d9);color:#000;box-shadow:0 0 30px #8b5cf6;}
-.net-bar{margin-top:12px;padding:10px;background:rgba(0,0,0,0.5);border:1px solid #8b5cf6;border-radius:6px;font-size:11px;letter-spacing:2px;text-align:center;}
-.net-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#8b5cf6;margin-right:6px;animation:blink 1s infinite;}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
-.auth-foot{margin-top:12px;font-size:10px;color:#666;letter-spacing:2px;}
 .user-bar{margin-bottom:10px;padding:8px 12px;background:rgba(0,0,0,0.3);border:1px solid #8b5cf6;border-radius:6px;font-size:11px;text-align:center;color:#e0e0e0;}
 
 /* TOGGLE SWITCH */
@@ -262,15 +261,12 @@ function createMainPanel() {
 .tab-btn:hover{background:rgba(124,58,237,0.06) !important;color:#7c3aed !important;}
 .tab-btn.active{background:#7c3aed !important;color:#fff !important;}
 .tab-content{background:#fafafc !important;}
-.auth-icon{filter:none !important;}
-.auth-brand{background:none !important;-webkit-text-fill-color:#7c3aed !important;color:#7c3aed !important;}
 .inp-lbl{color:#555 !important;}
 .t-input{background:#f8f8fc !important;border-color:#e0e0e8 !important;color:#1a1a2e !important;font-family:'Segoe UI',sans-serif !important;}
 .t-input:focus{border-color:#7c3aed !important;box-shadow:0 0 0 3px rgba(124,58,237,0.1) !important;}
 .t-input::placeholder{color:#aaa !important;}
 .btn-auth{background:#7c3aed !important;color:#fff !important;border:none !important;font-family:'Segoe UI',sans-serif !important;}
 .btn-auth:hover{background:#6d28d9 !important;box-shadow:0 4px 12px rgba(124,58,237,0.3) !important;}
-.net-bar{background:#f4f4f8 !important;border-color:#e0e0e8 !important;color:#555 !important;}
 .user-bar{background:#f4f4f8 !important;border-color:#e0e0e8 !important;color:#555 !important;}
 .aa-toggle-slider{background:#ddd !important;}
 .aa-toggle input:checked + .aa-toggle-slider{background:#7c3aed !important;}
@@ -293,8 +289,6 @@ function createMainPanel() {
 .st-bar{background:#f4f4f8 !important;border-color:#e0e0e8 !important;}
 .st-bar button{background:#fff !important;border-color:#d0d0d8 !important;color:#555 !important;font-family:'Segoe UI',sans-serif !important;}
 .st-bar button:hover{background:#7c3aed !important;color:#fff !important;}
-.auth-sub{color:#888 !important;}
-.auth-err{border-color:#ef4444 !important;color:#dc2626 !important;}
 .tess-header button{background:rgba(255,255,255,0.15) !important;border-color:rgba(255,255,255,0.3) !important;color:#fff !important;}
 .tess-header button:hover{background:rgba(255,255,255,0.3) !important;}
 .tess-header button.active-tab{background:#fff !important;color:#7c3aed !important;}
@@ -304,11 +298,35 @@ function createMainPanel() {
 .bot-subpanel.visible[id="botsubLikefollow"]{border-top:3px solid #ec4899 !important;}
 .bot-subpanel.visible[id="botsubEater"]{border-top:3px solid #f59e0b !important;}
 .bot-subpanel.visible[id="botsubIcebreakers"]{border-top:3px solid #10b981 !important;}
+/* Light theme modals & icebreakers */
+.sal-box{background:#fff !important;border-color:#d0d0d8 !important;box-shadow:0 4px 24px rgba(0,0,0,0.1) !important;color:#1a1a2e !important;}
+.sal-hdr{background:linear-gradient(135deg,#7c3aed,#6d28d9) !important;color:#fff !important;border-color:#d0d0d8 !important;}
+.sal-body textarea{background:#f8f8fc !important;border-color:#d0d0d8 !important;color:#1a1a2e !important;}
+.sal-foot button{background:#f4f4f8 !important;border-color:#d0d0d8 !important;color:#555 !important;}
+.car-box{background:#fff !important;border-color:#d0d0d8 !important;box-shadow:0 4px 24px rgba(0,0,0,0.1) !important;color:#1a1a2e !important;}
+.car-hdr{background:linear-gradient(135deg,#7c3aed,#6d28d9) !important;color:#fff !important;border-color:#d0d0d8 !important;}
+.car-body textarea{background:#f8f8fc !important;border-color:#d0d0d8 !important;color:#1a1a2e !important;}
+.car-foot button{background:#f4f4f8 !important;border-color:#d0d0d8 !important;color:#555 !important;}
+.ib-item{background:#f8f8fc !important;border-color:#d0d0d8 !important;}
+.ib-item:hover{background:rgba(124,58,237,0.06) !important;border-color:#7c3aed !important;}
+.ib-label{color:#7c3aed !important;}
+.ib-text{color:#1a1a2e !important;}
 .bot-subpanel.visible[id="botsubPhotos"]{border-top:3px solid #f59e0b !important;}
 .bot-subpanel.visible[id="botsubSaludos"]{border-top:3px solid #10b981 !important;}
 .bot-subpanel.visible[id="botsubCartas"]{border-top:3px solid #3b82f6 !important;}
 .bot-subpanel.visible[id="botsubScraping"]{border-top:3px solid #ef4444 !important;}
 .bot-subpanel.visible[id="botsubMailing"]{border-top:3px solid #8b5cf6 !important;}
+.ml-btn{display:block;width:100%;padding:10px 16px;border:none;border-radius:8px;cursor:pointer;font-family:'Segoe UI',sans-serif;font-size:12px;font-weight:600;letter-spacing:0.5px;transition:all 0.3s;text-align:center;margin-top:6px;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;box-shadow:0 2px 8px rgba(124,58,237,0.3);}
+.ml-btn:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(124,58,237,0.4);}
+.ml-btn:active{transform:translateY(0);}
+.ml-btn-secondary{background:linear-gradient(135deg,#6366f1,#4f46e5);box-shadow:0 2px 8px rgba(99,102,241,0.3);}
+.ml-btn-secondary:hover{box-shadow:0 4px 16px rgba(99,102,241,0.4);}
+.ml-btn-success{background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 2px 8px rgba(16,185,129,0.3);}
+.ml-btn-success:hover{box-shadow:0 4px 16px rgba(16,185,129,0.4);}
+/* Dark theme ml-btn override */
+.tess-box .ml-btn{background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;}
+.tess-box .ml-btn-secondary{background:linear-gradient(135deg,#6366f1,#4f46e5);}
+.tess-box .ml-btn-success{background:linear-gradient(135deg,#10b981,#059669);}
 .bot-subpanel.visible[id="botsubAutoAnswer"]{border-top:3px solid #06b6d4 !important;}
 .bot-subpanel.visible[id="botsubStar"]{border-top:3px solid #7c3aed !important;}
 /* Tab-content accent colors */
@@ -321,7 +339,7 @@ function createMainPanel() {
 <div id="tess-mini-icon">🤖</div>
 <div class="tess-box">
 <div class="tess-resize se"></div><div class="tess-resize sw"></div><div class="tess-resize ne"></div><div class="tess-resize nw"></div>
-<div class="tess-header"><span>🤖 TESSERACT</span><div><button id="btnZoomOut" title="Reducir">-</button><span id="zoomLevel" style="color:#fff;font-size:11px;min-width:28px;text-align:center;display:inline-block;">1.0</span><button id="btnZoomIn" title="Ampliar">+</button><button id="btnMin" title="Minimizar">_</button><button id="btnClose" title="Cerrar">x</button></div></div>
+<div class="tess-header"><img src="${logoUrl}" alt="TESSERACT" style="height:22px;width:auto;display:inline-block;vertical-align:middle;"><div><button id="btnZoomOut" title="Reducir">-</button><span id="zoomLevel" style="color:#fff;font-size:11px;min-width:28px;text-align:center;display:inline-block;">1.0</span><button id="btnZoomIn" title="Ampliar">+</button><button id="btnMin" title="Minimizar">_</button><button id="btnClose" title="Cerrar">x</button></div></div>
 
 <!-- PERFIL ACTIVO -->
 <div class="profile-badge" id="profileBadge"><span>🎯 <span class="pb-name" id="profileName">—</span></span><span class="pb-id" id="profileId">ID: —</span> <input id="manualProfileName" placeholder="Name" style="width:60px;background:#0a0a0f;border:1px solid #333350;color:#e0e0e0;font-size:8px;padding:2px 4px;border-radius:2px;"> <input id="manualProfileId" placeholder="ID" style="width:60px;background:#0a0a0f;border:1px solid #333350;color:#e0e0e0;font-size:8px;padding:2px 4px;border-radius:2px;"> <button id="btnSetProfile" style="background:#8b5cf6;border:none;color:#fff;font-size:8px;padding:2px 6px;border-radius:2px;cursor:pointer;">SET</button></div>
@@ -337,20 +355,7 @@ function createMainPanel() {
 
 <!-- PESTAÑA BOT -->
 <div id="tabMain" class="tab-content active">
-<div id="loginScreen" class="auth-section">
-<span class="auth-icon">🔐</span>
-<div class="auth-brand">TESSERACT</div>
-<div class="auth-group">AUTENTICACIÓN SEGURA</div>
-<div class="auth-sub">Solo usuarios @tesseract.com</div>
-<div class="auth-err" id="authError"></div>
-<div class="inp-grp"><label class="inp-lbl">IDENTIFICADOR DE AGENTE</label><input type="text" id="agentId" class="t-input" placeholder="usuario@tesseract.com" autocomplete="off" /><div class="auth-hint">Debe terminar en @tesseract.com</div></div>
-<div class="inp-grp"><label class="inp-lbl">CLAVE DE CIFRADO</label><input type="password" id="encryptKey" class="t-input" placeholder="••••••••*+" autocomplete="off" /><div class="auth-hint">Debe terminar en *+</div></div>
-<button class="btn-auth" id="btnLogin">INICIALIZAR SESIÓN</button>
-<div class="net-bar"><span class="net-dot"></span>TESSERACT NETWORK</div>
-<div class="auth-foot">v24.0 — JARVIS IA</div>
-</div>
-
-<div id="mainScreen" style="display:none;">
+<div id="mainScreen">
 <div class="user-bar">👤 <strong id="currentUserDisplay"></strong></div>
 
 <!-- SUB-PESTAÑAS DEL BOT -->
@@ -388,6 +393,12 @@ function createMainPanel() {
 <div class="eater-sugs" id="eaterSuggestions" style="margin-top:8px;">
 <div style="margin-bottom:6px;font-size:10px;color:#888;letter-spacing:1px;">📝 RESPUESTA GENERADA</div>
 <textarea id="eaterResponseArea" class="eater-textarea">Esperando mensaje...</textarea>
+<div id="eaterSelectionInfo" style="display:none;align-items:center;gap:6px;margin-top:4px;padding:4px 8px;background:rgba(139,92,246,0.15);border:1px solid #8b5cf6;border-radius:6px;font-size:9px;color:#c4b5fd;">
+  <span>📋</span>
+  <span class="sel-count" style="font-weight:bold;color:#fff;">0</span>
+  <span style="color:#c4b5fd;">seleccionados</span>
+  <span style="margin-left:auto;cursor:pointer;color:#f87171;font-size:12px;" id="btnClearSelection">✕</span>
+</div>
 <button id="btnStopClone" style="width:100%;padding:6px;margin-top:4px;border:1px solid #ef4444;border-radius:6px;background:rgba(239,68,68,0.15);color:#ef4444;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:1px;">⏹ CLONACIÓN: ACTIVA</button>
 <button id="btnCopyEaterResponse" style="width:100%;padding:8px;margin-top:6px;border:1px solid #8b5cf6;border-radius:6px;background:rgba(30,27,75,0.5);color:#e0e0e0;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:1px;">📋 COPIAR AL CHAT</button>
 <div style="display:flex;gap:6px;margin-top:6px;">
@@ -410,9 +421,27 @@ function createMainPanel() {
 <div class="bot-subpanel" id="botsubIcebreakers" data-z="1">
 <button class="win-close" data-close="botsubIcebreakers">×</button>
 <div class="eater-box">
-<h4 style="font-size:11px;letter-spacing:1px;margin:8px 0;text-align:center;color:#8b5cf6;">🎯 ICEBREAKERS (Click = Colocar en chat)</h4>
-<div id="icebreakersList" style="display:flex;flex-wrap:wrap;gap:4px;padding:4px;justify-content:center;max-height:200px;overflow-y:auto;">
+<h4 style="font-size:16px;letter-spacing:3px;margin:8px 0;text-align:center;background:linear-gradient(135deg,#7c3aed,#ec4899,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:900;text-transform:uppercase;font-family:'Orbitron',sans-serif;">IB</h4>
+<div style="display:flex;gap:4px;margin-bottom:6px;">
+  <input id="ibInput" value="RH" placeholder="RH, RH Amistad, RH Amor Real, RH Charla Caliente, RH Mail" style="flex:1;background:#0a0a0f;border:1px solid #333350;color:#e0e0e0;padding:6px 8px;border-radius:4px;font-size:10px;font-family:'Share Tech Mono',monospace;">
+  <button id="ibGenerateBtn" style="background:#8b5cf6;border:none;color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:10px;font-family:'Orbitron',sans-serif;white-space:nowrap;">🔄 GENERAR</button>
 </div>
+<div style="display:flex;gap:4px;margin-bottom:4px;">
+  <button id="ibSendAllBtn" style="flex:1;background:linear-gradient(135deg,#059669,#10b981);border:none;color:#fff;padding:8px;border-radius:6px;cursor:pointer;font-size:10px;font-family:'Orbitron',sans-serif;letter-spacing:1px;">🌐 ENVIAR IB (Traducir → Enviar)</button>
+</div>
+<div id="icebreakersList" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto;padding:2px 4px;">
+  <div class="ib-item" data-idx="0"><div class="ib-label">RH Amistad</div><div class="ib-text">—</div></div>
+  <div class="ib-item" data-idx="1"><div class="ib-label">RH Amor Real</div><div class="ib-text">—</div></div>
+  <div class="ib-item" data-idx="2"><div class="ib-label">RH Charla Caliente</div><div class="ib-text">—</div></div>
+  <div class="ib-item" data-idx="3"><div class="ib-label">RH Mail 1</div><div class="ib-text">—</div></div>
+  <div class="ib-item" data-idx="4"><div class="ib-label">RH Mail 2</div><div class="ib-text">—</div></div>
+</div>
+<style>
+.ib-item{cursor:pointer;border:1px solid #333350;border-radius:6px;padding:6px 8px;background:rgba(139,92,246,0.08);transition:all 0.2s;}
+.ib-item:hover{background:rgba(139,92,246,0.2);border-color:#8b5cf6;}
+.ib-label{font-size:9px;color:#8b5cf6;letter-spacing:1px;margin-bottom:3px;font-family:'Orbitron',sans-serif;}
+.ib-text{font-size:11px;color:#e0e0e0;line-height:1.4;}
+</style>
 </div>
 </div>
 
@@ -485,9 +514,9 @@ function createMainPanel() {
     <div class="mod-card"><h4>⏱ Intervalo</h4><div class="st" id="mlIntervalDisplay">60 min</div></div>
     <div class="mod-card"><h4>💬 Mensaje</h4><div class="st" id="mlMsgPreview" style="font-size:8px;">—</div></div>
   </div>
-  <button class="btn-auth" id="btnOpenMLConfig" style="margin-top:8px;">⚙ CONFIGURAR SMART MAILING</button>
-  <button class="btn-auth" id="btnScrapeML" style="margin-top:4px;background:#7c3aed;">🔍 RASTREAR CONTACTOS</button>
-  <button class="btn-auth" id="btnStartCarta" style="margin-top:4px;background:#059669;border-color:#059669;">📨 INICIAR ENVIO DE CARTAS</button>
+  <button class="ml-btn" id="btnOpenMLConfig">⚙ CONFIGURAR</button>
+  <button class="ml-btn ml-btn-secondary" id="btnScrapeML">🔍 RASTREAR</button>
+  <button class="ml-btn ml-btn-success" id="btnStartCarta">📨 INICIAR ENVÍO</button>
   <div id="mlCartaProgress" style="margin-top:6px;font-size:9px;color:#888;display:none;text-align:center;"></div>
   <div id="mlContactList" style="margin-top:8px;max-height:200px;overflow-y:auto;border:1px solid #e0e0e8;border-radius:6px;background:#fafafc;display:none;"></div>
 </div>
@@ -560,11 +589,6 @@ function createCartasModal() {
 
 // ============ EVENTOS ============
 function setupAllEvents() {
-  // Login
-  document.getElementById('btnLogin').addEventListener('click', doLogin);
-  document.getElementById('agentId').addEventListener('keypress', e => { if(e.key==='Enter') doLogin(); });
-  document.getElementById('encryptKey').addEventListener('keypress', e => { if(e.key==='Enter') doLogin(); });
-  
   // Pestañas
   var mainPanel = document.getElementById('tesseract-main-panel');
   mainPanel.querySelectorAll('.tab-btn').forEach(btn => {
@@ -623,6 +647,8 @@ function setupAllEvents() {
   document.getElementById('btnStopClone').addEventListener('click', toggleClonacion);
   document.getElementById('btnCopyEaterResponse').addEventListener('click', copyEaterResponseToChat);
   document.getElementById('btnRefreshEater2').addEventListener('click', refreshEaterSuggestions);
+  var clearSelBtn = document.getElementById('btnClearSelection');
+  if (clearSelBtn && typeof _clearMessageSelection !== 'undefined') clearSelBtn.addEventListener('click', _clearMessageSelection);
   document.getElementById('btnTranslate2').addEventListener('change', function () {
     selectedLangCode = this.value;
     translateEaterResponse();
@@ -646,7 +672,7 @@ function setupAllEvents() {
   document.getElementById('tess-mini-icon').addEventListener('click', function (e) {
     toggleMin(e);
   });
-  document.getElementById('btnClose').addEventListener('click', () => document.getElementById('tesseract-main-panel').style.display = 'none');
+  document.getElementById('btnClose').addEventListener('click', toggleMin);
 
   // Zoom (envuelto en try/catch para no bloquear la inicialización)
   try {
@@ -664,7 +690,7 @@ function setupAllEvents() {
     chrome.storage.local.get('tess_zoom', function (d) { if (d.tess_zoom) window._tessApplyZoom(d.tess_zoom); });
   } catch (e) { console.warn('[ZOOM] Error:', e.message); }
 
-  document.getElementById('btnLogout').addEventListener('click', doLogout);
+  document.getElementById('btnLogout').addEventListener('click', typeof doLogout === 'function' ? doLogout : function () { chrome.storage.local.remove('tess_jwt', function () { location.reload(); }); });
   document.getElementById('btnAdminPanel').addEventListener('click', async () => {
     try {
       const data = await chrome.storage.local.get(['tess_jwt']);
@@ -793,95 +819,6 @@ function setupAllEvents() {
 }
 
 // ============ AUTENTICACIÓN (vía servidor) ============
-async function doLogin() {
-  const email = document.getElementById('agentId').value.trim().toLowerCase();
-  const password = document.getElementById('encryptKey').value.trim();
-
-  if (!email.endsWith('@tesseract.com')) {
-    document.getElementById('authError').textContent = '❌ El identificador debe terminar en @tesseract.com';
-    document.getElementById('authError').style.display = 'block';
-    return;
-  }
-  if (!password.endsWith('*+')) {
-    document.getElementById('authError').textContent = '❌ La clave debe terminar en *+';
-    document.getElementById('authError').style.display = 'block';
-    return;
-  }
-
-  document.getElementById('authError').style.display = 'none';
-  document.getElementById('authError').textContent = '⏳ Verificando con servidor...';
-  document.getElementById('authError').style.display = 'block';
-
-  try {
-    const res = await fetch(`${TESSERACT_API}/api/tess/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      document.getElementById('authError').textContent = '❌ ' + (data.error || 'Error de autenticación');
-      document.getElementById('authError').style.display = 'block';
-      return;
-    }
-
-    // Guardar token y datos
-    await chrome.storage.local.set({
-      tess_jwt: data.token,
-      tess_auth: true,
-      tess_user: data.user.email,
-      user_email: data.user.email,
-      isAdmin: data.user.isAdmin,
-      isDeveloper: data.user.isDeveloper,
-      subscriptionStatus: data.user.role,
-      bot_connected_user: data.user.email,
-      bot_connected_at: Date.now()
-    });
-
-    document.getElementById('authError').style.display = 'none';
-    isAuthenticated = true;
-    currentUser = email;
-    
-    const loginScreen = document.getElementById('loginScreen');
-    const mainScreen = document.getElementById('mainScreen');
-    
-    if (loginScreen) loginScreen.style.display = 'none';
-    if (mainScreen) {
-      mainScreen.style.display = 'block';
-    }
-    
-    // Cargar blacklist del servidor
-    loadBlacklist();
-    // Recargar blacklist de mailing, auto-answer y L+F+P despues del login
-    if (typeof reloadMLBlacklist === 'function') reloadMLBlacklist();
-    if (typeof loadAABlacklist === 'function') loadAABlacklist();
-    if (typeof reloadLFPBlacklist === 'function') reloadLFPBlacklist();
-    
-    document.getElementById('currentUserDisplay').textContent = email;
-    renderStarIds();
-    saveAllStates();
-    detectCurrentProfile();
-    startPeriodicSync();
-    console.log('[TESSERACT] ✅ Acceso concedido:', email);
-
-  } catch (error) {
-    document.getElementById('authError').textContent = '❌ Error de conexión: ' + error.message;
-    document.getElementById('authError').style.display = 'block';
-    console.error('[TESSERACT] Login error:', error);
-  }
-}
-
-function doLogout() {
-  isAuthenticated = false; currentUser = null;
-  likesActive = followsActive = saludosActive = cartasActive = eaterActive = false;
-  document.getElementById('loginScreen').style.display = 'block';
-  document.getElementById('mainScreen').style.display = 'none';
-  document.getElementById('eaterSuggestions').style.display = 'none';
-  saveAllStates();
-}
-
 // ============ MÓDULOS ============
 // Bridge: updateStats is called by like-follow-photos.js to refresh results counter
 function updateStats() {
@@ -1055,32 +992,9 @@ function copyIDs() {
 // ============ SINCRONIZACIÓN PERIÓDICA CON SERVIDOR ============
 let periodicSyncInterval = null;
 
-async function tryRefreshToken() {
-  return new Promise(resolve => {
-    chrome.storage.local.get(['tess_refresh'], async data => {
-      if (!data.tess_refresh) return resolve(false);
-      try {
-        var res = await fetch(`${TESSERACT_API}/api/tess/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: data.tess_refresh })
-        });
-        if (!res.ok) {
-          chrome.storage.local.remove(['tess_jwt', 'tess_refresh']);
-          return resolve(false);
-        }
-        var json = await res.json();
-        await chrome.storage.local.set({ tess_jwt: json.token, tess_refresh: json.refreshToken });
-        resolve(true);
-      } catch (e) { resolve(false); }
-    });
-  });
-}
-
 function startPeriodicSync() {
   if (periodicSyncInterval) clearInterval(periodicSyncInterval);
   periodicSyncInterval = setInterval(async () => {
-    if (!isAuthenticated || !currentUser) return;
     const totalSweeps = (collectedIds.Like?.length || 0) +
                         (collectedIds.Follow?.length || 0) +
                         (collectedIds.LFP?.length || 0) +
@@ -1104,13 +1018,7 @@ function startPeriodicSync() {
             office: userOffice || null
           })
         });
-        if (res.status === 401) {
-          console.warn('[TESS] Token expirado en periodic sync');
-          var refreshed = await tryRefreshToken();
-          if (!refreshed) chrome.storage.local.remove(['tess_jwt', 'tess_refresh']);
-        } else if (!res.ok) {
-          console.warn('[TESS] Periodic sync error:', res.status);
-        }
+        if (!res.ok) console.warn('[TESS] Periodic sync error:', res.status);
       }
     } catch (e) {
       console.warn('[TESS] Periodic sync error (offline?):', e.message);
@@ -1180,9 +1088,8 @@ async function startCartaMailing() {
   progressEl.style.color = '#8b5cf6';
 
   if (btn) {
-    btn.textContent = '⏹ DETENER ENVIO';
-    btn.style.background = '#dc2626';
-    btn.style.borderColor = '#dc2626';
+    btn.textContent = '⏹ DETENER';
+    btn.className = 'ml-btn ml-btn-danger';
     btn._mailingActive = true;
   }
 
@@ -1194,7 +1101,7 @@ async function startCartaMailing() {
   try {
     if (typeof window._loadMailingConfigDirect === 'function') await window._loadMailingConfigDirect();
     var cfg = typeof window._getMailingConfigDirect === 'function' ? window._getMailingConfigDirect() : null;
-    if (!cfg) { progressEl.textContent = 'Error: config no disponible'; progressEl.style.color = '#dc2626'; window._mlProgressCallback = null; if (btn) { btn.textContent = '📨 INICIAR ENVIO DE CARTAS'; btn.style.background = '#059669'; btn.style.borderColor = '#059669'; btn._mailingActive = false; } return; }
+    if (!cfg) { progressEl.textContent = 'Error: config no disponible'; progressEl.style.color = '#dc2626'; window._mlProgressCallback = null; if (btn) { btn.textContent = '📨 INICIAR ENVÍO'; btn.className = 'ml-btn ml-btn-success'; btn._mailingActive = false; } return; }
     // Guardar y desactivar el limite diario para procesar todas las paginas
     originalMaxDaily = cfg.maxDaily;
     cfg.maxDaily = 99999;
@@ -1277,6 +1184,31 @@ function updateMLTabUI() {
 }
 window._updateMLTabUI = updateMLTabUI;
 
+let _mlPollTimer = null;
+
+function startMLStatsPolling() {
+  stopMLStatsPolling();
+  _mlPollTimer = setInterval(function() {
+    try {
+      var cfg = typeof window._getMailingConfigDirect === 'function' ? window._getMailingConfigDirect() : null;
+      if (!cfg) return;
+      var elSent = document.getElementById('mlSentTodayInline');
+      var elLimit = document.getElementById('mlDailyLimitInline');
+      var elQueue = document.getElementById('mlQueueCountInline');
+      if (elSent) elSent.textContent = cfg.sentToday || 0;
+      if (elLimit) elLimit.textContent = cfg.maxDaily || 30;
+      if (elQueue) {
+        var stats = typeof window._getMailingStats === 'function' ? window._getMailingStats() : null;
+        elQueue.textContent = stats?.lastScrapedCount ?? '--';
+      }
+    } catch (e) {}
+  }, 3000);
+}
+
+function stopMLStatsPolling() {
+  if (_mlPollTimer) { clearInterval(_mlPollTimer); _mlPollTimer = null; }
+}
+
 function updateMLContactList() {
   const container = document.getElementById('mlContactList');
   if (!container) return;
@@ -1310,7 +1242,6 @@ function updateMLContactList() {
 // ============ STORAGE ============
 async function saveAllStates() {
   await chrome.storage.local.set({
-    tess_auth: isAuthenticated, tess_user: currentUser,
     tess_eater: eaterActive, tess_likes: likesActive, tess_follows: followsActive,
     tess_saludos: saludosActive, tess_cartas: cartasActive,
     tess_stats: botStats, tess_ids: collectedIds,
@@ -1325,15 +1256,9 @@ async function saveAllStates() {
 async function loadAllStates() {
   try {
 const r = await chrome.storage.local.get([
-      'tess_auth', 'tess_user', 'tess_eater', 'tess_likes', 'tess_follows',
+      'tess_eater', 'tess_likes', 'tess_follows',
       'tess_saludos', 'tess_cartas', 'tess_stats', 'tess_ids'
     ]);
-    if (r.tess_auth && r.tess_user) {
-      isAuthenticated = true; currentUser = r.tess_user;
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('mainScreen').style.display = 'block';
-      document.getElementById('currentUserDisplay').textContent = currentUser;
-    }
     if (r.tess_eater) {
       eaterActive = true;
       const btn = document.getElementById('btnEaterToggle');
@@ -1381,8 +1306,7 @@ async function syncMetricsToStorage(action, count) {
         });
         if (res.status === 401) {
           console.warn('[TESS] Token expirado en syncMetricsToStorage');
-          var refreshed = await tryRefreshToken();
-          if (!refreshed) chrome.storage.local.remove(['tess_jwt', 'tess_refresh']);
+          chrome.storage.local.remove(['tess_jwt', 'tess_refresh']);
         } else if (!res.ok) {
           console.warn('[TESS] syncMetricsToStorage server error:', res.status);
         }

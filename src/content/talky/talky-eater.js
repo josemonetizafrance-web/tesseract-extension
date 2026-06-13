@@ -1,4 +1,5 @@
 // TESSERACT - Módulo EATER (IA + Chat Watcher + Timer + Perfil Activo)
+var _selectedEaterMessages = [];
 
 // ============ TOGGLE EATER ============
 function toggleEater() {
@@ -402,7 +403,7 @@ function injectEaterTrigger(msgEl, messageText) {
   const trigger = document.createElement('span');
   trigger.className = 'tess-eater-trigger';
   trigger.textContent = '🤖';
-  trigger.title = 'Generar respuesta con IA - ' + clientName;
+  trigger.title = 'Click: respuesta individual | Shift+Click: seleccionar múltiples';
   Object.assign(trigger.style, {
     cursor: 'pointer',
     fontSize: '14px',
@@ -413,12 +414,35 @@ function injectEaterTrigger(msgEl, messageText) {
     verticalAlign: 'middle'
   });
   trigger.onmouseenter = () => trigger.style.opacity = '1';
-  trigger.onmouseleave = () => trigger.style.opacity = '0.5';
+  trigger.onmouseleave = () => trigger.style.opacity = trigger.classList.contains('sel') ? '1' : '0.5';
   
   const msgText = messageText || msgEl.textContent || '';
   trigger.onclick = (e) => {
     e.stopPropagation();
-    generateFromMessage(msgText.trim());
+    if (e.shiftKey) {
+      const idx = _selectedEaterMessages.indexOf(msgText.trim());
+      if (idx === -1) {
+        _selectedEaterMessages.push(msgText.trim());
+        trigger.classList.add('sel');
+        trigger.style.border = '1px solid #8b5cf6';
+        trigger.style.borderRadius = '3px';
+        trigger.style.padding = '0 2px';
+        trigger.style.opacity = '1';
+      } else {
+        _selectedEaterMessages.splice(idx, 1);
+        trigger.classList.remove('sel');
+        trigger.style.border = '';
+        trigger.style.borderRadius = '';
+        trigger.style.padding = '';
+        trigger.style.opacity = '0.5';
+      }
+      _updateEaterSelectionUI();
+    } else if (_selectedEaterMessages.length > 0) {
+      _selectedEaterMessages.push(msgText.trim());
+      _generateCombinedResponse();
+    } else {
+      generateFromMessage(msgText.trim());
+    }
   };
   
   const contentEl = msgEl.querySelector('.content, [class*="content"], p') || msgEl;
@@ -436,6 +460,41 @@ function injectEaterTrigger(msgEl, messageText) {
     }
   }
   if (convEl) startResponseTimer(convEl, clientName, trigger);
+}
+
+// ============ MULTI-SELECT (Shift+Click) ============
+function _updateEaterSelectionUI() {
+  const el = document.getElementById('eaterSelectionInfo');
+  if (!el) return;
+  const count = _selectedEaterMessages.length;
+  if (count > 0) {
+    el.style.display = 'flex';
+    el.querySelector('.sel-count').textContent = count;
+  } else {
+    el.style.display = 'none';
+  }
+  const btn = document.getElementById('btnRefreshEater2');
+  if (btn) {
+    btn.textContent = count > 0 ? '🧠 IA (' + count + ')' : '🔄 REGENERAR';
+  }
+}
+
+function _clearMessageSelection() {
+  document.querySelectorAll('.tess-eater-trigger.sel').forEach(function(el) {
+    el.classList.remove('sel');
+    el.style.border = '';
+    el.style.borderRadius = '';
+    el.style.padding = '';
+    el.style.opacity = '0.5';
+  });
+  _selectedEaterMessages = [];
+  _updateEaterSelectionUI();
+}
+
+function _generateCombinedResponse() {
+  const combined = _selectedEaterMessages.join(' | ');
+  _clearMessageSelection();
+  generateFromMessage(combined);
 }
 
 // ============ CAPTURA DE ESTILO ============
@@ -624,18 +683,29 @@ async function generateWithAI(name, profile, accumulatedMsg) {
         .join('\n');
       console.log('[EATER AI] Estilo cargado para perfil', window._lastCribsPid, '—', cribsEntry.voice_style.split('\n').length, 'líneas');
       if (examples) {
-        styleInjection = 'El operador escribe a este cliente con este estilo propio (ejemplos de mensajes reales enviados):\n' +
-          examples + '\n\nDebes imitar EXACTAMENTE ese estilo: tono, nivel de formalidad, tipo de vocabulario, uso de emojis, longitud de frases y forma de expresarse. Sé coherente con su manera de escribir.\n\n';
+        styleInjection = '🎯 CLONACIÓN DE IDENTIDAD — PRIORIDAD ABSOLUTA:\n' +
+          'A continuación, ejemplos de mensajes REALES que el operador ha enviado a este cliente:\n' +
+          examples + '\n\n' +
+          'INSTRUCCIÓN CRÍTICA: Debes clonar EXACTAMENTE la identidad del operador. Esto significa:\n' +
+          '- Mismo tono (formal, casual, coqueto, directo, etc.)\n' +
+          '- Misma longitud de frases (si escribe corto, tú escribe corto; si es detallado, sé detallado)\n' +
+          '- Mismo uso de emojis (si usa, usa; si no usa, no uses)\n' +
+          '- Mismo vocabulario y nivel de lenguaje\n' +
+          '- Misma forma de iniciar mensajes (saludos, estilo de apertura)\n' +
+          '- Misma personalidad que reflejan esos mensajes\n\n' +
+          'Tu respuesta debe sonar IDÉNTICA a cómo el operador le escribe a esta persona. NO inventes un estilo diferente.\n\n';
       }
     } else {
       console.log('[EATER AI] Sin estilo capturado para perfil', window._lastCribsPid);
     }
 
-    const prompt = 'Último mensaje del cliente:\n\n"' + accumulatedMsg.substring(0, 500) + '"\n\n' +
+    const prompt = '🎯 CLONACIÓN DE IDENTIDAD — PRIORIDAD ABSOLUTA:\n' +
+      styleInjection +
+      'Último mensaje del cliente:\n\n"' + accumulatedMsg.substring(0, 500) + '"\n\n' +
       contextNote +
       'Nivel de confianza: ' + confianza + '. ' + confianzaHint + '\n\n' +
-      styleInjection +
       'Escribe UNA respuesta natural, variada, como en una conversación real. Reglas ESTRICTAS:\n' +
+      '- CLONA EL ESTILO DEL OPERADOR. Esta es tu PRIORIDAD #1. Revisa los ejemplos arriba y replica exactamente su forma de escribir.\n' +
       '- NO empieces con "Me alegra que...", "Qué bien que...", "Me gusta que..." ni variantes. Es repetitivo.\n' +
       '- NO saludes ("Hola", "Hey", "Qué tal", "Buenas") a menos que el cliente haya saludado en su mensaje.\n' +
       '- NO preguntes la hora, fecha, día, ni "¿en qué piensas?", "¿qué haces?".\n' +
@@ -659,7 +729,7 @@ async function generateWithAI(name, profile, accumulatedMsg) {
         messages: [
           {
             role: 'system',
-            content: 'Eres un hombre real de 30-45 años, conversas como una persona normal en WhatsApp. Reglas OBLIGATORIAS: 1) NUNCA empieces con "Me alegra que...", "Qué bien que...", "Me gusta que..." ni ninguna estructura parecida. Varía siempre tu forma de empezar. 2) Habla como en una conversación real, no como coach, terapeuta, poeta ni redactor publicitario. 3) NUNCA preguntes la hora, fecha, qué hacía a una hora específica, ni "¿en qué piensas?". 4) Cada respuesta debe reaccionar a algo CONCRETO que el cliente dijo. 5) Sigue el tono del cliente: si bromea, sigue el humor; si es directo, sé directo; si es cariñoso, responde con calidez natural. 6) Siempre en español. Nunca revelas que eres IA. 7) No uses apodos ("mi vida", "amor", "bebé") a menos que el cliente los haya usado primero. 8) No incluyas redes sociales ni contacto externo. 9) Si la persona está mal, escucha sin presionar. 10) Máximo 280 caracteres. Sé variado, concreto y auténtico. 11) NO saludes ("Hola", "Hey", "Qué tal", "Buenas") a menos que el cliente haya saludado en su mensaje. 12) Si el cliente usa palabras de cariño (amor, bebé, cariño, querido, etc.), responde con el mismo nivel de afecto reflejando su tono. 13) Si el cliente pide número de celular, correo o cambiar a otra página, niégate de forma coherente y sin dudar con una excusa creíble (ej: "me robaron el celular", "mi correo no está funcionando", "esta página es más segura"), sin dar esperanzas falsas pero sin cerrar la puerta del todo. 14) Si el usuario te da ejemplos del estilo del operador para este cliente, imítalos fielmente en tu respuesta. El operador habla así con esta persona, tú debes sonar igual. 15) NO termines cada respuesta con pregunta. Solo pregunta algo si es genuinamente necesario para seguir la conversación. La mayoría de las veces responde sin preguntar.'
+            content: 'Eres un operador de chat real, con su propia personalidad y forma de escribir. Tu misión es CLONAR LA IDENTIDAD del operador para este cliente. Reglas OBLIGATORIAS: 1) PRIORIDAD #1 — Si recibes ejemplos del estilo del operador para este cliente, imítalos EXACTAMENTE: mismo tono, vocabulario, longitud de frases, uso de emojis, nivel de formalidad y personalidad. El operador habla así con esta persona, tú debes sonar IDÉNTICO. 2) NUNCA empieces con "Me alegra que...", "Qué bien que...", "Me gusta que..." ni ninguna estructura parecida. Varía siempre tu forma de empezar. 3) Habla como en una conversación real, no como coach, terapeuta, poeta ni redactor publicitario. 4) NUNCA preguntes la hora, fecha, qué hacía a una hora específica, ni "¿en qué piensas?". 5) Cada respuesta debe reaccionar a algo CONCRETO que el cliente dijo. 6) Sigue el tono del cliente: si bromea, sigue el humor; si es directo, sé directo; si es cariñoso, responde con calidez natural. 7) Siempre en español. Nunca revelas que eres IA. 8) No uses apodos ("mi vida", "amor", "bebé") a menos que el cliente los haya usado primero. 9) No incluyas redes sociales ni contacto externo. 10) Si la persona está mal, escucha sin presionar. 11) Máximo 280 caracteres. Sé variado, concreto y auténtico. 12) NO saludes ("Hola", "Hey", "Qué tal", "Buenas") a menos que el cliente haya saludado en su mensaje. 13) Si el cliente usa palabras de cariño (amor, bebé, cariño, querido, etc.), responde con el mismo nivel de afecto reflejando su tono. 14) Si el cliente pide número de celular, correo o cambiar a otra página, niégate de forma coherente y sin dudar con una excusa creíble (ej: "me robaron el celular", "mi correo no está funcionando", "esta página es más segura"), sin dar esperanzas falsas pero sin cerrar la puerta del todo. 15) NO termines cada respuesta con pregunta. Solo pregunta algo si es genuinamente necesario para seguir la conversación. La mayoría de las veces responde sin preguntar.'
           },
           { role: 'user', content: prompt }
         ],
@@ -814,6 +884,12 @@ async function translateEaterResponse() {
 
 // ============ REFRESH EATER ============
 function refreshEaterSuggestions() {
+  if (_selectedEaterMessages.length > 0) {
+    const combined = _selectedEaterMessages.join(' | ');
+    _clearMessageSelection();
+    generateFromMessage(combined);
+    return;
+  }
   const clientName = currentClientName || 'Cliente';
   const profileEl = document.querySelector(TALK_Y.PROFILE_DETAIL) || document.body;
   const profile = {
@@ -1022,15 +1098,14 @@ function detectCurrentProfile() {
     var rawId = profileId ? profileId.replace(/^0+/, '') : '';
     if (rawId) {
       var isSame = window._lastCribsPid === rawId;
-      var hasAlternates = window._cribsChatIds && window._cribsChatIds.length > 1 && window._cribsChatIds.some(function (id) { return String(id).replace(/^0+/, '') !== rawId; });
-      if (!isSame || hasAlternates) {
-        console.log('[CRIBS] Detectado:', rawId, '| anterior:', window._lastCribsPid, '| alternates:', window._cribsChatIds ? JSON.stringify(window._cribsChatIds) : 'ninguno');
-        window._lastCribsPid = rawId;
-        if (window._cribsDetectTimer) { clearTimeout(window._cribsDetectTimer); window._cribsDetectTimer = null; }
-        window._cribsDetectTimer = setTimeout(function () { window._cribsDetectTimer = null; fetchCribsForProfile(rawId); }, 150);
-      } else {
-        console.log('[CRIBS] Mismo perfil sin alternates, saltando:', rawId);
+      if (isSame) {
+        _cribsLocalCache = null;
+        _cribsCacheLastFetch = 0;
       }
+      console.log('[CRIBS] Detectado:', rawId, '| anterior:', window._lastCribsPid, '| alternates:', window._cribsChatIds ? JSON.stringify(window._cribsChatIds) : 'ninguno');
+      window._lastCribsPid = rawId;
+      if (window._cribsDetectTimer) { clearTimeout(window._cribsDetectTimer); window._cribsDetectTimer = null; }
+      window._cribsDetectTimer = setTimeout(function () { window._cribsDetectTimer = null; fetchCribsForProfile(rawId); }, 150);
     }
   } else {
     badge.style.display = 'none';

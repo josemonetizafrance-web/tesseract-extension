@@ -213,7 +213,18 @@ function hasActiveDialogue(contactEl) {
 function detectContactType(contactEl, contactId) {
   if (hasActiveDialogue(contactEl)) return 'active';
   if (contactId && isContactAlreadyContactedML(contactId)) return 'recurring';
+  if (contactEl && getLetterCount(contactEl) >= 3) return 'excess_letters';
   return 'new';
+}
+
+function getLetterCount(el) {
+  try {
+    var container = el.closest('[class*="active-limit"], [class*="activeLimit"], tr, [class*="row"], [class*="item"], [class*="contact"], [class*="mail"], li') || el;
+    var text = container.textContent || '';
+    var match = text.match(/(\d+)\s*letter\s*total/i);
+    if (match) return parseInt(match[1], 10);
+  } catch (e) {}
+  return 0;
 }
 
 async function getMessageForContact() {
@@ -551,6 +562,7 @@ async function executeMailingRound() {
     if (mailingConfig.blockActiveDialogue && contactType === 'active') { activeSkipped++; skipped++; continue; }
     if (isInMLBlacklist(contactId)) { blacklisted++; continue; }
     if (await isContactAlreadyContactedML(contactId)) { alreadyContacted++; skipped++; continue; }
+    if (contactType === 'excess_letters') { skipped++; continue; }
 
     const message = await getMessageForContact();
     if (!message) { skipped++; continue; }
@@ -908,6 +920,7 @@ async function executeEmailMailingRound() {
       if (mailingConfig.blockActiveDialogue && contactType === 'active') { activeSkipped++; skipped++; continue; }
       if (isInMLBlacklist(contactId)) { blacklisted++; continue; }
       if (await isContactAlreadyContactedML(contactId)) { alreadyContacted++; skipped++; continue; }
+      if (contactType === 'excess_letters') { skipped++; continue; }
 
       var message = await getMessageForContact();
       if (!message) { skipped++; continue; }
@@ -1046,10 +1059,20 @@ window._executeEmailMailingRound = executeEmailMailingRound;
 window._abortMailingRound = abortMailingRound;
 window._isInMLBlacklist = isInMLBlacklist;
 window._reloadMLBlacklist = reloadMLBlacklist;
-window._addToMLBlacklist = function(id) {
-  if (id && !mlBlacklist.includes(String(id))) {
-    mlBlacklist.push(String(id));
-    console.log('[ML] Added to blacklist:', id, 'total:', mlBlacklist.length);
+window._addToMLBlacklist = async function(id) {
+  if (!id || mlBlacklist.includes(String(id))) return;
+  mlBlacklist.push(String(id));
+  console.log('[ML] Added to blacklist:', id, 'total:', mlBlacklist.length);
+  try {
+    const stored = await chrome.storage.local.get(['tess_jwt']);
+    if (!stored.tess_jwt) return;
+    await fetch(TESSERACT_API + '/api/tess/blacklist/add', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + stored.tess_jwt, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contactId: String(id) })
+    });
+  } catch (e) {
+    console.error('[ML] Error persisting blacklist:', e);
   }
 };
 window._removeFromMLBlacklist = function(id) {

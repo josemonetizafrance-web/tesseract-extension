@@ -208,9 +208,8 @@ async function doSaludosSweep(list) {
     copyToChatInput(msg);
     await sleep(800);
     sendChatMessage();
-    if (typeof window.onOperatorResponded === 'function') { await sleep(500); window.onOperatorResponded(); }
-    await sleep(1500);
-    
+    await sleep(2000);
+
     const id = extractId(activeContact);
     if (id) {
       processedIds.add(id);
@@ -295,15 +294,14 @@ async function doCartasSweep(list) {
     copyToChatInput(shortCarta);
     await sleep(800);
     sendChatMessage();
-    if (typeof window.onOperatorResponded === 'function') { await sleep(500); window.onOperatorResponded(); }
-    await sleep(1500);
-    
+    await sleep(2000);
+
     const id = extractId(activeContact);
     if (id) {
       processedIds.add(id);
       registerIdInStarTools(id, 'Cartas');
     }
-    
+
     scanPageForIds().forEach(newId => registerIdInStarTools(newId, 'Cartas'));
     
     sent++;

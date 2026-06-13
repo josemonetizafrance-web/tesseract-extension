@@ -64,7 +64,8 @@
                 "dist/pages/admin/*",
                 "dist/pages/popup/*",
                 "dist/modules/*",
-                "dist/content/talky/*"
+                "dist/content/talky/*",
+                "dist/assets/*"
             ],
             "matches": [
                 "https://talkytimes.com/*",

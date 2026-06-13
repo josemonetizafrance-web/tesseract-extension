@@ -79,7 +79,27 @@ function lfpIsBlocked() {
 }
 
 function lfpPhotoViewerOpen() {
-  return !!(document.querySelector(TALK_Y.PHOTO_VIEWER));
+  var viewer = document.querySelector(TALK_Y.PHOTO_VIEWER);
+  if (viewer) {
+    if (viewer.matches && viewer.matches('.splide--nav, .splide[class*="gallery"]')) {
+      var modal = document.querySelector('[role="dialog"], .modal-overlay, [class*="lightbox"], [class*="modal"]');
+      if (modal) {
+        var mr = modal.getBoundingClientRect();
+        if (mr.width > 200 && mr.height > 200) return true;
+      }
+      return false;
+    }
+    var rect = viewer.getBoundingClientRect();
+    if (rect.width > 200 && rect.height > 200) return true;
+    if (viewer.querySelector('img')) return true;
+    if (viewer.textContent && viewer.textContent.length > 0) return true;
+  }
+  var galleryImg = document.querySelector('[class*="gallery"] img, [class*="photo-view"] img');
+  if (galleryImg) {
+    var gr = galleryImg.getBoundingClientRect();
+    if (gr.width > 200 && gr.height > 200) return true;
+  }
+  return false;
 }
 
 function lfpFindNextPage() {
@@ -129,26 +149,109 @@ async function lfpGoBack() {
 async function lfpDoPhotos() {
   if (!lfpActive) return;
   await lfpSleep(200);
-  var fp = document.querySelector(TALK_Y.PHOTO_IMAGE);
-  if (!fp) return;
-  try { (fp.tagName === 'A' ? fp : (fp.closest('a') || fp)).click(); } catch (e) { try { fp.click(); } catch (e2) {} }
-  await lfpSleep(1200);
-  if (!lfpPhotoViewerOpen()) return;
+  console.log('[LFP-PHOTO] lfpDoPhotos started');
 
-  var limit = Date.now() + 8000;
-  var idx = 0;
-  while (idx < 5 && lfpActive && Date.now() < limit) {
-    var btn = document.querySelector('button.gallery-footer__like_narrow') || document.querySelector(TALK_Y.LIKE_BTN) || document.querySelector('.gallery-footer button:not([aria-label*="Next"]):not([aria-label*="next"]):not([aria-label*="Close"]):not([aria-label*="close"])');
-    if (btn && btn.getAttribute('aria-pressed') !== 'true' && !btn.matches('[data-type="filled"],[data-type="solid"]')) {
-      try { btn.click(); lfpStats.photoLikes++; } catch (e) {}
-      await lfpSleep(200);
-    }
-    await lfpSleep(400);
-    if (!lfpPhotoViewerOpen()) break;
-    var nx = document.querySelector(TALK_Y.NEXT_PHOTO_BTN);
-    if (nx && !nx.disabled) { try { nx.click(); await lfpSleep(600); idx++; } catch (e) { break; } } else break;
+  // Strategy 1: Try to find like button on page (re-query each time, don't cache reference)
+  var likeBtn = document.querySelector('button[data-test-id*="set-like"]');
+  if (likeBtn) {
+    console.log('[LFP-PHOTO] Like button found directly, using direct approach');
+    await lfpProcessVisiblePhotos(null);
+    return;
   }
-  var cl = document.querySelector(TALK_Y.CLOSE_BTN);
+
+  console.log('[LFP-PHOTO] Like button not found directly, trying to open photo viewer');
+
+  // Strategy 2: Open photo gallery by clicking a photo
+  var fp = document.querySelector(TALK_Y.PHOTO_IMAGE) || document.querySelector('[data-test-id*="photo-view"], [class*="profile-photo"] img, [class*="profile"] img:not([class*="avatar"]):not([class*="icon"]):not([class*="badge"]), [data-test-id*="gallery-slider"]');
+  console.log('[LFP-PHOTO] Initial photo element (fp):', fp ? fp.tagName + (fp.className ? '.' + fp.className.slice(0,30) : '') : 'null');
+  if (!fp) {
+    var allImgs = document.querySelectorAll('img:not([class*="avatar"]):not([class*="icon"]):not([class*="badge"]):not([class*="emoji"])');
+    for (var ii = 0; ii < allImgs.length; ii++) {
+      var ir = allImgs[ii].getBoundingClientRect();
+      if (ir.width > 100 && ir.height > 100 && ir.top > 0) { fp = allImgs[ii]; console.log('[LFP-PHOTO] fp from img fallback:', fp.alt || fp.src.slice(0, 50)); break; }
+    }
+  }
+  if (!fp) {
+    var galleryDiv = document.querySelector('[data-test-id*="gallery-slider"], .splide--nav .splide__slide:first-child');
+    if (galleryDiv) { fp = galleryDiv; console.log('[LFP-PHOTO] fp from gallery-slider fallback'); }
+  }
+  if (!fp) { console.log('[LFP-PHOTO] No photo element found, aborting'); return; }
+  
+  console.log('[LFP-PHOTO] Clicking photo element to open viewer');
+  try {
+    var link = fp.closest('a');
+    if (link) { link.click(); } else if (fp.tagName === 'A') { fp.click(); } else { fp.click(); }
+  } catch (e) { try { fp.click(); } catch (e2) {} }
+  await lfpSleep(1500);
+
+  // Check multiple times if viewer opened
+  var viewerOpen = lfpPhotoViewerOpen();
+  console.log('[LFP-PHOTO] Viewer open after 1.5s:', viewerOpen);
+  if (!viewerOpen) {
+    await lfpSleep(1200);
+    viewerOpen = lfpPhotoViewerOpen();
+    console.log('[LFP-PHOTO] Viewer open after 2.7s:', viewerOpen);
+    if (!viewerOpen) {
+      var firstSlide = document.querySelector('.splide--nav .splide__slide, [data-test-id*="gallery-slider"]');
+      if (firstSlide) { 
+        console.log('[LFP-PHOTO] Clicking first splide slide as fallback');
+        try { firstSlide.click(); } catch (e) {} await lfpSleep(1500); 
+        viewerOpen = lfpPhotoViewerOpen();
+        console.log('[LFP-PHOTO] Viewer open after splide click:', viewerOpen);
+      }
+      if (!viewerOpen) { console.log('[LFP-PHOTO] Photo viewer never opened, aborting'); return; }
+    }
+  }
+
+  // Process up to 4 photos
+  await lfpProcessVisiblePhotos(null);
+  console.log('[LFP-PHOTO] Done, photoLikes:', lfpStats.photoLikes);
+}
+
+async function lfpProcessVisiblePhotos(_unused) {
+  var limit = Date.now() + 15000;
+  console.log('[LFP-PHOTO] Processing photos, limit=15s');
+
+  // Like first photo (already visible)
+  var firstBtn = document.querySelector('button[data-test-id*="set-like"]') || document.querySelector(TALK_Y.LIKE_BTN) || document.querySelector('button[class*="like"]');
+  if (firstBtn) {
+    var firstLiked = firstBtn.getAttribute('aria-pressed') === 'true' || (firstBtn.getAttribute('data-type') || '').indexOf('filled') !== -1 || (firstBtn.getAttribute('data-type') || '').indexOf('solid') !== -1;
+    if (!firstLiked) {
+      try { firstBtn.scrollIntoView({ block: 'center' }); await lfpSleep(100); firstBtn.click(); lfpStats.photoLikes++; console.log('[LFP-PHOTO] ✅ Liked photo 1'); } catch (e) { console.log('[LFP-PHOTO] Like click error:', e.message); }
+      await lfpSleep(400);
+    }
+  }
+
+  // Navigate to next photos using splide arrow button
+  for (var si = 2; si <= 4 && lfpActive && Date.now() < limit; si++) {
+    var nextBtn = document.querySelector('.splide__arrow--next, button[aria-label*="Next slide"], button[aria-label*="next"]');
+    if (!nextBtn || nextBtn.disabled) {
+      console.log('[LFP-PHOTO] No more next arrow, stopping');
+      break;
+    }
+    try {
+      nextBtn.click();
+      console.log('[LFP-PHOTO] Clicked next arrow for photo', si);
+      await lfpSleep(800);
+    } catch (e) { console.log('[LFP-PHOTO] Next arrow error:', e.message); break; }
+
+    var btn = document.querySelector('button[data-test-id*="set-like"]') || document.querySelector(TALK_Y.LIKE_BTN) || document.querySelector('button[class*="like"]');
+    console.log('[LFP-PHOTO] Photo', si, 'like btn:', !!btn);
+    if (btn) {
+      var isLiked = btn.getAttribute('aria-pressed') === 'true' || (btn.getAttribute('data-type') || '').indexOf('filled') !== -1 || (btn.getAttribute('data-type') || '').indexOf('solid') !== -1;
+      if (!isLiked) {
+        try { btn.scrollIntoView({ block: 'center' }); await lfpSleep(100); btn.click(); lfpStats.photoLikes++; console.log('[LFP-PHOTO] ✅ Liked photo', si); } catch (e) { console.log('[LFP-PHOTO] Like click error:', e.message); }
+        await lfpSleep(400);
+      } else {
+        console.log('[LFP-PHOTO] Photo', si, 'already liked');
+      }
+    } else {
+      console.log('[LFP-PHOTO] Like button not found for photo', si);
+    }
+  }
+
+  // Close gallery
+  var cl = document.querySelector(TALK_Y.CLOSE_BTN) || document.querySelector('[class*="gallery"] button[aria-label*="Close"]');
   if (cl) { try { cl.click(); } catch (e) { try { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true })); } catch (e2) {} } }
   else { try { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true })); } catch (e) {} }
   await lfpSleep(500);
@@ -197,9 +300,17 @@ async function lfpProcessOne() {
   if (!lfpActive) return;
 
   // Photos (with timeout)
-  var hasPhoto = document.querySelector('[data-test-id*="photo-view"]') || document.querySelector('.profile-photo-wrap img');
+  var hasPhoto = document.querySelector(TALK_Y.PHOTO_IMAGE) || document.querySelector('[data-test-id*="photo-view"], [class*="photo"] img[src*="photo"], [class*="gallery"] img, [class*="profile-photo"] img, [data-test-id*="gallery-slider"]');
+  if (!hasPhoto) {
+    var pi = document.querySelectorAll('img:not([class*="avatar"]):not([class*="icon"]):not([class*="badge"]):not([class*="emoji"])');
+    for (var pi2 = 0; pi2 < pi.length; pi2++) { var pr = pi[pi2].getBoundingClientRect(); if (pr.width > 80 && pr.height > 80 && pr.top > -200) { hasPhoto = pi[pi2]; break; } }
+  }
+  if (!hasPhoto) {
+    hasPhoto = document.querySelector('[data-test-id*="gallery-slider"], .splide--nav .splide__slide');
+  }
+  console.log('[LFP-PHOTO] hasPhoto:', !!hasPhoto, 'profile:', window._lastCribsPid);
   if (hasPhoto && lfpActive) {
-    try { await Promise.race([lfpDoPhotos(), new Promise(function (r) { setTimeout(r, 12000); })]); } catch (e) {}
+    try { await Promise.race([lfpDoPhotos(), new Promise(function (r) { setTimeout(r, 15000); })]); } catch (e) { console.log('[LFP-PHOTO] lfpDoPhotos error or timeout:', e && e.message ? e.message : e); }
   } else { await lfpSleep(100); }
   if (!lfpActive) return;
 

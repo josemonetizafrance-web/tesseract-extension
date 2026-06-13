@@ -100,6 +100,7 @@ let aaLastProfileId = '';
 let aaProfileCooldowns = {};
 let aaPendingSave = false;
 let aaSaveTimer = null;
+let aaProcessing = false;
 let weBelieveObserver = null;
 let weBelieveRespondedKeys = new Set();
 
@@ -605,89 +606,95 @@ function startAAObserver() {
     debounceTimer = setTimeout(async () => {
       debounceTimer = null;
 
-      const today = new Date().toISOString().slice(0, 10);
-      if (aaActiveDate !== today) resetDailyCounter();
+      if (aaProcessing) return;
+      aaProcessing = true;
 
-      if (aaConfig.maxDaily > 0 && aaDailyCount >= aaConfig.maxDaily) return;
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        if (aaActiveDate !== today) resetDailyCounter();
 
-      const detections = [];
+        if (aaConfig.maxDaily > 0 && aaDailyCount >= aaConfig.maxDaily) return;
 
-      for (const mutation of mutations) {
-        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          for (const node of mutation.addedNodes) {
-            if (node.nodeType !== 1) continue;
-            const html = (node.outerHTML || node.textContent || '').toLowerCase();
+        const detections = [];
 
-            // Detectar tipo de evento Y extraer ID del emisor
-            let eventType = null;
-            let senderId = null;
+        for (const mutation of mutations) {
+          if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+            for (const node of mutation.addedNodes) {
+              if (node.nodeType !== 1) continue;
+              const html = (node.outerHTML || node.textContent || '').toLowerCase();
 
-            // Extraer ID del emisor del elemento de notificación
-            senderId = extractSenderFromNode(node);
+              let eventType = null;
+              let senderId = null;
 
-            if (/like|heart|favorite/.test(html) && /received|new|notification|te/.test(html)) {
-              eventType = 'like';
-            } else if (/wink|guiño/.test(html)) {
-              eventType = 'wink';
-            } else if (/comment|comentario/.test(html) && /received|new|notification|te/.test(html)) {
-              eventType = 'comment';
-            } else if (/gift|regalo/.test(html) && /received|new|notification|te/.test(html)) {
-              eventType = 'gift';
-            } else if (/message|mensaje|nuevo mensaje|new message|te escribió|wrote to you/.test(html)) {
-              eventType = 'greeting';
-            }
+              senderId = extractSenderFromNode(node);
 
-            if (eventType && senderId) {
-              detections.push({ eventType, senderId });
+              if (/like|heart|favorite/.test(html) && /received|new|notification|te/.test(html)) {
+                eventType = 'like';
+              } else if (/wink|guiño/.test(html)) {
+                eventType = 'wink';
+              } else if (/comment|comentario/.test(html) && /received|new|notification|te/.test(html)) {
+                eventType = 'comment';
+              } else if (/gift|regalo/.test(html) && /received|new|notification|te/.test(html)) {
+                eventType = 'gift';
+              } else if (/message|mensaje|nuevo mensaje|new message|te escribió|wrote to you/.test(html)) {
+                eventType = 'greeting';
+              }
+
+              if (eventType && senderId) {
+                detections.push({ eventType, senderId });
+              }
             }
           }
         }
-      }
 
-      // Procesar detecciones
-      for (const detection of detections) {
-        const { eventType, senderId } = detection;
+        // Procesar detecciones
+        for (const detection of detections) {
+          const { eventType, senderId } = detection;
 
-        // Verificar si el evento está habilitado
-        if (!aaConfig.events[eventType]?.enabled) continue;
+          if (!aaConfig.events[eventType]?.enabled) continue;
 
-        // Verificar blacklist
-        if (isInAABlacklist(senderId)) {
-          console.log('[AA] ⛔ Skip (blacklist):', senderId);
-          continue;
-        }
+          // Verificar blacklist
+          if (isInAABlacklist(senderId)) {
+            console.log('[AA] ⛔ Skip (blacklist):', senderId);
+            continue;
+          }
 
-        // Verificar cooldown por perfil
-        if (aaProfileCooldowns[senderId] && (Date.now() - aaProfileCooldowns[senderId]) < 30000) {
-          console.log('[AA] Cooldown activo para:', senderId);
-          continue;
-        }
+          // Verificar cooldown por perfil
+          if (aaProfileCooldowns[senderId] && (Date.now() - aaProfileCooldowns[senderId]) < 30000) {
+            console.log('[AA] Cooldown activo para:', senderId);
+            continue;
+          }
 
-        // Verificar historial (no responder al mismo usuario dos veces)
-        if (await isContactAlreadyContacted(senderId)) {
-          console.log('[AA] Ya respondido a:', senderId);
-          continue;
-        }
+          // Verificar historial (no responder al mismo usuario dos veces)
+          if (await isContactAlreadyContacted(senderId)) {
+            console.log('[AA] Ya respondido a:', senderId);
+            continue;
+          }
 
-        aaLastProfileId = senderId;
-        aaProfileCooldowns[senderId] = Date.now();
-        setTimeout(() => { delete aaProfileCooldowns[senderId]; }, 30000);
+          aaLastProfileId = senderId;
+          aaProfileCooldowns[senderId] = Date.now();
+          setTimeout(() => { delete aaProfileCooldowns[senderId]; }, 30000);
 
-        // Abrir chat del emisor
-        const opened = await openProfileChat(senderId);
-        if (!opened) {
-          console.log('[AA] No se pudo abrir chat para:', senderId);
-          continue;
-        }
+          // Abrir chat del emisor
+          const opened = await openProfileChat(senderId);
+          if (!opened) {
+            console.log('[AA] No se pudo abrir chat para:', senderId);
+            continue;
+          }
 
-        // Obtener contexto y generar respuesta
-        const profileContext = getProfileContext(senderId);
-        const response = await getAAResponse(eventType, profileContext);
-        if (response) {
-          await sendResponse(response);
+          // Marcar como contactado inmediatamente para evitar loops
           await markContactAsContacted(senderId);
-          console.log('[AA] ✅ Respuesta enviada a', senderId, 'por', eventType);
+
+          // Obtener contexto y generar respuesta
+          const profileContext = getProfileContext(senderId);
+          const response = await getAAResponse(eventType, profileContext);
+          if (response) {
+            await sendResponse(response);
+            console.log('[AA] ✅ Respuesta enviada a', senderId, 'por', eventType);
+          }
         }
+      } finally {
+        aaProcessing = false;
       }
     }, 1500);
   });
@@ -901,7 +908,22 @@ window._updateAADelay = updateAADelay;
 window._updateAAUseAI = updateAAUseAI;
 window._updateAAMaxDaily = updateAAMaxDaily;
 window._updateAAScanSources = updateAAScanSources;
-window._addToAABlacklist = function(id) { if (id && !aaBlacklist.includes(String(id))) { aaBlacklist.push(String(id)); console.log('[AA] Added to blacklist:', id); } };
+window._addToAABlacklist = async function(id) {
+  if (!id || aaBlacklist.includes(String(id))) return;
+  aaBlacklist.push(String(id));
+  console.log('[AA] Added to blacklist:', id);
+  try {
+    const stored = await chrome.storage.local.get(['tess_jwt']);
+    if (!stored.tess_jwt) return;
+    await fetch(TESSERACT_API + '/api/tess/blacklist/add', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + stored.tess_jwt, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contactId: String(id) })
+    });
+  } catch (e) {
+    console.error('[AA] Error persisting blacklist:', e);
+  }
+};
 window._setAAState = setAAState;
 window._updateAAWeBelieve = updateAAWeBelieve;
 window._startWeBelieveObserver = startWeBelieveObserver;
