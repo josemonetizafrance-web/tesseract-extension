@@ -675,6 +675,7 @@ function setupAllEvents() {
         if (!panel) { console.error('[TESSERACT] Panel NO encontrado:', panelId); return; }
         topZ++;
         panel.style.zIndex = topZ;
+        panel.style.display = 'flex';
         panel.classList.add('visible');
         this.classList.add('active');
         console.log('[TESSERACT] Panel abierto:', panelId);
@@ -686,7 +687,8 @@ function setupAllEvents() {
   document.querySelectorAll('.win-close').forEach(btn => {
     btn.addEventListener('click', function() {
       const panelId = this.dataset.close;
-      document.getElementById(panelId).classList.remove('visible');
+      const panel = document.getElementById(panelId);
+      if (panel) { panel.style.display = ''; panel.classList.remove('visible'); }
       const subKey = panelId.replace('botsub', '').toLowerCase();
       document.querySelector('.bot-subbtn[data-botsub="' + subKey + '"]').classList.remove('active');
     });
