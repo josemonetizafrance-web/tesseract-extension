@@ -1385,7 +1385,7 @@ function spSkipContact(contactEl) {
       if (text.includes('bookmark') || text.includes('pushpin') || text.includes('saved') || text.includes('pinned') || text.includes('fijado') || text.includes('guardado')) return true;
     }
     if (document.getElementById('spSkipConversation').checked) {
-      var counter = contactEl.querySelector('.counter, [class*="counter"]');
+      var counter = contactEl.querySelector('div.counter[data-type="Chat"], .counter');
       if (counter) {
         var numSpan = counter.querySelector('span.counter-success, span:not(.icon)');
         if (numSpan) {
@@ -1394,12 +1394,21 @@ function spSkipContact(contactEl) {
         }
       }
     }
+    if (document.getElementById('spOnlineOnly').checked) {
+      var status = contactEl.querySelector('.status[data-status]');
+      if (status && status.getAttribute('data-status') !== 'online') return true;
+    }
   } catch (e) {}
   return false;
 }
 
 function spGetContactId(contactEl) {
   try {
+    var avatar = contactEl.querySelector('div.ui-avatar[id]');
+    if (avatar) {
+      var id = avatar.id;
+      if (id && id.match(/^\d{5,15}$/)) return id;
+    }
     var link = contactEl.querySelector('a[href]');
     if (link) {
       var href = link.href || link.getAttribute('href') || '';
@@ -1424,22 +1433,21 @@ async function spStart() {
   document.getElementById('spStatus').textContent = '🔍 Escaneando contactos...';
   var sent = 0, skipped = 0;
   try {
-    var contacts = document.querySelectorAll('[class*="dialog-item"], [class*="conversation-item"], [class*="contact-item"], [class*="message-item"], [data-test-id*="dialog-item"]');
+    var contacts = document.querySelectorAll('.dialog-item-root, [data-test-id="dialog-item-tu"], [class*="dialog-item"], [class*="conversation-item"], [data-test-id*="dialog-item"]');
     if (!contacts.length) { document.getElementById('spStatus').textContent = '⚠ No se encontraron contactos'; _spActive = false; document.getElementById('spStartBtn').style.display = 'block'; document.getElementById('spStopBtn').style.display = 'none'; return; }
     document.getElementById('spStatus').textContent = '🔄 ' + contacts.length + ' contactos encontrados...';
     for (var i = 0; i < contacts.length; i++) {
       if (_spAbort) { document.getElementById('spStatus').textContent = '⏹ Detenido. Enviados: ' + sent + ', Saltados: ' + skipped; break; }
+      if (sent >= 5) { document.getElementById('spStatus').textContent = '⏹ Límite de 5 alcanzado. Enviados: ' + sent + ', Saltados: ' + skipped; break; }
       var el = contacts[i];
       var cid = spGetContactId(el);
       if (!cid) { skipped++; continue; }
       if (spSkipContact(el)) { skipped++; continue; }
-      // Skip if already contacted in this run
       try {
         el.click();
         await sleep(2000);
         var input = findChatInput();
         if (!input) { skipped++; continue; }
-        // Determine which message to send (cycle through 5)
         var idx = sent % 5;
         var textEl = document.getElementById('spText' + idx);
         var msg = textEl ? textEl.textContent : '';

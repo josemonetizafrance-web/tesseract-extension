@@ -433,6 +433,7 @@ function findChatInput() {
 
 function findSendButton() {
   const selectors = [
+    '.button-content svg[id="Send"], button:has(.button-content svg#Send), .button-content:has(svg#Send)',
     'button[class*="send"]', '[class*="send-btn"]', '[class*="btn-send"]',
     '[type="submit"][class*="chat"]', '[type="submit"][class*="message"]',
     'button[aria-label*="send"]', 'button[aria-label*="enviar"]',
@@ -440,7 +441,13 @@ function findSendButton() {
   ];
   for (const sel of selectors) {
     const el = document.querySelector(sel);
-    if (el && el.offsetParent !== null) return el;
+    if (el && el.offsetParent !== null) {
+      if (sel === '.button-content svg[id="Send"]') {
+        var parent = el.closest('button, [role="button"], .button-content');
+        if (parent && parent.offsetParent !== null) return parent;
+      }
+      return el;
+    }
   }
   const allButtons = document.querySelectorAll(TALK_Y.ALL_BUTTONS);
   for (const btn of allButtons) {

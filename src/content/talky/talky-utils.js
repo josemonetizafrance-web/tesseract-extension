@@ -87,6 +87,7 @@ async function waitForChatInput(timeoutMs) {
 
 function findChatInput() {
   const selectors = [
+    'textarea#form-textarea[data-test-id*="message type-your-message"]',
     'textarea[placeholder*="mensaje"]', 'textarea[placeholder*="message"]',
     'textarea[placeholder*="escrib"]', 'textarea[class*="chat"]',
     '[contenteditable="true"][class*="chat"]', '.chat-input textarea'
