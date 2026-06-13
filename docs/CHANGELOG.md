@@ -1,5 +1,36 @@
 # Changelog — Tesseract 2.0
 
+## [2026-06-13] — Mailing Pagination, Blocked/Deleted Skip & Icebreakers Fix
+
+### Added
+- **Mailing**: `isBlockedOrDeletedUser()` detection — skips contacts with "Deleted User" name or "User has blocked you" message within 2s instead of waiting 6s for input (`smart-mailing.js:553`)
+- **Mailing**: Pre-click check in main loop — scans contact element text for "deleted user" / "has blocked you" before opening conversation (`smart-mailing.js:687-690`)
+- **Mailing**: Pagination snapshot comparison — detects actual page change after clicking "next"; breaks only if content unchanged after 3 attempts (`smart-mailing.js:716-726`)
+- **Mailing**: `PAGINATOR_CONTAINER` selector as fallback for next-button detection (`dom-selectors.js:116`)
+- **Mailing**: `pageLetterCount()` — reads letter count from page to enforce `maxLetterCount` limit before sending (`smart-mailing.js:618`)
+- **Saludo Push**: `spTranslate()` ES→EN translation function, `traducir` checkbox in UI, per-profile contacted history (`talky-saludo-push.js`)
+- **DOM Selectors**: `BLOCKED_USER_CONTAINER`, `DELETED_USER_SELECTOR`, `DELETED_USER_TEXT` (`dom-selectors.js:119-121`)
+
+### Changed
+- **Groq model**: `llama-3.3-70b-versatile` → `llama-3.1-8b-instant` (higher rate limits); `max_tokens` 4000→1500 (`routes/ai-proxy.js`)
+- **Icebreaker mood chip logic**: removed `data-isselected` attribute check (doesn't exist in DOM) — now clicks directly (`talky-core-state.js`)
+- **Icebreaker category ordering**: enforced send order friendship→real_love→hot_talks→mail (`talky-core-state.js`)
+- **Icebreaker "create new" selector**: XPath → `label.chip-root[data-test-id*="create-icebreaker"]` (`dom-selectors.js:149`)
+- **Saludo Push API URL**: `window.TESSERACT_API` → `Tesseract.API` (the former is never defined) (`talky-saludo-push.js`)
+- **Pagination limit removed**: `stuckCount > 5` break condition eliminated — goes through all available pages (`smart-mailing.js:672`)
+
+### Fixed
+- **Restored missing routes**: `routes/ai-proxy.js` and all server route files overwritten by bad deploy — restored from old commit
+- **server.js BOM**: Removed UTF-8 Byte Order Mark causing "Invalid or unexpected token" on Render
+- **server `__tests__`**: Moved into `server/` directory to fix Chrome extension "filenames starting with _ are reserved" error
+- **AI JSON parsing**: Handles markdown code fences in AI response, adds explicit JSON format instruction, logs raw response (`talky-core-state.js`)
+- **Icebreaker textarea selectors**: Now match by `placeholder` + `maxlength` instead of fragile class names (`dom-selectors.js:150-151`)
+- **Icebreaker "create new" XPath**: Was `//p[...]/..` (targeted inner `<p>`) — changed to `//label[.//p[...]]` (targets wrapping `<label>`)
+
+### Project
+- Git repos initialized and pushed to GitHub (`josemonetizafrance-web/tesseract-extension` and `tesseract-server`)
+- `auto-answer.js` and `auto-answer-panel.js` replaced from `Tesseract_DEV.zip`
+
 ## [2026-06-03] — Logo, Auth Removal & Bugfixes
 
 ### Changed
