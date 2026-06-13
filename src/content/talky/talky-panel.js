@@ -663,14 +663,22 @@ function setupAllEvents() {
 
   // Sub-pestañas del BOT: estilo ventanas Windows
   let topZ = 10;
-  document.querySelectorAll('.bot-subbtn').forEach(btn => {
+  var allSubBtns = document.querySelectorAll('.bot-subbtn');
+  console.log('[TESSERACT] Bot-subbtn encontrados:', allSubBtns.length);
+  allSubBtns.forEach(function(btn) {
     btn.addEventListener('click', function() {
-      const panelId = 'botsub' + this.dataset.botsub.charAt(0).toUpperCase() + this.dataset.botsub.slice(1);
-      const panel = document.getElementById(panelId);
-      topZ++;
-      panel.style.zIndex = topZ;
-      panel.classList.add('visible');
-      this.classList.add('active');
+      try {
+        console.log('[TESSERACT] Subbtn click:', this.dataset.botsub);
+        const panelId = 'botsub' + this.dataset.botsub.charAt(0).toUpperCase() + this.dataset.botsub.slice(1);
+        console.log('[TESSERACT] Buscando panel:', panelId);
+        const panel = document.getElementById(panelId);
+        if (!panel) { console.error('[TESSERACT] Panel NO encontrado:', panelId); return; }
+        topZ++;
+        panel.style.zIndex = topZ;
+        panel.classList.add('visible');
+        this.classList.add('active');
+        console.log('[TESSERACT] Panel abierto:', panelId);
+      } catch (e) { console.error('[TESSERACT] Error al abrir subpanel:', e); }
     });
   });
 
@@ -1333,9 +1341,16 @@ var _spAbort = false;
 const SP_SYSTEM_PROMPT = 'Actúa como un experto en comunicación interpersonal, atracción emocional, psicología de la curiosidad y conversación online. Crea una secuencia de 5 mensajes para TalkyTimes dirigidos a personas que visitaron mi perfil pero nunca respondieron o dejaron de responder.\n\nObjetivo:\n* Despertar curiosidad.\n* Generar conexión emocional.\n* Crear sensación de oportunidad perdida sin presión.\n* Aplicar Push & Pull moderado.\n* Sonar humano, espontáneo y auténtico.\n* Evitar lenguaje de IA, clichés románticos y frases genéricas.\n* Evitar necesidad, desesperación o insistencia excesiva.\n* Cada mensaje debe sentirse como una evolución natural del anterior.\n\nEstructura:\nSALUDO 1: Ligero, amigable y curioso. Pregunta abierta.\nSALUDO 2: Más personal. Observación del perfil. Pequeño desafío.\nINSISTENCIA 1: Interés genuino. Push & Pull ("Quizás me equivoque, pero...").\nINSISTENCIA 2: Más emocional y reflexivo. Desapego elegante.\nCIERRE: Breve, elegante. Última chispa de curiosidad. Retirarse con confianza.\n\nReglas:\n* Todos diferentes, todos terminan con pregunta.\n* Máximo 300 caracteres cada uno.\n* Sin emojis excesivos, sin clichés, sin presión.\n* Separa cada mensaje con exactamente "---".\n* No incluyas los títulos "SALUDO 1:", solo el texto.';
 
 function setupSaludosPush() {
-  document.getElementById('spGenerateBtn').addEventListener('click', spGenerate);
-  document.getElementById('spStartBtn').addEventListener('click', spStart);
-  document.getElementById('spStopBtn').addEventListener('click', spStop);
+  console.log('[SP] setupSaludosPush()');
+  var gen = document.getElementById('spGenerateBtn');
+  var start = document.getElementById('spStartBtn');
+  var stop = document.getElementById('spStopBtn');
+  var list = document.getElementById('spList');
+  console.log('[SP] Elements:', { gen: !!gen, start: !!start, stop: !!stop, list: !!list });
+  if (!gen || !start || !stop) { console.error('[SP] Elementos faltantes'); return; }
+  gen.addEventListener('click', spGenerate);
+  start.addEventListener('click', spStart);
+  stop.addEventListener('click', spStop);
 }
 
 async function spGenerate() {
