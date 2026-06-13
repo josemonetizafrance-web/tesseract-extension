@@ -47,6 +47,7 @@ async function initTesseract() {
   try { createSaludosModal(); } catch (e) { console.error('[TESSERACT] createSaludosModal:', e); }
   try { createCartasModal(); } catch (e) { console.error('[TESSERACT] createCartasModal:', e); }
   try { setupAllEvents(); } catch (e) { console.error('[TESSERACT] setupAllEvents:', e); }
+  try { setupSaludosPush(); } catch (e) { console.error('[TESSERACT] setupSaludosPush:', e); }
   try { await loadAllStates(); } catch (e) { console.error('[TESSERACT] loadAllStates:', e); }
   try { startChatWatcher(); } catch (e) { console.error('[TESSERACT] startChatWatcher:', e); }
   try { startBackgroundIdCapture(); } catch (e) { console.error('[TESSERACT] startBackgroundIdCapture:', e); }
@@ -333,6 +334,11 @@ function createMainPanel() {
 .tess-box .aa-btn{background:linear-gradient(135deg,#0891b2,#06b6d4);color:#fff;}
 .bot-subpanel.visible[id="botsubAutoAnswer"]{border-top:3px solid #06b6d4 !important;}
 .bot-subpanel.visible[id="botsubStar"]{border-top:3px solid #7c3aed !important;}
+.bot-subpanel.visible[id="botsubSaludospush"]{border-top:3px solid #10b981 !important;}
+.sp-item{background:#f8f8fc !important;border-color:#d0d0d8 !important;}
+.sp-item:hover{background:rgba(16,185,129,0.06) !important;border-color:#10b981 !important;}
+.sp-label{color:#10b981 !important;}
+.sp-text{color:#1a1a2e !important;}
 /* Tab-content accent colors */
 #tabMain.tab-content{border-left:3px solid #7c3aed !important;}
 #tabStar.tab-content{border-left:3px solid #f59e0b !important;}
@@ -367,6 +373,7 @@ function createMainPanel() {
   <button class="bot-subbtn" data-botsub="likefollow">❤️➕ LIKES & FOLLOWS</button>
   <button class="bot-subbtn" data-botsub="eater">🧠 EATER</button>
   <button class="bot-subbtn" data-botsub="icebreakers">🎯 ICEBREAKERS</button>
+  <button class="bot-subbtn" data-botsub="saludospush">📨 SALUDOS PUSH</button>
 </div>
 
 <!-- CONTENEDOR DE VENTANAS -->
@@ -536,10 +543,45 @@ function createMainPanel() {
     <div id="blList" style="font-size:10px;color:#ccc;">
       <p style="color:#666;text-align:center;">Cargando...</p>
     </div>
-  </div>
 </div>
 </div>
 
+<!-- SUB: SALUDOS PUSH -->
+<div class="bot-subpanel" id="botsubSaludospush" data-z="1">
+<button class="win-close" data-close="botsubSaludospush">×</button>
+<div class="eater-box">
+<h4 style="font-size:14px;letter-spacing:2px;margin:6px 0;text-align:center;background:linear-gradient(135deg,#10b981,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:900;font-family:'Orbitron',sans-serif;">📨 SALUDOS PUSH</h4>
+<div style="display:flex;gap:4px;margin-bottom:6px;">
+  <input id="spInput" value="Saludo Push" placeholder="Tema para generar saludos..." style="flex:1;background:#0a0a0f;border:1px solid #333350;color:#e0e0e0;padding:6px 8px;border-radius:4px;font-size:10px;font-family:'Share Tech Mono',monospace;">
+  <button id="spGenerateBtn" style="background:#10b981;border:none;color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:10px;font-family:'Orbitron',sans-serif;white-space:nowrap;">🔄 SALUDAR CON GROQ</button>
+</div>
+<div style="display:flex;gap:4px;margin-bottom:6px;">
+  <label style="display:flex;align-items:center;gap:4px;font-size:9px;color:#ccc;cursor:pointer;"><input type="checkbox" id="spSkipPinned"> Saltar Pin/Saved</label>
+  <label style="display:flex;align-items:center;gap:4px;font-size:9px;color:#ccc;cursor:pointer;"><input type="checkbox" id="spSkipConversation"> Saltar +5 mensajes</label>
+  <label style="display:flex;align-items:center;gap:4px;font-size:9px;color:#ccc;cursor:pointer;"><input type="checkbox" id="spOnlineOnly"> Solo online</label>
+</div>
+<div style="display:flex;gap:4px;margin-bottom:6px;">
+  <button id="spStartBtn" style="flex:1;background:linear-gradient(135deg,#10b981,#059669);border:none;color:#fff;padding:8px;border-radius:6px;cursor:pointer;font-size:10px;font-family:'Orbitron',sans-serif;letter-spacing:1px;">▶ INICIAR BARRIDO</button>
+  <button id="spStopBtn" style="flex:1;background:#dc2626;border:none;color:#fff;padding:8px;border-radius:6px;cursor:pointer;font-size:10px;font-family:'Orbitron',sans-serif;letter-spacing:1px;display:none;">⏹ DETENER</button>
+</div>
+<div id="spStatus" style="font-size:9px;color:#888;text-align:center;margin-bottom:6px;">—</div>
+<div id="spList" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto;padding:2px 4px;">
+  <div class="sp-item" data-idx="0"><div class="sp-label">SALUDO 1</div><div class="sp-text" id="spText0">—</div></div>
+  <div class="sp-item" data-idx="1"><div class="sp-label">SALUDO 2</div><div class="sp-text" id="spText1">—</div></div>
+  <div class="sp-item" data-idx="2"><div class="sp-label">INSISTENCIA 1</div><div class="sp-text" id="spText2">—</div></div>
+  <div class="sp-item" data-idx="3"><div class="sp-label">INSISTENCIA 2</div><div class="sp-text" id="spText3">—</div></div>
+  <div class="sp-item" data-idx="4"><div class="sp-label">CIERRE</div><div class="sp-text" id="spText4">—</div></div>
+</div>
+<style>
+.sp-item{border:1px solid #333350;border-radius:6px;padding:6px 8px;background:rgba(16,185,129,0.08);transition:all 0.2s;}
+.sp-item:hover{background:rgba(16,185,129,0.2);border-color:#10b981;}
+.sp-label{font-size:9px;color:#10b981;letter-spacing:1px;margin-bottom:3px;font-family:'Orbitron',sans-serif;}
+.sp-text{font-size:11px;color:#e0e0e0;line-height:1.4;}
+</style>
+</div>
+</div>
+
+</div>
 </div></div>`;
   document.body.appendChild(p);
   console.log('[TESSERACT] ✅ Panel principal creado');
@@ -1283,6 +1325,144 @@ const r = await chrome.storage.local.get([
     renderStarIds();
   } catch (e) { console.error('[TESSERACT] Error cargando:', e); }
 }
+
+// ============ SALUDOS PUSH ============
+var _spActive = false;
+var _spAbort = false;
+
+const SP_SYSTEM_PROMPT = 'Actúa como un experto en comunicación interpersonal, atracción emocional, psicología de la curiosidad y conversación online. Crea una secuencia de 5 mensajes para TalkyTimes dirigidos a personas que visitaron mi perfil pero nunca respondieron o dejaron de responder.\n\nObjetivo:\n* Despertar curiosidad.\n* Generar conexión emocional.\n* Crear sensación de oportunidad perdida sin presión.\n* Aplicar Push & Pull moderado.\n* Sonar humano, espontáneo y auténtico.\n* Evitar lenguaje de IA, clichés románticos y frases genéricas.\n* Evitar necesidad, desesperación o insistencia excesiva.\n* Cada mensaje debe sentirse como una evolución natural del anterior.\n\nEstructura:\nSALUDO 1: Ligero, amigable y curioso. Pregunta abierta.\nSALUDO 2: Más personal. Observación del perfil. Pequeño desafío.\nINSISTENCIA 1: Interés genuino. Push & Pull ("Quizás me equivoque, pero...").\nINSISTENCIA 2: Más emocional y reflexivo. Desapego elegante.\nCIERRE: Breve, elegante. Última chispa de curiosidad. Retirarse con confianza.\n\nReglas:\n* Todos diferentes, todos terminan con pregunta.\n* Máximo 300 caracteres cada uno.\n* Sin emojis excesivos, sin clichés, sin presión.\n* Separa cada mensaje con exactamente "---".\n* No incluyas los títulos "SALUDO 1:", solo el texto.';
+
+function setupSaludosPush() {
+  document.getElementById('spGenerateBtn').addEventListener('click', spGenerate);
+  document.getElementById('spStartBtn').addEventListener('click', spStart);
+  document.getElementById('spStopBtn').addEventListener('click', spStop);
+}
+
+async function spGenerate() {
+  var btn = document.getElementById('spGenerateBtn');
+  var input = document.getElementById('spInput');
+  var topic = input.value.trim() || 'Saludo Push';
+  btn.textContent = '⏳ GENERANDO...';
+  btn.disabled = true;
+  try {
+    var token = await new Promise(function (r) { chrome.storage.local.get('tess_jwt', function (d) { r(d.tess_jwt); }); });
+    if (!token) { if (typeof showTessToast === 'function') showTessToast('⚠ No hay sesión activa', 'warning'); return; }
+    var seed = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    var res = await fetch(TESSERACT_API + '/api/chatgpt/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: SP_SYSTEM_PROMPT },
+          { role: 'user', content: 'Tema: "' + topic + '". Seed: ' + seed }
+        ],
+        max_tokens: 1500,
+        temperature: 0.85
+      })
+    });
+    if (!res.ok) { showTessToast('⚠ Error AI', 'warning'); return; }
+    var data = await res.json();
+    var text = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : '';
+    if (!text) return;
+    var parts = text.split('---').map(function (s) { return s.trim(); }).filter(function (s) { return s; });
+    var labels = ['SALUDO 1', 'SALUDO 2', 'INSISTENCIA 1', 'INSISTENCIA 2', 'CIERRE'];
+    var container = document.getElementById('spList');
+    for (var i = 0; i < 5; i++) {
+      var textEl = document.getElementById('spText' + i);
+      if (textEl) textEl.textContent = parts[i] || '—';
+    }
+    showTessToast('✅ 5 saludos generados', 'success');
+  } catch (e) { console.error('[SP] Error:', e); showTessToast('⚠ Error: ' + e.message, 'warning'); }
+  finally { btn.textContent = '🔄 SALUDAR CON GROQ'; btn.disabled = false; }
+}
+
+function spSkipContact(contactEl) {
+  try {
+    if (document.getElementById('spSkipPinned').checked) {
+      var icons = contactEl.querySelectorAll('[id="Bookmark"], [id="CustomPushPin"], [data-test-id="dialog-item__bookmarked-icon"], [data-test-id*="dialog-pin"]');
+      for (var i = 0; i < icons.length; i++) { if (icons[i].offsetParent !== null) return true; }
+      var text = contactEl.textContent.toLowerCase();
+      if (text.includes('bookmark') || text.includes('pushpin') || text.includes('saved') || text.includes('pinned') || text.includes('fijado') || text.includes('guardado')) return true;
+    }
+    if (document.getElementById('spSkipConversation').checked) {
+      var counter = contactEl.querySelector('.counter, [class*="counter"]');
+      if (counter) {
+        var numSpan = counter.querySelector('span.counter-success, span:not(.icon)');
+        if (numSpan) {
+          var num = parseInt(numSpan.textContent.trim(), 10);
+          if (!isNaN(num) && num >= 5) return true;
+        }
+      }
+    }
+  } catch (e) {}
+  return false;
+}
+
+function spGetContactId(contactEl) {
+  try {
+    var link = contactEl.querySelector('a[href]');
+    if (link) {
+      var href = link.href || link.getAttribute('href') || '';
+      var m = href.match(/\/(\d{5,15})(?:[/?#]|$)/);
+      if (m) return m[1];
+    }
+    var uid = contactEl.getAttribute('data-test-uid') || '';
+    if (uid) {
+      var parts = uid.split('_');
+      for (var i = 0; i < parts.length; i++) { if (parts[i].match(/^\d{5,15}$/)) return parts[i]; }
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function spStart() {
+  if (_spActive) return;
+  _spActive = true;
+  _spAbort = false;
+  document.getElementById('spStartBtn').style.display = 'none';
+  document.getElementById('spStopBtn').style.display = 'block';
+  document.getElementById('spStatus').textContent = '🔍 Escaneando contactos...';
+  var sent = 0, skipped = 0;
+  try {
+    var contacts = document.querySelectorAll('[class*="dialog-item"], [class*="conversation-item"], [class*="contact-item"], [class*="message-item"], [data-test-id*="dialog-item"]');
+    if (!contacts.length) { document.getElementById('spStatus').textContent = '⚠ No se encontraron contactos'; _spActive = false; document.getElementById('spStartBtn').style.display = 'block'; document.getElementById('spStopBtn').style.display = 'none'; return; }
+    document.getElementById('spStatus').textContent = '🔄 ' + contacts.length + ' contactos encontrados...';
+    for (var i = 0; i < contacts.length; i++) {
+      if (_spAbort) { document.getElementById('spStatus').textContent = '⏹ Detenido. Enviados: ' + sent + ', Saltados: ' + skipped; break; }
+      var el = contacts[i];
+      var cid = spGetContactId(el);
+      if (!cid) { skipped++; continue; }
+      if (spSkipContact(el)) { skipped++; continue; }
+      // Skip if already contacted in this run
+      try {
+        el.click();
+        await sleep(2000);
+        var input = findChatInput();
+        if (!input) { skipped++; continue; }
+        // Determine which message to send (cycle through 5)
+        var idx = sent % 5;
+        var textEl = document.getElementById('spText' + idx);
+        var msg = textEl ? textEl.textContent : '';
+        if (!msg || msg === '—') { skipped++; continue; }
+        var sendBtn = findSendButton();
+        if (!sendBtn) { skipped++; continue; }
+        if (typeof typeIntoInput === 'function') typeIntoInput(input, msg);
+        else { input.value = msg; input.dispatchEvent(new Event('input', { bubbles: true })); }
+        await sleep(1500);
+        sendBtn.click();
+        await sleep(2000);
+        sent++;
+        document.getElementById('spStatus').textContent = '✅ Enviados: ' + sent + ' | Saltados: ' + skipped + ' | Actual: #' + cid;
+      } catch (e) { skipped++; }
+    }
+    if (!_spAbort) document.getElementById('spStatus').textContent = '✅ Barrido completo. Enviados: ' + sent + ', Saltados: ' + skipped;
+  } catch (e) { document.getElementById('spStatus').textContent = '⚠ Error: ' + e.message; }
+  _spActive = false;
+  document.getElementById('spStartBtn').style.display = 'block';
+  document.getElementById('spStopBtn').style.display = 'none';
+}
+
+function spStop() { _spAbort = true; document.getElementById('spStatus').textContent = '⏹ Deteniendo...'; }
 
 // ============ SINC MÉTRICAS CON SERVIDOR ============
 async function syncMetricsToStorage(action, count) {
