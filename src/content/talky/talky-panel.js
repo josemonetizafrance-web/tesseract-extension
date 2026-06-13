@@ -253,6 +253,40 @@ function createMainPanel() {
 .st-bar button:hover{background:#7c3aed;color:#fff;}
 </style>
 <style>
+/* ============ UNIFIED DESIGN SYSTEM ============ */
+.tess-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border:none;border-radius:8px;cursor:pointer;font-family:'Segoe UI',sans-serif;font-size:12px;font-weight:600;letter-spacing:0.5px;transition:all .3s;text-align:center;justify-content:center;line-height:1.2;}
+.tess-btn:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(124,58,237,.4);}
+.tess-btn:active{transform:translateY(0);}
+.tess-btn-primary{background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;box-shadow:0 2px 8px rgba(124,58,237,.3);}
+.tess-btn-success{background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,.3);}
+.tess-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;box-shadow:0 2px 8px rgba(239,68,68,.3);}
+.tess-btn-ghost{background:rgba(0,0,0,.4);color:#e0e0e0;border:1px solid #8b5cf6;box-shadow:none;}
+.tess-btn-ghost:hover{background:#7c3aed;color:#fff;border-color:#7c3aed;}
+.tess-btn-sm{padding:6px 12px;font-size:9px;border-radius:6px;}
+.tess-btn-block{width:100%;}
+.tess-btn-icon{width:44px;padding:10px 4px;font-size:16px;border-radius:8px;}
+.tess-input{width:100%;padding:8px 10px;background:#0a0a0f;border:1px solid #333350;border-radius:6px;color:#e0e0e0;font-family:'Segoe UI',sans-serif;font-size:11px;box-sizing:border-box;outline:none;transition:border-color .3s,box-shadow .3s;}
+.tess-input:focus{border-color:#8b5cf6;box-shadow:0 0 0 3px rgba(139,92,246,.15);}
+.tess-input::placeholder{color:#666;}
+.tess-input-sm{padding:4px 6px;font-size:10px;border-radius:4px;}
+.tess-card{background:rgba(30,27,75,.5);border:1px solid #8b5cf6;border-radius:10px;padding:12px;}
+.tess-section-hdr{font-size:14px;letter-spacing:2px;margin:6px 0;text-align:center;font-weight:900;font-family:'Orbitron',sans-serif;}
+.tess-flex{display:flex;align-items:center;gap:6px;}
+.tess-flex-center{display:flex;justify-content:center;gap:6px;}
+.tess-grow{flex:1;}
+
+/* LIGHT THEME OVERRIDES FOR UNIFIED CLASSES */
+.tess-box .tess-btn-primary{background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;}
+.tess-box .tess-btn-success{background:linear-gradient(135deg,#10b981,#059669);color:#fff;}
+.tess-box .tess-btn-danger{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;}
+.tess-box .tess-btn-ghost{background:#f4f4f8;color:#555;border-color:#d0d0d8;}
+.tess-box .tess-btn-ghost:hover{background:#7c3aed;color:#fff;border-color:#7c3aed;}
+.tess-box .tess-input{background:#f8f8fc;border-color:#e0e0e8;color:#1a1a2e;}
+.tess-box .tess-input:focus{border-color:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,.1);}
+.tess-box .tess-input::placeholder{color:#aaa;}
+.tess-box .tess-card{background:#f4f4f8;border-color:#e0e0e8;}
+.tess-box .tess-section-hdr{background:none;-webkit-background-clip:unset;-webkit-text-fill-color:unset;color:#7c3aed;}
+
 /* TESSERACT LIGHT THEME OVERRIDE */
 #tesseract-main-panel{font-family:'Segoe UI',system-ui,sans-serif !important;}
 .tess-box{background:#fff !important;border-color:#d0d0d8 !important;box-shadow:0 4px 24px rgba(0,0,0,0.1) !important;color:#1a1a2e !important;}
@@ -352,7 +386,7 @@ function createMainPanel() {
 <div class="tess-header"><img src="${logoUrl}" alt="TESSERACT" style="height:22px;width:auto;display:inline-block;vertical-align:middle;"><div><button id="btnZoomOut" title="Reducir">-</button><span id="zoomLevel" style="color:#fff;font-size:11px;min-width:28px;text-align:center;display:inline-block;">1.0</span><button id="btnZoomIn" title="Ampliar">+</button><button id="btnMin" title="Minimizar">_</button><button id="btnClose" title="Cerrar">x</button></div></div>
 
 <!-- PERFIL ACTIVO -->
-<div class="profile-badge" id="profileBadge"><span>🎯 <span class="pb-name" id="profileName">—</span></span><span class="pb-id" id="profileId">ID: —</span> <input id="manualProfileName" placeholder="Name" style="width:60px;background:#0a0a0f;border:1px solid #333350;color:#e0e0e0;font-size:8px;padding:2px 4px;border-radius:2px;"> <input id="manualProfileId" placeholder="ID" style="width:60px;background:#0a0a0f;border:1px solid #333350;color:#e0e0e0;font-size:8px;padding:2px 4px;border-radius:2px;"> <button id="btnSetProfile" style="background:#8b5cf6;border:none;color:#fff;font-size:8px;padding:2px 6px;border-radius:2px;cursor:pointer;">SET</button></div>
+<div class="profile-badge" id="profileBadge"><span>🎯 <span class="pb-name" id="profileName">—</span></span><span class="pb-id" id="profileId">ID: —</span> <input id="manualProfileName" placeholder="Name" class="tess-input tess-input-sm" style="width:60px;display:inline-block;"> <input id="manualProfileId" placeholder="ID" class="tess-input tess-input-sm" style="width:60px;display:inline-block;"> <button id="btnSetProfile" class="tess-btn tess-btn-primary tess-btn-sm" style="padding:2px 6px;font-size:8px;">SET</button></div>
 
 <!-- PESTAÑAS -->
 <div class="tab-nav">
@@ -382,12 +416,12 @@ function createMainPanel() {
 <!-- SUB: LIKE & FOLLOW + PHOTOS (Unificado) -->
 <div class="bot-subpanel" id="botsubLikefollow" data-z="1">
 <button class="win-close" data-close="botsubLikefollow">×</button>
-<div class="mod-card" style="margin-bottom:8px;">
-<h4>❤️➕📷 L+F+P UNIFICADO</h4>
-<div class="st" id="lfpStatus" style="color:#ffffff;font-size:13px;font-weight:bold;margin-bottom:8px;">INACTIVO</div>
-<div style="display:flex;gap:6px;justify-content:center;">
-<button id="btnLFPToggle" style="flex:1;padding:12px 8px;border:2px solid #8b5cf6;border-radius:8px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;transition:all 0.3s;text-shadow:0 0 10px rgba(139,92,246,0.5);">▶ L+F+P</button>
-<button id="btnLFPPause" style="width:44px;padding:12px 4px;border:1px solid #f59e0b;border-radius:8px;background:rgba(245,158,11,0.15);color:#f59e0b;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:16px;transition:all 0.3s;" title="Pausar/Reanudar">⏸</button>
+<div class="tess-card">
+<h4 class="tess-section-hdr">❤️➕📷 L+F+P UNIFICADO</h4>
+<div class="st" id="lfpStatus" style="color:#ffffff;font-size:13px;font-weight:bold;margin-bottom:8px;text-align:center;">INACTIVO</div>
+<div class="tess-flex-center">
+<button id="btnLFPToggle" class="tess-btn tess-btn-primary tess-grow" style="padding:12px 8px;font-size:13px;font-weight:700;letter-spacing:2px;text-shadow:0 0 10px rgba(139,92,246,0.5);">▶ L+F+P</button>
+<button id="btnLFPPause" class="tess-btn tess-btn-ghost tess-btn-icon" title="Pausar/Reanudar">⏸</button>
 </div>
 </div>
 <div class="stats-row">
@@ -410,11 +444,11 @@ function createMainPanel() {
   <span style="color:#c4b5fd;">seleccionados</span>
   <span style="margin-left:auto;cursor:pointer;color:#f87171;font-size:12px;" id="btnClearSelection">✕</span>
 </div>
-<button id="btnStopClone" style="width:100%;padding:6px;margin-top:4px;border:1px solid #ef4444;border-radius:6px;background:rgba(239,68,68,0.15);color:#ef4444;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:1px;">⏹ CLONACIÓN: ACTIVA</button>
-<button id="btnCopyEaterResponse" style="width:100%;padding:8px;margin-top:6px;border:1px solid #8b5cf6;border-radius:6px;background:rgba(30,27,75,0.5);color:#e0e0e0;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:1px;">📋 COPIAR AL CHAT</button>
-<div style="display:flex;gap:6px;margin-top:6px;">
-<button id="btnRefreshEater2" style="flex:1;padding:8px;border:1px solid #8b5cf6;border-radius:6px;background:rgba(139,92,246,0.2);color:#e0e0e0;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:1px;">🔄 REGENERAR</button>
-<select id="btnTranslate2" style="flex:1;padding:8px;border:1px solid #2196F3;border-radius:6px;background:rgba(33,150,243,0.2);color:#e0e0e0;cursor:pointer;font-family:'Segoe UI Emoji','Apple Color Emoji','Orbitron',sans-serif;font-size:8px;letter-spacing:1px;outline:none;appearance:auto;">
+<button id="btnStopClone" class="tess-btn tess-btn-danger tess-btn-sm tess-btn-block">⏹ CLONACIÓN: ACTIVA</button>
+<button id="btnCopyEaterResponse" class="tess-btn tess-btn-ghost tess-btn-sm tess-btn-block">📋 COPIAR AL CHAT</button>
+<div class="tess-flex-center" style="margin-top:6px;">
+<button id="btnRefreshEater2" class="tess-btn tess-btn-ghost tess-btn-sm tess-grow">🔄 REGENERAR</button>
+<select id="btnTranslate2" class="tess-input tess-input-sm" style="flex:1;flex-basis:0;cursor:pointer;appearance:auto;font-size:8px;background:#0a0a0f;border-color:#2196F3;">
 <option value="en">🇬🇧 EN</option>
 <option value="fr">🇫🇷 FR</option>
 <option value="pt">🇵🇹 PT</option>
@@ -432,13 +466,13 @@ function createMainPanel() {
 <div class="bot-subpanel" id="botsubIcebreakers" data-z="1">
 <button class="win-close" data-close="botsubIcebreakers">×</button>
 <div class="eater-box">
-<h4 style="font-size:16px;letter-spacing:3px;margin:8px 0;text-align:center;background:linear-gradient(135deg,#7c3aed,#ec4899,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:900;text-transform:uppercase;font-family:'Orbitron',sans-serif;">IB</h4>
-<div style="display:flex;gap:4px;margin-bottom:6px;">
-  <input id="ibInput" value="RH" placeholder="RH, RH Amistad, RH Amor Real, RH Charla Caliente, RH Mail" style="flex:1;background:#0a0a0f;border:1px solid #333350;color:#e0e0e0;padding:6px 8px;border-radius:4px;font-size:10px;font-family:'Share Tech Mono',monospace;">
-  <button id="ibGenerateBtn" style="background:#8b5cf6;border:none;color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:10px;font-family:'Orbitron',sans-serif;white-space:nowrap;">🔄 GENERAR</button>
+<h4 class="tess-section-hdr" style="font-size:16px;letter-spacing:3px;background:linear-gradient(135deg,#7c3aed,#ec4899,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">IB</h4>
+<div class="tess-flex">
+  <input id="ibInput" value="RH" placeholder="RH, RH Amistad, RH Amor Real, RH Charla Caliente, RH Mail" class="tess-input tess-input-sm tess-grow">
+  <button id="ibGenerateBtn" class="tess-btn tess-btn-primary tess-btn-sm">🔄 GENERAR</button>
 </div>
-<div style="display:flex;gap:4px;margin-bottom:4px;">
-  <button id="ibSendAllBtn" style="flex:1;background:linear-gradient(135deg,#059669,#10b981);border:none;color:#fff;padding:8px;border-radius:6px;cursor:pointer;font-size:10px;font-family:'Orbitron',sans-serif;letter-spacing:1px;">🌐 ENVIAR IB (Traducir → Enviar)</button>
+<div class="tess-flex-center">
+  <button id="ibSendAllBtn" class="tess-btn tess-btn-success tess-btn-sm tess-grow">🌐 ENVIAR IB (Traducir → Enviar)</button>
 </div>
 <div id="icebreakersList" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto;padding:2px 4px;">
   <div class="ib-item" data-idx="0"><div class="ib-label">RH Amistad</div><div class="ib-text">—</div></div>
@@ -469,7 +503,7 @@ function createMainPanel() {
 
 <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">
 <div class="logout-link" id="btnLogout" style="flex:1;">CERRAR SESIÓN</div>
-<button class="logout-link" id="btnAdminPanel" style="flex:1;background:#8b5cf6;border:1px solid #8b5cf6;color:#fff;text-align:center;padding:8px 12px;border-radius:6px;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:1px;">⚙ ADMIN PANEL</button>
+<button class="tess-btn tess-btn-primary tess-btn-sm" id="btnAdminPanel">⚙ ADMIN PANEL</button>
 </div>
 </div>
 </div>
@@ -529,7 +563,7 @@ function createMainPanel() {
   <button class="ml-btn ml-btn-secondary" id="btnScrapeML">🔍 RASTREAR</button>
   <button class="ml-btn ml-btn-success" id="btnStartCarta">📨 INICIAR ENVÍO</button>
   <div id="mlCartaProgress" style="margin-top:6px;font-size:9px;color:#888;display:none;text-align:center;"></div>
-  <div id="mlContactList" style="margin-top:8px;max-height:200px;overflow-y:auto;border:1px solid #e0e0e8;border-radius:6px;background:#fafafc;display:none;"></div>
+  <div id="mlContactList" style="margin-top:8px;max-height:200px;overflow-y:auto;border:1px solid #333350;border-radius:6px;background:rgba(0,0,0,0.3);display:none;"></div>
 </div>
 </div>
 
@@ -551,19 +585,19 @@ function createMainPanel() {
 <div class="bot-subpanel" id="botsubSaludospush" data-z="1">
 <button class="win-close" data-close="botsubSaludospush">×</button>
 <div class="eater-box">
-<h4 style="font-size:14px;letter-spacing:2px;margin:6px 0;text-align:center;background:linear-gradient(135deg,#10b981,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:900;font-family:'Orbitron',sans-serif;">📨 SALUDOS PUSH</h4>
-<div style="display:flex;gap:4px;margin-bottom:6px;">
-  <input id="spInput" value="Saludo Push" placeholder="Tema para generar saludos..." style="flex:1;background:#0a0a0f;border:1px solid #333350;color:#e0e0e0;padding:6px 8px;border-radius:4px;font-size:10px;font-family:'Share Tech Mono',monospace;">
-  <button id="spGenerateBtn" style="background:#10b981;border:none;color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:10px;font-family:'Orbitron',sans-serif;white-space:nowrap;">🔄 SALUDAR CON GROQ</button>
+<h4 class="tess-section-hdr" style="background:linear-gradient(135deg,#10b981,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">📨 SALUDOS PUSH</h4>
+<div class="tess-flex">
+  <input id="spInput" value="Saludo Push" placeholder="Tema para generar saludos..." class="tess-input tess-input-sm tess-grow">
+  <button id="spGenerateBtn" class="tess-btn tess-btn-success tess-btn-sm">🔄 SALUDAR CON GROQ</button>
 </div>
-<div style="display:flex;gap:4px;margin-bottom:6px;">
-  <label style="display:flex;align-items:center;gap:4px;font-size:9px;color:#ccc;cursor:pointer;"><input type="checkbox" id="spSkipPinned"> Saltar Pin/Saved</label>
-  <label style="display:flex;align-items:center;gap:4px;font-size:9px;color:#ccc;cursor:pointer;"><input type="checkbox" id="spSkipConversation"> Saltar +5 mensajes</label>
-  <label style="display:flex;align-items:center;gap:4px;font-size:9px;color:#ccc;cursor:pointer;"><input type="checkbox" id="spOnlineOnly"> Solo online</label>
+<div class="tess-flex-center" style="margin-bottom:6px;justify-content:flex-start;">
+  <label class="tess-flex" style="font-size:9px;color:#ccc;cursor:pointer;"><input type="checkbox" id="spSkipPinned"> Saltar Pin/Saved</label>
+  <label class="tess-flex" style="font-size:9px;color:#ccc;cursor:pointer;"><input type="checkbox" id="spSkipConversation"> Saltar +5 mensajes</label>
+  <label class="tess-flex" style="font-size:9px;color:#ccc;cursor:pointer;"><input type="checkbox" id="spOnlineOnly"> Solo online</label>
 </div>
-<div style="display:flex;gap:4px;margin-bottom:6px;">
-  <button id="spStartBtn" style="flex:1;background:linear-gradient(135deg,#10b981,#059669);border:none;color:#fff;padding:8px;border-radius:6px;cursor:pointer;font-size:10px;font-family:'Orbitron',sans-serif;letter-spacing:1px;">▶ INICIAR BARRIDO</button>
-  <button id="spStopBtn" style="flex:1;background:#dc2626;border:none;color:#fff;padding:8px;border-radius:6px;cursor:pointer;font-size:10px;font-family:'Orbitron',sans-serif;letter-spacing:1px;display:none;">⏹ DETENER</button>
+<div class="tess-flex-center">
+  <button id="spStartBtn" class="tess-btn tess-btn-success tess-btn-sm tess-grow">▶ INICIAR BARRIDO</button>
+  <button id="spStopBtn" class="tess-btn tess-btn-danger tess-btn-sm tess-grow" style="display:none;">⏹ DETENER</button>
 </div>
 <div id="spStatus" style="font-size:9px;color:#888;text-align:center;margin-bottom:6px;">—</div>
 <div id="spList" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto;padding:2px 4px;">
@@ -596,19 +630,18 @@ function createSaludosModal() {
   m.innerHTML = `
 <style>
 #saludosModal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999999;display:none;}
-.sal-box{width:450px;background:#0a0a0a;border:2px solid #8b5cf6;border-radius:12px;box-shadow:0 0 40px rgba(139,92,246,0.5);color:#8b5cf6;font-family:'Orbitron',sans-serif;}
-.sal-hdr{background:linear-gradient(135deg,#1e1b4b,#8b5cf6,#1e1b4b);padding:12px 16px;border-radius:10px 10px 0 0;font-weight:bold;letter-spacing:2px;display:flex;justify-content:space-between;border-bottom:2px solid #8b5cf6;color:#e0e0e0;}
+.sal-box{width:450px;background:#0a0a0a;border:2px solid #8b5cf6;border-radius:12px;box-shadow:0 0 40px rgba(139,92,246,0.5);color:#e0e0e0;font-family:'Segoe UI',sans-serif;overflow:hidden;}
+.sal-hdr{background:linear-gradient(135deg,#1e1b4b,#8b5cf6,#1e1b4b);padding:12px 16px;font-weight:bold;letter-spacing:2px;display:flex;justify-content:space-between;border-bottom:2px solid #8b5cf6;color:#e0e0e0;font-size:13px;}
+.sal-hdr span{cursor:pointer;font-size:18px;}
 .sal-body{padding:16px;max-height:400px;overflow-y:auto;}
-.sal-body h4{font-size:10px;letter-spacing:1px;margin:8px 0 5px 0;}
-.sal-body textarea{width:100%;height:50px;background:#000;border:1px solid #8b5cf6;border-radius:6px;color:#e0e0e0;font-family:Arial;font-size:11px;padding:8px;margin-bottom:8px;resize:vertical;box-sizing:border-box;}
-.sal-body textarea:focus{outline:none;border-color:#ef4444;}
-.sal-foot{padding:12px;border-top:1px solid #8b5cf6;text-align:right;}
-.sal-foot button{padding:8px 16px;border:1px solid #8b5cf6;border-radius:6px;background:rgba(30,27,75,0.7);color:#e0e0e0;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:10px;margin-left:8px;}
-.sal-foot button.save{background:#4CAF50;border-color:#4CAF50;color:#fff;}
+.sal-body h4{font-size:10px;letter-spacing:1px;margin:8px 0 5px 0;text-transform:uppercase;color:#e0e0e0;}
+.sal-body textarea{width:100%;height:50px;background:#0a0a0f;border:1px solid #333350;border-radius:6px;color:#e0e0e0;font-family:'Segoe UI',sans-serif;font-size:11px;padding:8px;margin-bottom:8px;resize:vertical;box-sizing:border-box;outline:none;transition:border-color .3s;}
+.sal-body textarea:focus{border-color:#8b5cf6;box-shadow:0 0 0 3px rgba(139,92,246,.15);}
+.sal-foot{padding:12px;border-top:1px solid #8b5cf6;text-align:right;background:rgba(0,0,0,0.3);}
 </style>
-<div class="sal-box"><div class="sal-hdr"><span>⚙ CONFIGURAR SALUDOS</span><span style="cursor:pointer;font-size:18px;" id="btnCloseSaludos">×</span></div>
+<div class="sal-box"><div class="sal-hdr"><span>⚙ CONFIGURAR SALUDOS</span><span id="btnCloseSaludos">×</span></div>
 <div class="sal-body"><h4>Mensaje 1:</h4><textarea id="sMsg1"></textarea><h4>Mensaje 2:</h4><textarea id="sMsg2"></textarea><h4>Mensaje 3:</h4><textarea id="sMsg3"></textarea><h4>Mensaje 4:</h4><textarea id="sMsg4"></textarea><h4>Mensaje 5:</h4><textarea id="sMsg5"></textarea></div>
-<div class="sal-foot"><button id="btnCancelSaludos">CANCELAR</button><button class="save" id="btnSaveSaludos">💾 GUARDAR</button></div></div>`;
+<div class="sal-foot"><button class="tess-btn tess-btn-ghost tess-btn-sm" id="btnCancelSaludos">CANCELAR</button><button class="tess-btn tess-btn-primary tess-btn-sm" id="btnSaveSaludos">💾 GUARDAR</button></div></div>`;
   document.body.appendChild(m);
 }
 
@@ -619,18 +652,17 @@ function createCartasModal() {
   m.innerHTML = `
 <style>
 #cartasModal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999999;display:none;}
-.car-box{width:520px;background:#0a0a0a;border:2px solid #8b5cf6;border-radius:12px;box-shadow:0 0 40px rgba(139,92,246,0.5);color:#8b5cf6;font-family:'Orbitron',sans-serif;}
-.car-hdr{background:linear-gradient(135deg,#1e1b4b,#8b5cf6,#1e1b4b);padding:12px 16px;border-radius:10px 10px 0 0;font-weight:bold;letter-spacing:2px;display:flex;justify-content:space-between;border-bottom:2px solid #8b5cf6;color:#e0e0e0;}
+.car-box{width:520px;background:#0a0a0a;border:2px solid #8b5cf6;border-radius:12px;box-shadow:0 0 40px rgba(139,92,246,0.5);color:#e0e0e0;font-family:'Segoe UI',sans-serif;overflow:hidden;}
+.car-hdr{background:linear-gradient(135deg,#1e1b4b,#8b5cf6,#1e1b4b);padding:12px 16px;font-weight:bold;letter-spacing:2px;display:flex;justify-content:space-between;border-bottom:2px solid #8b5cf6;color:#e0e0e0;font-size:13px;}
+.car-hdr span{cursor:pointer;font-size:18px;}
 .car-body{padding:16px;}
-.car-body textarea{width:100%;height:180px;background:#000;border:1px solid #8b5cf6;border-radius:6px;color:#e0e0e0;font-family:Arial;font-size:12px;padding:10px;resize:vertical;box-sizing:border-box;}
-.car-body textarea:focus{outline:none;border-color:#ef4444;}
-.car-foot{padding:12px;border-top:1px solid #8b5cf6;text-align:right;}
-.car-foot button{padding:8px 16px;border:1px solid #8b5cf6;border-radius:6px;background:rgba(30,27,75,0.7);color:#e0e0e0;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:10px;margin-left:8px;}
-.car-foot button.save{background:#FF9800;border-color:#FF9800;color:#000;font-weight:bold;}
+.car-body textarea{width:100%;height:180px;background:#0a0a0f;border:1px solid #333350;border-radius:6px;color:#e0e0e0;font-family:'Segoe UI',sans-serif;font-size:12px;padding:10px;resize:vertical;box-sizing:border-box;outline:none;transition:border-color .3s;}
+.car-body textarea:focus{border-color:#8b5cf6;box-shadow:0 0 0 3px rgba(139,92,246,.15);}
+.car-foot{padding:12px;border-top:1px solid #8b5cf6;text-align:right;background:rgba(0,0,0,0.3);}
 </style>
-<div class="car-box"><div class="car-hdr"><span>📨 CONFIGURAR CARTA</span><span style="cursor:pointer;font-size:18px;" id="btnCloseCartas">×</span></div>
+<div class="car-box"><div class="car-hdr"><span>📨 CONFIGURAR CARTA</span><span id="btnCloseCartas">×</span></div>
 <div class="car-body"><textarea id="cartaText" placeholder="Escribe tu carta aquí..."></textarea></div>
-<div class="car-foot"><button id="btnCancelCartas">CANCELAR</button><button class="save" id="btnSaveCartas">💾 GUARDAR</button></div></div>`;
+<div class="car-foot"><button class="tess-btn tess-btn-ghost tess-btn-sm" id="btnCancelCartas">CANCELAR</button><button class="tess-btn tess-btn-primary tess-btn-sm" id="btnSaveCartas">💾 GUARDAR</button></div></div>`;
   document.body.appendChild(m);
 }
 
@@ -1281,13 +1313,13 @@ function updateMLContactList() {
   const typeLabels = { active: '💬 ACTIVO', recurring: '🔄 RECURRENTE', new: '🆕 NUEVO' };
   const typeColors = { active: '#f59e0b', recurring: '#3b82f6', new: '#22c55e' };
   var isBlocked = typeof window._isInMLBlacklist === 'function' ? function(id) { return window._isInMLBlacklist(id); } : function(id) { return blacklist.includes(String(id)); };
-  let html = '<div style="font-size:9px;color:#888;padding:6px 8px;border-bottom:1px solid #e0e0e8;font-weight:600;">CONTACTOS (' + contacts.length + ')</div>';
+  let html = '<div style="font-size:9px;color:#888;padding:6px 8px;border-bottom:1px solid #333350;font-weight:600;">CONTACTOS (' + contacts.length + ')</div>';
   contacts.forEach(function (c) {
     var blocked = isBlocked(c.id);
     var label = blocked ? '🚫 BLOQUEADO' : (typeLabels[c.contactType] || '🆕 NUEVO');
     var color = blocked ? '#dc2626' : (typeColors[c.contactType] || '#22c55e');
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-bottom:1px solid #f0f0f5;font-size:10px;' + (blocked ? 'opacity:0.5;text-decoration:line-through;' : '') + '">';
-    html += '<span style="color:#1a1a2e;font-weight:500;">#' + c.id + '</span>';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-bottom:1px solid rgba(139,92,246,0.08);font-size:10px;' + (blocked ? 'opacity:0.5;text-decoration:line-through;' : '') + '">';
+    html += '<span style="color:#e0e0e0;font-weight:500;">#' + c.id + '</span>';
     html += '<span style="font-size:8px;padding:2px 6px;border-radius:4px;background:' + color + '20;color:' + color + ';font-weight:600;">' + label + '</span>';
     html += '</div>';
   });
