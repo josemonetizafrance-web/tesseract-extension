@@ -545,6 +545,7 @@ function createMainPanel() {
     </div>
 </div>
 </div>
+</div>
 
 <!-- SUB: SALUDOS PUSH -->
 <div class="bot-subpanel" id="botsubSaludospush" data-z="1">
