@@ -327,11 +327,11 @@ async function generateAllAAResponses() {
   if (!token) { errEl.textContent = '❌ No hay token JWT. Inicia sesión primero.'; errEl.style.display = 'block'; return; }
 
   const events = [
-    { key: 'like', label: 'Like', prompt: 'Una mujer recibió un "Like" en una app de citas. Genera una respuesta breve, natural y coqueta para agradecer el like.' },
-    { key: 'wink', label: 'Wink', prompt: 'Una mujer recibió un "Wink/Guiño" en una app de citas. Genera una respuesta breve, juguetona y amigable.' },
-    { key: 'comment', label: 'Comment', prompt: 'Una mujer recibió un "Comment" en su perfil de una app de citas. Genera una respuesta breve y agradecida.' },
-    { key: 'gift', label: 'Gift', prompt: 'Una mujer recibió un "Gift/Regalo virtual" en una app de citas. Genera una respuesta breve, agradecida y cálida.' },
-    { key: 'greeting', label: 'Greeting', prompt: 'Una mujer quiere enviar un saludo inicial a un hombre en una app de citas. Genera un mensaje breve, amigable y natural para romper el hielo.' }
+    { key: 'like', label: 'Like', prompt: 'Máximo 12 palabras, sonar real, como mujer agradeciendo un like. Nada de rollo.' },
+    { key: 'wink', label: 'Wink', prompt: 'Máximo 12 palabras, tono juguetón pero natural, como mujer respondiendo un guiño. Sin rodeos.' },
+    { key: 'comment', label: 'Comment', prompt: 'Máximo 12 palabras, agradece un comentario en el perfil. Corto y genuino.' },
+    { key: 'gift', label: 'Gift', prompt: 'Máximo 12 palabras, agradece un regalo virtual. Cálido pero breve.' },
+    { key: 'greeting', label: 'Greeting', prompt: 'Máximo 12 palabras, saludo inicial de mujer a hombre. Natural, como si conocieran de antes.' }
   ];
 
   // Also generate We Believe response
@@ -343,11 +343,11 @@ async function generateAllAAResponses() {
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify({
           messages: [
-            { role: 'system', content: 'Eres una asistente de citas. Genera SOLO el texto de respuesta, sin explicaciones. Máximo 2 oraciones.' },
-            { role: 'user', content: 'Un usuario recibió un mensaje automático del sistema "We Believe people come here to find love". Genera una respuesta breve, natural y amigable para iniciar una conversación.' }
+            { role: 'system', content: 'Máximo 15 palabras. Suena real, sin presentaciones formales.' },
+            { role: 'user', content: 'Alguien dice "We believe people come here to find love". Responde como mujer interesada, corto.' }
           ],
-          max_tokens: 100,
-          temperature: 0.8
+          max_tokens: 60,
+          temperature: 0.9
         })
       });
       if (wbRes.ok) {
@@ -369,11 +369,11 @@ async function generateAllAAResponses() {
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify({
           messages: [
-            { role: 'system', content: 'Eres una asistente de citas. Genera SOLO el texto de respuesta, sin explicaciones, sin comillas, sin etiquetas. Máximo 2 oraciones.' },
+            { role: 'system', content: 'Máximo 12 palabras. Suena a persona real, no a chatbot. Nada de frases hechas.' },
             { role: 'user', content: ev.prompt }
           ],
-          max_tokens: 100,
-          temperature: 0.8
+          max_tokens: 60,
+          temperature: 0.9
         })
       });
       if (!res.ok) continue;
