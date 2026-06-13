@@ -327,6 +327,10 @@ function createMainPanel() {
 .tess-box .ml-btn{background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;}
 .tess-box .ml-btn-secondary{background:linear-gradient(135deg,#6366f1,#4f46e5);}
 .tess-box .ml-btn-success{background:linear-gradient(135deg,#10b981,#059669);}
+.aa-btn{display:block;width:100%;padding:10px 16px;border:none;border-radius:8px;cursor:pointer;font-family:'Segoe UI',sans-serif;font-size:12px;font-weight:600;letter-spacing:0.5px;transition:all 0.3s;text-align:center;margin-top:8px;background:linear-gradient(135deg,#0891b2,#06b6d4);color:#fff;box-shadow:0 2px 8px rgba(6,182,212,0.3);}
+.aa-btn:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(6,182,212,0.4);}
+.aa-btn:active{transform:translateY(0);}
+.tess-box .aa-btn{background:linear-gradient(135deg,#0891b2,#06b6d4);color:#fff;}
 .bot-subpanel.visible[id="botsubAutoAnswer"]{border-top:3px solid #06b6d4 !important;}
 .bot-subpanel.visible[id="botsubStar"]{border-top:3px solid #7c3aed !important;}
 /* Tab-content accent colors */
@@ -497,7 +501,7 @@ function createMainPanel() {
     <div class="stat-mini"><span class="val" id="aaTodayResp">0</span>HOY</div>
     <div class="stat-mini"><span class="val" id="aaDailyLimit">50</span>LÍMITE</div>
   </div>
-  <button class="btn-auth" id="btnOpenAAConfig" style="margin-top:8px;">⚙ CONFIGURAR AUTO-ANSWER</button>
+  <button class="aa-btn" id="btnOpenAAConfig">⚙ CONFIGURAR AUTO-ANSWER</button>
 </div>
 </div>
 

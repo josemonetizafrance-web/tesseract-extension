@@ -334,6 +334,32 @@ async function generateAllAAResponses() {
     { key: 'greeting', label: 'Greeting', prompt: 'Una mujer quiere enviar un saludo inicial a un hombre en una app de citas. Genera un mensaje breve, amigable y natural para romper el hielo.' }
   ];
 
+  // Also generate We Believe response
+  const wbEl = document.getElementById('aaWeBelieveResponse');
+  if (wbEl) {
+    try {
+      const wbRes = await fetch('https://tesseract-jblo.onrender.com/api/chatgpt/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: 'Eres una asistente de citas. Genera SOLO el texto de respuesta, sin explicaciones. Máximo 2 oraciones.' },
+            { role: 'user', content: 'Un usuario recibió un mensaje automático del sistema "We Believe people come here to find love". Genera una respuesta breve, natural y amigable para iniciar una conversación.' }
+          ],
+          max_tokens: 100,
+          temperature: 0.8
+        })
+      });
+      if (wbRes.ok) {
+        const wbData = await wbRes.json();
+        const wbText = (wbData.choices?.[0]?.message?.content || '').trim();
+        if (wbText) wbEl.value = wbText;
+      }
+    } catch (e) {
+      console.warn('[AA-BODYGUARD] Error generando We Believe', e.message);
+    }
+  }
+
   for (const ev of events) {
     const tmplEl = document.getElementById('aaEv' + ev.label + 'Tmpl');
     if (!tmplEl) continue;
