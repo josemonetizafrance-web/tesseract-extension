@@ -1449,6 +1449,9 @@ async function spStart() {
   document.getElementById('spStartBtn').style.display = 'none';
   document.getElementById('spStopBtn').style.display = 'block';
   document.getElementById('spStatus').textContent = '🔍 Escaneando contactos...';
+  var box = document.querySelector('#tesseract-main-panel .tess-box');
+  var mini = document.getElementById('tess-mini-icon');
+  if (box && box.style.display !== 'none') { box.style.display = 'none'; if (mini) mini.style.display = 'flex'; }
   var sent = 0, skipped = 0;
   try {
     var contacts = document.querySelectorAll('.dialog-item-root, [data-test-id="dialog-item-tu"], [class*="dialog-item"], [class*="conversation-item"], [data-test-id*="dialog-item"]');
@@ -1486,6 +1489,7 @@ async function spStart() {
   _spActive = false;
   document.getElementById('spStartBtn').style.display = 'block';
   document.getElementById('spStopBtn').style.display = 'none';
+  if (box && box.style.display === 'none') { box.style.display = ''; if (mini) mini.style.display = 'none'; }
 }
 
 function spStop() { _spAbort = true; document.getElementById('spStatus').textContent = '⏹ Deteniendo...'; }
