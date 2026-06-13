@@ -1459,7 +1459,6 @@ async function spStart() {
     document.getElementById('spStatus').textContent = '🔄 ' + contacts.length + ' contactos encontrados...';
     for (var i = 0; i < contacts.length; i++) {
       if (_spAbort) { document.getElementById('spStatus').textContent = '⏹ Detenido. Enviados: ' + sent + ', Saltados: ' + skipped; break; }
-      if (sent >= 5) { document.getElementById('spStatus').textContent = '⏹ Límite de 5 alcanzado. Enviados: ' + sent + ', Saltados: ' + skipped; break; }
       var el = contacts[i];
       var cid = spGetContactId(el);
       if (!cid) { skipped++; continue; }
