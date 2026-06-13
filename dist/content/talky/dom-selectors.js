@@ -113,6 +113,12 @@ var TALK_Y = {
   NEXT_PAGE_BTN_NEXT: 'button[data-test-id*="change-page-options-current-page"][data-test-id*="next"]',
   NEXT_PAGE_BTNS: 'button[data-test-id*="change-page"]',
   PAGE_BUTTONS: 'button.page-button:not([disabled])',
+  PAGINATOR_CONTAINER: '[data-test-id="cmp:paginator container"]',
+
+  // ─── BLOCKED / DELETED USER ───
+  BLOCKED_USER_CONTAINER: 'div.block-message, [class*="block-message"]',
+  DELETED_USER_SELECTOR: 'p.name.color',
+  DELETED_USER_TEXT: 'Deleted User',
 
   // ─── PINNED / SAVED DETECTION ───
   PINNED_INDICATORS: 'button[data-test-id*="pin"], [class*="pin"], [class*="saved"], [data-pin], [data-saved]',

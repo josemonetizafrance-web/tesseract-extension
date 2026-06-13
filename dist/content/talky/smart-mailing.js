@@ -550,10 +550,27 @@ function findAnySendBtn(inputEl) {
   return null;
 }
 
+function isBlockedOrDeletedUser() {
+  try {
+    var blockEl = document.querySelector(TALK_Y.BLOCKED_USER_CONTAINER);
+    if (blockEl && blockEl.offsetParent !== null) return true;
+    var pageText = document.body.textContent || '';
+    if (pageText.includes('This user has blocked you') || pageText.includes('has blocked you')) return true;
+    var nameEl = document.querySelector(TALK_Y.DELETED_USER_SELECTOR);
+    if (nameEl && (nameEl.textContent || '').trim() === TALK_Y.DELETED_USER_TEXT) return true;
+  } catch (e) {}
+  return false;
+}
+
 async function sendMailingMessage(text, profileId, contactEl) {
   if (contactEl) {
     contactEl.click();
     await sleep(2000);
+    if (isBlockedOrDeletedUser()) {
+      console.log('[ML] Skipped (blocked/deleted user)');
+      goBackToInbox();
+      return false;
+    }
     var maxLc = mailingConfig.maxLetterCount || 2;
     if (maxLc > 0) {
       var lc = pageLetterCount();
@@ -648,10 +665,11 @@ async function executeMailingRound() {
 
   try {
     var stuckCount = 0;
+    var lastContactSnapshot = '';
     while (mailingConfig.enabled && !mailingAbort) {
       if (mailingConfig.maxDaily > 0 && mailingConfig.sentToday >= mailingConfig.maxDaily) break;
       if (!isWithinWorkingHours()) break;
-      if (currentPage > 100 || stuckCount > 5) break;
+      if (currentPage > 100) break;
 
       var contacts = scrapeActiveLimitsIds();
       totalScanned += contacts.length;
@@ -663,9 +681,13 @@ async function executeMailingRound() {
         var cType = contacts[ci].contactType || 'new';
 
         if (contacts[ci].element) {
-          var container = contacts[ci].element.closest
-            ? contacts[ci].element.closest('[class*="mail-box-item"], [class*="mail-item"], [class*="item"], [class*="row"], li, tr, [class*="contact"], [class*="user"], [class*="member"], [class*="thread"], [class*="conversation"], [class*="dialog"]')
-            : null;
+          if (mailingConfig.blockActiveDialogue && cType === 'active') {
+            activeSkipped++; skipped++; processedIds.add(cid); continue;
+          }
+          var elText = (contacts[ci].element.textContent || '').toLowerCase();
+          if (elText.includes('deleted user') || elText.includes('has blocked you')) {
+            skipped++; processedIds.add(cid); continue;
+          }
         } else if (mailingConfig.blockActiveDialogue && cType === 'active') {
           activeSkipped++; skipped++; processedIds.add(cid); continue;
         }
@@ -684,11 +706,24 @@ async function executeMailingRound() {
             if (parseInt((pBtns[pb].textContent || '').trim(), 10) === currentPage + 1) { nextBtn = pBtns[pb]; break; }
           }
         }
+        if (!nextBtn) {
+          var paginator = document.querySelector(TALK_Y.PAGINATOR_CONTAINER);
+          if (paginator) {
+            nextBtn = paginator.querySelector('button[data-test-id*="next"]:not([disabled])');
+          }
+        }
         if (!nextBtn) break;
+        var snapshotBefore = (document.querySelector(TALK_Y.MAIL_BOX_ITEM) || {}).textContent || '';
         nextBtn.click();
         currentPage++;
         await sleep(2000);
-        stuckCount++;
+        var snapshotAfter = (document.querySelector(TALK_Y.MAIL_BOX_ITEM) || {}).textContent || '';
+        if (snapshotBefore === snapshotAfter) {
+          stuckCount++;
+          if (stuckCount > 3) break;
+        } else {
+          stuckCount = 0;
+        }
         continue;
       }
 
